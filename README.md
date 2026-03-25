@@ -11,6 +11,7 @@
 - coordinator 收敛 issue 状态
 - worker 存活监控与恢复
 - coordinator heartbeat 主动轮询 / 通知
+- heartbeat -> reconcile -> launch next worker 的自动续跑主链
 
 ## 仓库里有什么
 
@@ -18,7 +19,14 @@
 .
 ├── README.md
 ├── scripts/
-│   └── install_openspec_extensions.py
+│   ├── install_openspec_extensions.py
+│   ├── openspec_coordinator_heartbeat.py
+│   ├── openspec_coordinator_heartbeat_start.py
+│   ├── openspec_coordinator_heartbeat_status.py
+│   ├── openspec_coordinator_heartbeat_stop.py
+│   ├── openspec_coordinator_tick.py
+│   ├── openspec_worker_launch.py
+│   └── openspec_worker_status.py
 ├── skills/
 │   ├── openspec-chat-router/
 │   ├── openspec-plan-issues/
@@ -41,7 +49,7 @@
 | `openspec-execute-issue` | 在 worker 会话中只执行一个 issue，并写进度工件 | `本会话只处理 ISSUE-001` |
 | `openspec-monitor-worker` | 看 worker 是否还活着、做到哪一步 | `看看 worker1 还活着吗` |
 | `openspec-reconcile-change` | 从 `issues/*.progress.json` 和 `runs/*.json` 收敛 coordinator 状态 | `同步 worker 进度` |
-| `openspec-shared` | 提供共享脚本、heartbeat 与配置逻辑 | 被其他扩展 skill 复用 |
+| `openspec-shared` | 提供共享脚本、heartbeat、coordinator tick、worker launch/status 与配置逻辑 | 被其他扩展 skill 复用 |
 
 ## 前置依赖
 
@@ -101,6 +109,9 @@ python3 scripts/install_openspec_extensions.py \
 - `scripts/openspec_coordinator_heartbeat_start.py`
 - `scripts/openspec_coordinator_heartbeat_status.py`
 - `scripts/openspec_coordinator_heartbeat_stop.py`
+- `scripts/openspec_coordinator_tick.py`
+- `scripts/openspec_worker_launch.py`
+- `scripts/openspec_worker_status.py`
 
 并在需要时向目标项目 `.gitignore` 追加：
 
@@ -108,6 +119,9 @@ python3 scripts/install_openspec_extensions.py \
 .worktree/
 openspec/changes/*/runs/COORDINATOR-HEARTBEAT.state.json
 openspec/changes/*/runs/COORDINATOR-HEARTBEAT.exec.log
+openspec/changes/*/runs/ISSUE-*.worker-session.json
+openspec/changes/*/runs/RUN-*.worker.exec.log
+openspec/changes/*/runs/RUN-*.worker.last-message.txt
 ```
 
 如果要在安装时一并写入 heartbeat 默认通知配置：
@@ -171,6 +185,7 @@ new -> ff -> plan-issues -> dispatch-issue -> execute-issue -> reconcile -> veri
 6. 主会话用 `openspec-reconcile-change` 收敛状态，决定下一步
 7. 如果希望主会话自动轮询并通知，启动 `scripts/openspec_coordinator_heartbeat.py`
 8. 如果希望常驻 `screen` 托管，用 `start/status/stop` 三个脚本管理 heartbeat
+9. 如果希望 heartbeat 自动启动下一个 worker，显式开启 `auto_launch_next`
 
 ## 可直接复制的话术模板
 
@@ -260,6 +275,13 @@ python3 scripts/openspec_coordinator_heartbeat.py \
   --change <change-name>
 ```
 
+如果你希望单次执行一轮收敛，而不是启动常驻 heartbeat：
+
+```bash
+python3 scripts/openspec_coordinator_tick.py \
+  --change <change-name>
+```
+
 如果你希望 heartbeat 在判断出下一步只是机械动作时自动生成派发工件：
 
 ```bash
@@ -268,11 +290,44 @@ python3 scripts/openspec_coordinator_heartbeat.py \
   --auto-dispatch-next
 ```
 
+如果你希望 heartbeat 在判定出 `dispatch_next_issue` 时直接启动下一个 worker：
+
+```bash
+python3 scripts/openspec_coordinator_heartbeat.py \
+  --change <change-name> \
+  --auto-launch-next
+```
+
 如果你想让 heartbeat 挂在常驻 `screen` 里：
 
 ```bash
 python3 scripts/openspec_coordinator_heartbeat_start.py \
   --change <change-name>
+```
+
+常驻模式下同样可以开启自动启动：
+
+```bash
+python3 scripts/openspec_coordinator_heartbeat_start.py \
+  --change <change-name> \
+  --auto-launch-next
+```
+
+如果你只想人工预览下一次 worker 启动参数：
+
+```bash
+python3 scripts/openspec_worker_launch.py \
+  --change <change-name> \
+  --issue-id ISSUE-001 \
+  --dry-run
+```
+
+如果你想看某个 worker 当前是否处于 `launching` / `running` / `failed` / `orphaned`：
+
+```bash
+python3 scripts/openspec_worker_status.py \
+  --change <change-name> \
+  --issue-id ISSUE-001
 ```
 
 查看状态：
@@ -312,7 +367,19 @@ python3 scripts/openspec_coordinator_heartbeat_stop.py \
   "coordinator_heartbeat": {
     "interval_seconds": 60,
     "stale_seconds": 900,
-    "notify_topic": ""
+    "notify_topic": "",
+    "auto_dispatch_next": true,
+    "auto_launch_next": false
+  },
+  "worker_launcher": {
+    "session_prefix": "opsx-worker",
+    "start_grace_seconds": 120,
+    "launch_cooldown_seconds": 30,
+    "max_launch_retries": 1,
+    "codex_bin": "codex",
+    "sandbox_mode": "danger-full-access",
+    "bypass_approvals": true,
+    "json_output": true
   }
 }
 ```
@@ -324,6 +391,15 @@ python3 scripts/openspec_coordinator_heartbeat_stop.py \
 - monitoring 查找 Codex 会话日志的位置
 - 持久宿主类型：`screen` / `tmux` / `none`
 - coordinator heartbeat 的轮询频率、stale 判定与默认通知 topic
+- coordinator heartbeat 是否自动 dispatch / 自动 launch 下一个 worker
+- worker launch 的 session 前缀、启动确认宽限期、失败重试节流与 Codex 启动参数
+
+默认建议：
+
+- `auto_dispatch_next=true`
+- `auto_launch_next=false`
+
+也就是默认会自动准备下一个 dispatch，但不会默认自动拉起新的 worker 会话。要做到真正无人值守，请显式开启 `auto_launch_next`。
 
 建议 issue 文档里仍然显式写出 `worker_worktree` 和 `validation`，不要完全依赖默认值推断。
 
@@ -333,6 +409,7 @@ python3 scripts/openspec_coordinator_heartbeat_stop.py \
 - 大任务先把 change 文档补齐，再切 issue，不要一边做一边临时发散
 - 一个 worker 会话只做一个 issue，不要在同一会话里并发处理多个 issue
 - 主会话在继续推进前，先跑一次 reconcile，不要靠聊天上下文猜当前状态
+- 真正的流程状态以 `issues/*.progress.json` 和 `runs/*.json` 为准；`worker-session.json` 只负责 coordinator 侧 launch lease 与恢复
 
 ## Notes
 

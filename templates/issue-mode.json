@@ -16,6 +16,18 @@
   "coordinator_heartbeat": {
     "interval_seconds": 60,
     "stale_seconds": 900,
-    "notify_topic": ""
+    "notify_topic": "",
+    "auto_dispatch_next": true,
+    "auto_launch_next": false
+  },
+  "worker_launcher": {
+    "session_prefix": "opsx-worker",
+    "start_grace_seconds": 120,
+    "launch_cooldown_seconds": 30,
+    "max_launch_retries": 1,
+    "codex_bin": "codex",
+    "sandbox_mode": "danger-full-access",
+    "bypass_approvals": true,
+    "json_output": true
   }
 }

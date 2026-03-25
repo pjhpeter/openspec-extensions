@@ -111,6 +111,7 @@ def build_runner_args(
     stale_seconds: int | None,
     notify_topic: str,
     auto_dispatch_next: bool,
+    auto_launch_next: bool,
 ) -> list[str]:
     runner = heartbeat_runner_path(repo_root)
     args = [sys.executable, str(runner), "--repo-root", str(repo_root), "--change", change]
@@ -122,6 +123,8 @@ def build_runner_args(
         args.extend(["--notify-topic", notify_topic.strip()])
     if auto_dispatch_next:
         args.append("--auto-dispatch-next")
+    if auto_launch_next:
+        args.append("--auto-launch-next")
     return args
 
 

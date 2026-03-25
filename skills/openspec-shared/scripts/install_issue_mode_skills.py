@@ -21,11 +21,17 @@ RUNTIME_SCRIPTS = [
     Path("scripts/openspec_coordinator_heartbeat_start.py"),
     Path("scripts/openspec_coordinator_heartbeat_status.py"),
     Path("scripts/openspec_coordinator_heartbeat_stop.py"),
+    Path("scripts/openspec_coordinator_tick.py"),
+    Path("scripts/openspec_worker_launch.py"),
+    Path("scripts/openspec_worker_status.py"),
 ]
 GITIGNORE_ENTRIES = [
     ".worktree/",
     "openspec/changes/*/runs/COORDINATOR-HEARTBEAT.state.json",
     "openspec/changes/*/runs/COORDINATOR-HEARTBEAT.exec.log",
+    "openspec/changes/*/runs/ISSUE-*.worker-session.json",
+    "openspec/changes/*/runs/RUN-*.worker.exec.log",
+    "openspec/changes/*/runs/RUN-*.worker.last-message.txt",
 ]
 
 
@@ -51,7 +57,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--skip-heartbeat-wrapper",
         action="store_true",
-        help="Do not install the target-side heartbeat launcher script.",
+        help="Do not install the target-side coordinator/worker runtime wrapper scripts.",
     )
     parser.add_argument(
         "--notify-topic",

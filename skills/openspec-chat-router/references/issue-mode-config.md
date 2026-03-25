@@ -24,7 +24,19 @@ If this file is missing, the helpers fall back to these defaults:
   "coordinator_heartbeat": {
     "interval_seconds": 60,
     "stale_seconds": 900,
-    "notify_topic": ""
+    "notify_topic": "",
+    "auto_dispatch_next": false,
+    "auto_launch_next": false
+  },
+  "worker_launcher": {
+    "session_prefix": "opsx-worker",
+    "start_grace_seconds": 120,
+    "launch_cooldown_seconds": 30,
+    "max_launch_retries": 1,
+    "codex_bin": "codex",
+    "sandbox_mode": "danger-full-access",
+    "bypass_approvals": true,
+    "json_output": true
   }
 }
 ```
@@ -41,6 +53,16 @@ If this file is missing, the helpers fall back to these defaults:
 - `coordinator_heartbeat.interval_seconds`: default polling interval for proactive coordinator checks.
 - `coordinator_heartbeat.stale_seconds`: how old an active issue can be before heartbeat falls back to worker monitoring.
 - `coordinator_heartbeat.notify_topic`: default ntfy topic used by the coordinator heartbeat helper.
+- `coordinator_heartbeat.auto_dispatch_next`: whether heartbeat should prepare the next issue dispatch automatically.
+- `coordinator_heartbeat.auto_launch_next`: whether heartbeat should launch the next worker session automatically after dispatch.
+- `worker_launcher.session_prefix`: prefix for `screen` / `tmux` worker session names.
+- `worker_launcher.start_grace_seconds`: how long launcher confirmation can remain in `launching` before being considered failed.
+- `worker_launcher.launch_cooldown_seconds`: cooldown window before a failed launch should be retried again.
+- `worker_launcher.max_launch_retries`: maximum automatic relaunch attempts after the initial start.
+- `worker_launcher.codex_bin`: Codex executable used by the worker launcher.
+- `worker_launcher.sandbox_mode`: sandbox mode used when `bypass_approvals=false`.
+- `worker_launcher.bypass_approvals`: whether worker launch uses `--dangerously-bypass-approvals-and-sandbox`.
+- `worker_launcher.json_output`: whether worker launch adds `codex exec --json`.
 
 ## Practical Rule
 

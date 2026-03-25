@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,18 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "interval_seconds": 60,
         "stale_seconds": 900,
         "notify_topic": "",
+        "auto_dispatch_next": False,
+        "auto_launch_next": False,
+    },
+    "worker_launcher": {
+        "session_prefix": "opsx-worker",
+        "start_grace_seconds": 120,
+        "launch_cooldown_seconds": 30,
+        "max_launch_retries": 1,
+        "codex_bin": "codex",
+        "sandbox_mode": "danger-full-access",
+        "bypass_approvals": True,
+        "json_output": True,
     },
 }
 
@@ -101,6 +114,12 @@ def normalize_string_list(values: object) -> list[str]:
     return items
 
 
+def normalize_bool(value: object, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    return default
+
+
 def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
     config_path = repo_root / CONFIG_RELATIVE_PATH
     config = dict(DEFAULT_CONFIG)
@@ -154,6 +173,59 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
     notify_topic = str(
         coordinator_heartbeat.get("notify_topic", DEFAULT_CONFIG["coordinator_heartbeat"]["notify_topic"])
     ).strip()
+    auto_dispatch_next = normalize_bool(
+        coordinator_heartbeat.get(
+            "auto_dispatch_next", DEFAULT_CONFIG["coordinator_heartbeat"]["auto_dispatch_next"]
+        ),
+        bool(DEFAULT_CONFIG["coordinator_heartbeat"]["auto_dispatch_next"]),
+    )
+    auto_launch_next = normalize_bool(
+        coordinator_heartbeat.get("auto_launch_next", DEFAULT_CONFIG["coordinator_heartbeat"]["auto_launch_next"]),
+        bool(DEFAULT_CONFIG["coordinator_heartbeat"]["auto_launch_next"]),
+    )
+
+    worker_launcher = config.get("worker_launcher", {})
+    if not isinstance(worker_launcher, dict):
+        worker_launcher = {}
+    session_prefix = (
+        str(worker_launcher.get("session_prefix", DEFAULT_CONFIG["worker_launcher"]["session_prefix"])).strip()
+        or "opsx-worker"
+    )
+    start_grace_seconds = int(
+        worker_launcher.get("start_grace_seconds", DEFAULT_CONFIG["worker_launcher"]["start_grace_seconds"])
+    )
+    launch_cooldown_seconds = int(
+        worker_launcher.get(
+            "launch_cooldown_seconds", DEFAULT_CONFIG["worker_launcher"]["launch_cooldown_seconds"]
+        )
+    )
+    max_launch_retries = int(
+        worker_launcher.get("max_launch_retries", DEFAULT_CONFIG["worker_launcher"]["max_launch_retries"])
+    )
+    if start_grace_seconds <= 0:
+        raise SystemExit(f"{CONFIG_RELATIVE_PATH} field `worker_launcher.start_grace_seconds` must be > 0.")
+    if launch_cooldown_seconds < 0:
+        raise SystemExit(f"{CONFIG_RELATIVE_PATH} field `worker_launcher.launch_cooldown_seconds` must be >= 0.")
+    if max_launch_retries < 0:
+        raise SystemExit(f"{CONFIG_RELATIVE_PATH} field `worker_launcher.max_launch_retries` must be >= 0.")
+    codex_bin = str(worker_launcher.get("codex_bin", DEFAULT_CONFIG["worker_launcher"]["codex_bin"])).strip() or "codex"
+    sandbox_mode = (
+        str(worker_launcher.get("sandbox_mode", DEFAULT_CONFIG["worker_launcher"]["sandbox_mode"])).strip()
+        or "danger-full-access"
+    )
+    if sandbox_mode not in {"read-only", "workspace-write", "danger-full-access"}:
+        raise SystemExit(
+            f"{CONFIG_RELATIVE_PATH} field `worker_launcher.sandbox_mode` must be "
+            "`read-only`, `workspace-write`, or `danger-full-access`."
+        )
+    bypass_approvals = normalize_bool(
+        worker_launcher.get("bypass_approvals", DEFAULT_CONFIG["worker_launcher"]["bypass_approvals"]),
+        bool(DEFAULT_CONFIG["worker_launcher"]["bypass_approvals"]),
+    )
+    json_output = normalize_bool(
+        worker_launcher.get("json_output", DEFAULT_CONFIG["worker_launcher"]["json_output"]),
+        bool(DEFAULT_CONFIG["worker_launcher"]["json_output"]),
+    )
 
     return {
         "worktree_root": worktree_root,
@@ -171,6 +243,18 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
             "interval_seconds": interval_seconds,
             "stale_seconds": stale_seconds,
             "notify_topic": notify_topic,
+            "auto_dispatch_next": auto_dispatch_next,
+            "auto_launch_next": auto_launch_next,
+        },
+        "worker_launcher": {
+            "session_prefix": session_prefix,
+            "start_grace_seconds": start_grace_seconds,
+            "launch_cooldown_seconds": launch_cooldown_seconds,
+            "max_launch_retries": max_launch_retries,
+            "codex_bin": codex_bin,
+            "sandbox_mode": sandbox_mode,
+            "bypass_approvals": bypass_approvals,
+            "json_output": json_output,
         },
         "config_path": str(CONFIG_RELATIVE_PATH),
         "config_exists": config_path.exists(),
@@ -179,6 +263,30 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
 
 def default_worker_worktree_setting(config: dict[str, Any], change: str, issue_id: str) -> str:
     return (Path(config["worktree_root"]) / change / issue_id).as_posix()
+
+
+def ensure_path_within(parent: Path, target: Path) -> None:
+    try:
+        target.relative_to(parent)
+    except ValueError as error:
+        raise SystemExit(f"Path `{target}` must stay within `{parent}`.") from error
+
+
+def validate_issue_worker_worktree(repo_root: Path, raw_path: str, config: dict[str, Any]) -> str:
+    candidate = raw_path.strip()
+    if not candidate:
+        raise SystemExit("Issue frontmatter `worker_worktree` must not be empty.")
+
+    candidate_path = Path(candidate).expanduser()
+    if candidate_path.is_absolute():
+        raise SystemExit("Issue frontmatter `worker_worktree` must be repo-relative, not absolute.")
+
+    resolved_path = (repo_root / candidate_path).resolve()
+    ensure_path_within(repo_root, resolved_path)
+
+    worktree_root = resolve_repo_path(repo_root, str(config["worktree_root"]))
+    ensure_path_within(worktree_root, resolved_path)
+    return candidate
 
 
 def issue_worker_worktree_setting(
@@ -190,7 +298,7 @@ def issue_worker_worktree_setting(
     frontmatter = read_issue_frontmatter(repo_root, change, issue_id)
     worker_worktree = frontmatter.get("worker_worktree")
     if isinstance(worker_worktree, str) and worker_worktree.strip():
-        return worker_worktree.strip(), "issue_doc"
+        return validate_issue_worker_worktree(repo_root, worker_worktree, config), "issue_doc"
     return default_worker_worktree_setting(config, change, issue_id), "config_default"
 
 
@@ -245,3 +353,51 @@ def worker_branch_name(config: dict[str, Any], change: str, issue_id: str) -> st
     if prefix:
         return f"{prefix}/{change_slug}/{issue_slug}"
     return f"{change_slug}/{issue_slug}"
+
+
+def now_iso() -> str:
+    return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def default_worker_run_id(issue_id: str) -> str:
+    stamp = datetime.now().astimezone().strftime("%Y%m%dT%H%M%S")
+    return f"RUN-{stamp}-{issue_id}"
+
+
+def change_dir(repo_root: Path, change: str) -> Path:
+    return repo_root / "openspec" / "changes" / change
+
+
+def change_runs_dir(repo_root: Path, change: str) -> Path:
+    runs_dir = change_dir(repo_root, change) / "runs"
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    return runs_dir
+
+
+def issue_progress_path(repo_root: Path, change: str, issue_id: str) -> Path:
+    return change_dir(repo_root, change) / "issues" / f"{issue_id}.progress.json"
+
+
+def run_artifact_path(repo_root: Path, change: str, run_id: str) -> Path:
+    return change_runs_dir(repo_root, change) / f"{run_id}.json"
+
+
+def worker_session_state_path(repo_root: Path, change: str, issue_id: str) -> Path:
+    return change_runs_dir(repo_root, change) / f"{issue_id}.worker-session.json"
+
+
+def worker_exec_log_path(repo_root: Path, change: str, run_id: str) -> Path:
+    return change_runs_dir(repo_root, change) / f"{run_id}.worker.exec.log"
+
+
+def worker_last_message_path(repo_root: Path, change: str, run_id: str) -> Path:
+    return change_runs_dir(repo_root, change) / f"{run_id}.worker.last-message.txt"
+
+
+def worker_session_name(config: dict[str, Any], change: str, issue_id: str) -> str:
+    prefix = slugify_branch_fragment(config["worker_launcher"]["session_prefix"]).replace("/", "-").strip("-")
+    change_slug = slugify_branch_fragment(change).replace("/", "-")
+    issue_slug = slugify_branch_fragment(issue_id).replace("/", "-")
+    if prefix:
+        return f"{prefix}-{change_slug}-{issue_slug}"
+    return f"{change_slug}-{issue_slug}"

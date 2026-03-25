@@ -23,6 +23,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--repo-root", required=True)
     parser.add_argument("--change", required=True)
     parser.add_argument("--issue-id", required=True)
+    parser.add_argument("--run-id", default="")
+    parser.add_argument("--session-name", default="")
+    parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
 
@@ -40,12 +43,21 @@ def require_str(frontmatter: dict[str, object], key: str) -> str:
     return value
 
 
-def render_dispatch(change: str, frontmatter: dict[str, object], worker_worktree: str, validation: list[str]) -> str:
+def render_dispatch(
+    change: str,
+    frontmatter: dict[str, object],
+    worker_worktree: str,
+    validation: list[str],
+    repo_root: Path,
+    run_id: str,
+    session_name: str,
+) -> str:
     issue_id = require_str(frontmatter, "issue_id")
     title = require_str(frontmatter, "title")
     allowed_scope = require_list(frontmatter, "allowed_scope")
     out_of_scope = require_list(frontmatter, "out_of_scope")
     done_when = require_list(frontmatter, "done_when")
+    effective_run_id = run_id.strip() or f"RUN-<timestamp>-{issue_id}"
 
     def bullet_list(items: list[str]) -> str:
         return "\n".join(f"  - `{item}`" for item in items)
@@ -55,6 +67,12 @@ def render_dispatch(change: str, frontmatter: dict[str, object], worker_worktree
 - Issue: `{issue_id}` - {title}
 - Worker worktree:
   - `{worker_worktree}`
+- Workflow artifact repo root:
+  - `{repo_root}`
+- Run ID:
+  - `{effective_run_id}`
+- Worker session:
+  - `{session_name or '<launcher-generated>'}`
 - Allowed scope:
 {bullet_list(allowed_scope)}
 - Out of scope:
@@ -65,8 +83,7 @@ def render_dispatch(change: str, frontmatter: dict[str, object], worker_worktree
 {bullet_list(validation)}
 
 开始后先写：
-- `openspec/changes/{change}/issues/{issue_id}.progress.json`
-- `openspec/changes/{change}/runs/RUN-<timestamp>-{issue_id}.json`
+- `python3 .codex/skills/openspec-execute-issue/scripts/update_issue_progress.py start --repo-root "{repo_root}" --change "{change}" --issue-id "{issue_id}" --run-id "{effective_run_id}" --status in_progress --boundary-status working --next-action continue_issue --summary "已开始处理该 issue。"`
 
 完成后回报：
 - Issue
@@ -75,6 +92,15 @@ def render_dispatch(change: str, frontmatter: dict[str, object], worker_worktree
 - Progress Artifact
 - Run Artifact
 - Need Coordinator Update
+
+停止前必须写：
+- `python3 .codex/skills/openspec-execute-issue/scripts/update_issue_progress.py stop --repo-root "{repo_root}" --change "{change}" --issue-id "{issue_id}" --run-id "{effective_run_id}" --status completed --boundary-status review_required --next-action coordinator_review --summary "issue 边界内实现已完成，等待 coordinator 收敛。" --validation "lint=<pending-or-passed>" --validation "typecheck=<pending-or-passed>" --changed-file "<path>"`
+
+如果阻塞，改写为：
+- `status=blocked`
+- `boundary-status=blocked`
+- `next-action=resolve_blocker`
+- `blocker=<concrete reason>`
 """
 
 
@@ -105,18 +131,31 @@ def main() -> None:
         issue_id=args.issue_id,
         config=config,
     )
-    dispatch_text = render_dispatch(args.change, frontmatter, worker_worktree, validation)
-    dispatch_path.write_text(dispatch_text)
+    dispatch_text = render_dispatch(
+        args.change,
+        frontmatter,
+        worker_worktree,
+        validation,
+        repo_root,
+        args.run_id,
+        args.session_name,
+    )
+    if not args.dry_run:
+        dispatch_path.write_text(dispatch_text)
 
     payload = {
         "change": args.change,
         "issue_id": require_str(frontmatter, "issue_id"),
         "worker_worktree": worker_worktree,
         "worker_worktree_source": worktree_source,
+        "artifact_repo_root": str(repo_root),
+        "run_id": args.run_id,
+        "session_name": args.session_name,
         "validation": validation,
         "validation_source": validation_source,
         "config_path": config["config_path"],
         "dispatch_path": str(dispatch_path.relative_to(repo_root)),
+        "dry_run": args.dry_run,
     }
     print(json.dumps(payload, ensure_ascii=False))
 

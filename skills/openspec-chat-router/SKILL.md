@@ -298,7 +298,7 @@ python3 .codex/skills/openspec-shared/scripts/coordinator_heartbeat.py \
 ```
 
 Use repo defaults from `openspec/issue-mode.json` when present.
-Override `--notify-topic`, `--interval-seconds`, `--stale-seconds`, or `--auto-dispatch-next` only when the user asked for different behavior.
+Override `--notify-topic`, `--interval-seconds`, `--stale-seconds`, `--auto-dispatch-next`, or `--auto-launch-next` only when the user asked for different behavior.
 
 ### Special path: `heartbeat-start`
 
@@ -310,6 +310,7 @@ python3 scripts/openspec_coordinator_heartbeat_start.py \
 ```
 
 Add `--auto-dispatch-next` only when the user explicitly wants automatic dispatch of the next mechanical step.
+Add `--auto-launch-next` only when the user explicitly wants heartbeat to launch the next worker session as well.
 
 ### Special path: `heartbeat-status`
 
