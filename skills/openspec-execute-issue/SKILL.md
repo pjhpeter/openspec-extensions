@@ -1,6 +1,6 @@
 ---
 name: openspec-execute-issue
-description: Execute exactly one issue in an OpenSpec multi-session change. Use when a worker session is told to handle one issue only, with boundaries such as “Issue: ISSUE-001”, “Allowed scope”, “Out of scope”, “Done when”, or similar issue-scoped implementation instructions.
+description: 'Execute exactly one issue in an OpenSpec multi-session change. Use when a worker session is told to handle one issue only, with boundaries such as “Issue: ISSUE-001”, “Allowed scope”, “Out of scope”, “Done when”, or similar issue-scoped implementation instructions.'
 ---
 
 # OpenSpec Execute Issue
