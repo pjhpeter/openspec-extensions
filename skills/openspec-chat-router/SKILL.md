@@ -41,8 +41,11 @@ Do not rely on hardcoded absolute filesystem paths for these resources.
 - If the user asks to enter OpenSpec mode, print the OpenSpec mode cheat sheet instead of running a workflow stage.
 - For large or complex work, prefer issue-based multi-session execution rather than keeping one long-running session alive.
 - In issue-based execution, one new session should handle one issue only.
+- In issue-based execution, the default flow is: coordinator creates or reuses the issue worktree, dispatches one worker session into that worktree, waits for worker completion, then reviews the issue from the main session before accepting it.
 - In multi-session work on the same change, the coordinator session owns `tasks.md`, final progress, `verify`, and `archive` unless the user explicitly chooses a different owner.
+- In issue-based execution, the coordinator session also owns review of completed issues, merging accepted worker worktrees back to the coordinator branch, and creating the git commit after merge.
 - In issue-based execution, workers must write issue-local progress artifacts and run artifacts. They must not directly update `tasks.md`.
+- In issue-based execution, workers must not merge their own worktree back or create the final git commit for the issue unless the user explicitly overrides that rule.
 - Before a coordinator continues a change that already has issue artifacts, reconcile worker state from disk first instead of trusting chat memory.
 - When present, use `openspec/issue-mode.json` as the repo-level default config for worktree paths, validation, and monitoring.
 - If the intent is still ambiguous after doing all non-blocked work, ask exactly one short targeted question.
@@ -105,8 +108,10 @@ Preferred flow:
 
 1. Use the main session to get the change to implementation-ready state.
 2. Split implementation into issue-sized units with clear boundaries.
-3. Open one new session per issue.
-4. Let the coordinator session maintain the global checklist and final verification.
+3. For each issue, create or reuse the worker git worktree before handoff.
+4. Open one new worker session per issue and keep it inside that issue worktree only.
+5. After the worker reports `review_required`, let the coordinator review the worktree, merge accepted changes back to the coordinator branch, and create the commit.
+6. Let the coordinator session maintain the global checklist and final verification.
 
 Issue sizing guidance:
 
@@ -119,15 +124,20 @@ Same-change multi-session rules:
 - Coordinator session:
   - owns `tasks.md`
   - owns final progress accounting
+  - owns review of completed issues
+  - owns merging accepted worker worktrees back to the coordinator branch
+  - owns the final git commit after merge
   - owns `verify` and `archive`
   - reads `issues/*.progress.json` and `runs/*.json` before deciding the next step
   - is the only session allowed to update change-level checklists after reconciling worker state
   - uses worker monitoring only as a fallback when progress artifacts are stale, missing, or suspicious
 - Worker session:
   - only handles one assigned issue
+  - works only inside the assigned issue worktree
   - only edits its allowed scope
   - writes `openspec/changes/<change>/issues/ISSUE-*.progress.json`
   - writes `openspec/changes/<change>/runs/RUN-*.json`
+  - does not merge its worktree back or create the final git commit
   - reports back with issue id, changed files, validation, and whether coordinator action is needed
 - Avoid having multiple sessions update the same checkbox list or spec file concurrently.
 - Read `references/issue-mode-contract.md` whenever you are setting up or reconciling issue-based work.
@@ -188,9 +198,11 @@ Use a format like this:
 推荐方式：
 1. 主会话先补齐 proposal / design / tasks
 2. 把复杂实现拆成多个 issue
-3. 一个 issue 开一个新会话
-4. worker 只写 issue-local progress 和 run 工件
-5. 主会话用 reconcile 收敛状态，再统一维护 tasks.md、verify、archive
+3. 主会话先为 issue 创建或复用对应的 worker worktree
+4. 一个 issue 开一个 worker 新会话，并且只在该 worktree 内工作
+5. worker 只写 issue-local progress 和 run 工件，不直接合并、不直接提交
+6. 主会话用 reconcile 收敛状态，review 通过后合并该 worktree，并在主会话提交代码
+7. 之后再统一维护 tasks.md、verify、archive
 
 主会话话术模板：
 - 继续 OpenSpec change `<change-name>`，先把文档补齐到可实现状态
@@ -229,9 +241,11 @@ Rules for `issue-mode` output:
 
 - Tell the user not to keep multiple issues in one long-running session.
 - Default the coordinator to the main session.
+- Remind the user that the coordinator should create or reuse the issue worktree before handing the issue to a worker.
 - If the user says “按 issue 模式继续 `<change-name>`”, print the template first and then continue with the named change.
 - If the task artifacts are not ready yet, route to `new`, `propose`, or `ff` before encouraging worker sessions.
 - If the user is setting up issue-mode for the first time, remind them that workers should not touch `tasks.md`.
+- Remind the user that workers should not merge or commit; the coordinator reviews, merges, and commits after accepting the issue.
 
 ### Special path: `execute-issue`
 

@@ -17,6 +17,7 @@ Read these before writing any workflow artifacts:
 - Execute one issue only.
 - Do not update `tasks.md`.
 - Do not run `verify` or `archive`.
+- Do not merge the worker worktree back or create the final git commit.
 - Treat `issues/<issue-id>.progress.json` as the worker-owned source of truth.
 - Write a run artifact under `runs/` for this worker session.
 
@@ -75,6 +76,7 @@ Do all non-blocked work first, then ask one short question only if one of these 
    - progress artifact path
    - run artifact path
    - whether coordinator action is needed
+7. Stop after handing off to the coordinator; review, merge, and commit happen in the main session unless the user explicitly overrides that rule.
 
 ## Blocker Handling
 

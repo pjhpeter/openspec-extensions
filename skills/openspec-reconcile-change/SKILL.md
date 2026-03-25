@@ -25,16 +25,25 @@ When artifact state looks stale or suspicious, use `../openspec-monitor-worker/S
      --repo-root . \
      --change "<change-name>"
    ```
-3. Read:
+3. If the result is `coordinator_review` and you are accepting the issue, run the coordinator merge helper:
+   ```bash
+   python3 .codex/skills/openspec-reconcile-change/scripts/coordinator_merge_issue.py \
+     --repo-root . \
+     --change "<change-name>" \
+     --issue-id "<issue-id>"
+   ```
+   Add `--dry-run` to preview the merge inputs first.
+   Add `--commit-message "..."` when the default issue acceptance commit message should be overridden.
+4. Read:
    - `openspec/changes/<change>/tasks.md`
    - any `issues/ISSUE-*.md` and `issues/*.progress.json` flagged by the helper
    - supporting `runs/*.json` only when the helper summary is insufficient
-4. Update coordinator-owned files only:
+5. Update coordinator-owned files only:
    - `tasks.md`
    - change-level summaries if this workflow uses them
-5. Choose the next action using the helper result:
+6. Choose the next action using the helper result:
    - `resolve_blocker` -> stop and surface blocker
-   - `coordinator_review` -> review or acknowledge the completed issue
+   - `coordinator_review` -> review the completed issue in its worker worktree, then accept it with `coordinator_merge_issue.py`
    - `dispatch_next_issue` -> prepare the next worker issue
    - `verify_change` -> move to `openspec-verify-change`
    - `wait_for_active_issue` -> do not force progress
@@ -43,11 +52,14 @@ When artifact state looks stale or suspicious, use `../openspec-monitor-worker/S
 
 - Do not treat worker chat output as the source of truth when artifacts exist.
 - Do not let workers update `tasks.md`.
+- Do not let workers self-merge or create the final git commit for an issue.
 - Prefer issue progress artifacts over run artifacts.
 - Use issue docs to discover pending work that has not started yet.
+- `coordinator_merge_issue.py` expects the coordinator worktree to start clean before it imports the worker diff and creates the acceptance commit.
 - If a worker may be stuck or dead and artifacts are stale, inspect it with `openspec-monitor-worker` before redispatching.
 - If the user wants periodic polling or proactive notifications instead of one-shot reconcile, run `.codex/skills/openspec-shared/scripts/coordinator_heartbeat.py`.
 - If the helper finds no issue artifacts, fall back to normal OpenSpec routing.
+- If coordinator review accepts an issue, merge and commit it before dispatching the next dependent issue or moving to `verify`.
 
 ## Output Style
 

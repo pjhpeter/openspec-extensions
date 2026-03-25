@@ -26,14 +26,19 @@ Helper scripts may fall back to the repo config when those fields are missing.
 - Coordinator owns:
   - `tasks.md`
   - change-level progress summaries
+  - review of completed issues
+  - merging accepted worker worktrees back to the coordinator branch
+  - the git commit created after merge
   - `verify`
   - `archive`
 - Worker owns:
   - one issue only
+  - one assigned issue worktree only
   - issue-local progress artifact
   - run artifact for that issue session
 
 Workers must not directly update `tasks.md`.
+Workers must not merge their worktree back or create the final git commit for the issue.
 
 ## Directory Layout
 
@@ -122,10 +127,11 @@ Use one run artifact per worker session:
 
 1. Read change artifacts and the assigned issue boundary.
 2. Write or refresh the issue progress artifact at task start.
-3. Implement only the assigned issue.
+3. Implement only the assigned issue inside the assigned worker worktree.
 4. Run required validation.
 5. Update the issue progress artifact and run artifact before stopping.
-6. Report the artifact paths back to the coordinator.
+6. Do not merge the worktree or create the final git commit.
+7. Report the artifact paths back to the coordinator.
 
 ## Coordinator Reconcile Rules
 
@@ -135,7 +141,7 @@ Use one run artifact per worker session:
 4. Update `tasks.md` only after reconciling issue state from disk.
 5. Default decisions:
    - any `blocked` -> stop and resolve blocker
-   - any `review_required` -> review or acknowledge that issue first
+   - any `review_required` -> review that issue in its worker worktree first; if accepted, merge it back to the coordinator branch and create the commit before moving on
    - any issue doc without progress -> dispatch that next issue
    - all issues `completed` -> move to `verify`
    - some issues still `pending` and none blocked -> dispatch next issue
@@ -170,3 +176,4 @@ If `worker_worktree` or `validation` is missing, helpers fall back to `openspec/
 
 Chat text is not the workflow state.
 Issue progress files are the workflow state.
+In issue mode, accepted code lands through coordinator review plus coordinator-owned merge and commit, not through worker self-merge.

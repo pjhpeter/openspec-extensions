@@ -33,6 +33,7 @@ Read these first:
      --issue-id "<issue-id>"
    ```
 6. Use the generated dispatch file plus the created/reused worktree as the source of truth when sending work to a new worker session.
+7. Tell the worker to stay inside that issue worktree and return control to the coordinator for review, merge, and commit after completion.
 
 ## Rules
 
@@ -41,6 +42,7 @@ Read these first:
 - If the repo does not define that file, fall back to `.worktree/<change-name>/<issue-id>/`.
 - Do not improvise scope boundaries from memory when an issue doc exists.
 - If the issue doc is missing required frontmatter fields, fix the issue doc first.
+- The coordinator owns worktree handoff, review, merge, and final commit for the issue.
 
 ## Output
 
