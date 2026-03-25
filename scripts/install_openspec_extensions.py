@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import stat
 import shutil
 from pathlib import Path
 
@@ -19,7 +20,11 @@ SKILL_NAMES = [
     "openspec-reconcile-change",
     "openspec-shared",
 ]
-GITIGNORE_ENTRY = ".worktree/"
+HEARTBEAT_WRAPPER_PATH = Path("scripts/openspec_coordinator_heartbeat.py")
+GITIGNORE_ENTRIES = [
+    ".worktree/",
+    "openspec/changes/*/runs/COORDINATOR-HEARTBEAT.state.json",
+]
 
 
 def parse_args() -> argparse.Namespace:
@@ -37,6 +42,28 @@ def parse_args() -> argparse.Namespace:
         help="Overwrite an existing openspec/issue-mode.json in the target project.",
     )
     parser.add_argument("--skip-gitignore", action="store_true", help="Do not modify the target project's .gitignore.")
+    parser.add_argument(
+        "--skip-heartbeat-wrapper",
+        action="store_true",
+        help="Do not install the target-side heartbeat launcher script.",
+    )
+    parser.add_argument(
+        "--notify-topic",
+        default="",
+        help="Optional default ntfy topic written into openspec/issue-mode.json coordinator_heartbeat.notify_topic.",
+    )
+    parser.add_argument(
+        "--heartbeat-interval-seconds",
+        type=int,
+        default=None,
+        help="Default polling interval written into openspec/issue-mode.json.",
+    )
+    parser.add_argument(
+        "--heartbeat-stale-seconds",
+        type=int,
+        default=None,
+        help="Default stale threshold written into openspec/issue-mode.json.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Preview actions without writing files.")
     return parser.parse_args()
 
@@ -54,6 +81,30 @@ def ensure_directory(path: Path, label: str) -> None:
 
 def relative_str(path: Path) -> str:
     return path.as_posix()
+
+
+def deep_merge(base: dict, override: dict) -> dict:
+    result = dict(base)
+    for key, value in override.items():
+        current = result.get(key)
+        if isinstance(current, dict) and isinstance(value, dict):
+            result[key] = deep_merge(current, value)
+            continue
+        result[key] = value
+    return result
+
+
+def config_overrides_from_args(args: argparse.Namespace) -> dict:
+    heartbeat_overrides: dict[str, object] = {}
+    if args.heartbeat_interval_seconds is not None:
+        heartbeat_overrides["interval_seconds"] = args.heartbeat_interval_seconds
+    if args.heartbeat_stale_seconds is not None:
+        heartbeat_overrides["stale_seconds"] = args.heartbeat_stale_seconds
+    if args.notify_topic.strip():
+        heartbeat_overrides["notify_topic"] = args.notify_topic.strip()
+    if not heartbeat_overrides:
+        return {}
+    return {"coordinator_heartbeat": heartbeat_overrides}
 
 
 def validate_source_layout(source_repo: Path) -> None:
@@ -105,6 +156,7 @@ def install_config_template(
     source_repo: Path,
     target_repo: Path,
     force_config: bool,
+    overrides: dict,
     dry_run: bool,
 ) -> tuple[str, str]:
     source_config = source_repo / CONFIG_TEMPLATE_PATH
@@ -114,27 +166,69 @@ def install_config_template(
     if existed_before and not force_config:
         return relative_str(TARGET_CONFIG_PATH), "preserved"
 
+    merged_config = deep_merge(json.loads(source_config.read_text()), overrides)
+
     if not dry_run:
         target_config.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_config, target_config)
+        target_config.write_text(json.dumps(merged_config, ensure_ascii=False, indent=2) + "\n")
     return relative_str(TARGET_CONFIG_PATH), "overwritten" if existed_before else "installed"
 
 
-def update_gitignore(target_repo: Path, dry_run: bool) -> tuple[str, bool]:
+def update_gitignore(target_repo: Path, dry_run: bool) -> tuple[str, list[str]]:
     gitignore_path = target_repo / ".gitignore"
     content = gitignore_path.read_text() if gitignore_path.exists() else ""
     lines = content.splitlines()
-    if GITIGNORE_ENTRY in lines:
-        return ".gitignore", False
+    missing_entries = [entry for entry in GITIGNORE_ENTRIES if entry not in lines]
+    if not missing_entries:
+        return ".gitignore", []
 
     updated = content
     if updated and not updated.endswith("\n"):
         updated += "\n"
-    updated += f"{GITIGNORE_ENTRY}\n"
+    updated += "".join(f"{entry}\n" for entry in missing_entries)
 
     if not dry_run:
         gitignore_path.write_text(updated)
-    return ".gitignore", True
+    return ".gitignore", missing_entries
+
+
+def heartbeat_wrapper_text() -> str:
+    return """#!/usr/bin/env python3
+from __future__ import annotations
+
+import subprocess
+import sys
+from pathlib import Path
+
+
+def main() -> int:
+    repo_root = Path(__file__).resolve().parents[1]
+    runner = repo_root / ".codex" / "skills" / "openspec-shared" / "scripts" / "coordinator_heartbeat.py"
+    if not runner.exists():
+        print(f"Heartbeat runner not found: {runner}", file=sys.stderr)
+        return 1
+    command = [sys.executable, str(runner), "--repo-root", str(repo_root), *sys.argv[1:]]
+    return subprocess.call(command)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+"""
+
+
+def install_heartbeat_wrapper(target_repo: Path, force: bool, dry_run: bool) -> tuple[str, str]:
+    target_path = target_repo / HEARTBEAT_WRAPPER_PATH
+    existed_before = target_path.exists()
+
+    if existed_before and not force:
+        return relative_str(HEARTBEAT_WRAPPER_PATH), "preserved"
+
+    if not dry_run:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(heartbeat_wrapper_text())
+        current_mode = target_path.stat().st_mode
+        target_path.chmod(current_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return relative_str(HEARTBEAT_WRAPPER_PATH), "overwritten" if existed_before else "installed"
 
 
 def main() -> None:
@@ -158,13 +252,23 @@ def main() -> None:
         source_repo=source_repo,
         target_repo=target_repo,
         force_config=args.force_config,
+        overrides=config_overrides_from_args(args),
         dry_run=args.dry_run,
     )
 
+    heartbeat_wrapper_path = ""
+    heartbeat_wrapper_status = "skipped"
+    if not args.skip_heartbeat_wrapper:
+        heartbeat_wrapper_path, heartbeat_wrapper_status = install_heartbeat_wrapper(
+            target_repo=target_repo,
+            force=args.force,
+            dry_run=args.dry_run,
+        )
+
     gitignore_path = ""
-    gitignore_updated = False
+    gitignore_added_entries: list[str] = []
     if not args.skip_gitignore:
-        gitignore_path, gitignore_updated = update_gitignore(target_repo, args.dry_run)
+        gitignore_path, gitignore_added_entries = update_gitignore(target_repo, args.dry_run)
 
     result = {
         "source_repo": str(source_repo),
@@ -178,12 +282,19 @@ def main() -> None:
         "config": {
             "path": config_path,
             "status": config_status,
+            "overrides": config_overrides_from_args(args),
+        },
+        "heartbeat_wrapper": {
+            "path": heartbeat_wrapper_path,
+            "status": heartbeat_wrapper_status,
+            "skipped": args.skip_heartbeat_wrapper,
         },
         "gitignore": {
             "path": gitignore_path,
-            "updated": gitignore_updated,
+            "updated": bool(gitignore_added_entries),
+            "added_entries": gitignore_added_entries,
             "skipped": args.skip_gitignore,
-            "entry": GITIGNORE_ENTRY,
+            "entries": GITIGNORE_ENTRIES,
         },
     }
     print(json.dumps(result, ensure_ascii=False, indent=2))

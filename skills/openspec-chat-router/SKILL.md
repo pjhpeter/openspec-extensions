@@ -1,6 +1,6 @@
 ---
 name: openspec-chat-router
-description: Route natural-language chat or IM requests into the correct OpenSpec workflow step without requiring slash commands. Use when the user wants to drive the OpenSpec change workflow in plain language, such as “进入openspec模式”, “进入 openspec 模式”, “开启openspec模式”, “给我 openspec 话术模板”, “列出当前 change 列表”, “起一个变更”, “继续当前 change”, “把文档补齐后开始做”, “检查能不能归档”, “同步 delta spec”, “按 issue 模式继续”, “拆成 issue”, “给我 ISSUE-001 的 worker 模板”, “执行 ISSUE-001”, “同步 worker 进度”, “收敛 issue 状态”, “根据 worker 结果继续推进”, or similar requests about proposal/design/tasks/spec/archive work.
+description: Route natural-language chat or IM requests into the correct OpenSpec workflow step without requiring slash commands. Use when the user wants to drive the OpenSpec change workflow in plain language, such as “进入openspec模式”, “进入 openspec 模式”, “开启openspec模式”, “给我 openspec 话术模板”, “列出当前 change 列表”, “起一个变更”, “继续当前 change”, “把文档补齐后开始做”, “检查能不能归档”, “同步 delta spec”, “按 issue 模式继续”, “拆成 issue”, “给我 ISSUE-001 的 worker 模板”, “执行 ISSUE-001”, “同步 worker 进度”, “收敛 issue 状态”, “根据 worker 结果继续推进”, “开启 coordinator heartbeat”, “自动检查 worker 并通知我”, or similar requests about proposal/design/tasks/spec/archive work.
 ---
 
 # OpenSpec Chat Router
@@ -64,6 +64,7 @@ Map the user's request to the closest OpenSpec action.
 | They want one worker session to execute a single issue with explicit scope boundaries | `execute-issue` |
 | They want to observe a worker process, inspect whether it is still alive, or recover what it is doing from persistent-host/process/session files/worktree state | `monitor-worker` |
 | They want to sync worker outputs, collect issue progress, or decide the next coordinator step | `reconcile` |
+| They want the coordinator to poll worker state, notify proactively, or auto-dispatch mechanical next steps | `heartbeat` |
 | They want to verify completeness, readiness, or acceptance before closing the change | `verify` |
 | They want to merge delta specs into the main specs | `sync-specs` |
 | They want to finish, archive, close out, or收尾 the change | `archive` |
@@ -85,6 +86,7 @@ Use these defaults when the user does not name a stage explicitly:
 - “本会话只处理 ISSUE-001 / 执行这个 issue / worker 继续做这个 issue” -> `execute-issue`
 - “看看 worker1 还活着吗 / 监控 worker / worker 做到哪一步了” -> `monitor-worker`
 - “同步 worker 进度 / 收敛 issue 状态 / 根据 worker 结果继续推进” -> `reconcile`
+- “开启 heartbeat / 自动检查 worker / 有结果就通知我 / 自动派发下一个 issue” -> `heartbeat`
 - “看看做完没有 / 能不能验收 / 能不能归档” -> `verify`
 - “进入 openspec 模式 / 给我 openspec 话术模板 / 把命令表打出来” -> `mode`
 - “这个任务很复杂 / 按 issue 模式继续 / 给我多会话模板 / 给我 worker 会话模板” -> `issue-mode`
@@ -264,6 +266,19 @@ Reconcile is the default first step when:
 - `issues/*.progress.json` already exists for the change
 - the user says “继续当前 change” after issue-mode work
 - the user asks whether the coordinator can continue automatically
+
+### Special path: `heartbeat`
+
+If the user asks for proactive polling, heartbeat monitoring,主动通知, or automatic dispatch of obvious next steps, use the bundled helper:
+
+```bash
+python3 .codex/skills/openspec-shared/scripts/coordinator_heartbeat.py \
+  --repo-root . \
+  --change "<change-name>"
+```
+
+Use repo defaults from `openspec/issue-mode.json` when present.
+Override `--notify-topic`, `--interval-seconds`, `--stale-seconds`, or `--auto-dispatch-next` only when the user asked for different behavior.
 
 ### Special path: `monitor-worker`
 

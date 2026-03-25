@@ -20,6 +20,11 @@ If this file is missing, the helpers fall back to these defaults:
     "mode": "detach",
     "base_ref": "HEAD",
     "branch_prefix": "opsx"
+  },
+  "coordinator_heartbeat": {
+    "interval_seconds": 60,
+    "stale_seconds": 900,
+    "notify_topic": ""
   }
 }
 ```
@@ -33,6 +38,9 @@ If this file is missing, the helpers fall back to these defaults:
 - `worker_worktree.mode`: `detach` or `branch`.
 - `worker_worktree.base_ref`: base ref passed to `git worktree add`.
 - `worker_worktree.branch_prefix`: prefix used when `mode=branch`.
+- `coordinator_heartbeat.interval_seconds`: default polling interval for proactive coordinator checks.
+- `coordinator_heartbeat.stale_seconds`: how old an active issue can be before heartbeat falls back to worker monitoring.
+- `coordinator_heartbeat.notify_topic`: default ntfy topic used by the coordinator heartbeat helper.
 
 ## Practical Rule
 

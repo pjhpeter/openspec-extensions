@@ -63,83 +63,136 @@ def resolve_worktree(args: argparse.Namespace, repo_root: Path, config: dict[str
     raise SystemExit("Provide either --worktree or --repo-root with --change and --issue-id.")
 
 
-def inspect_screen(session_name: str) -> dict[str, Any]:
+def match_host_entries(entries: list[str], session_name: str, hints: list[str]) -> tuple[str, list[str], str]:
+    if session_name:
+        matches = [entry for entry in entries if session_name in entry]
+        status = "active" if matches else "missing"
+        return status, matches, "explicit"
+
+    filtered_hints = [hint.lower() for hint in hints if hint]
+    if not filtered_hints:
+        return "not_checked", [], "none"
+
+    matches = [entry for entry in entries if all(hint in entry.lower() for hint in filtered_hints)]
+    if len(matches) == 1:
+        return "active", matches, "hint"
+    if len(matches) > 1:
+        return "ambiguous", matches, "hint"
+    return "missing", [], "hint"
+
+
+def inspect_screen(session_name: str, hints: list[str]) -> dict[str, Any]:
     code, stdout, stderr = run_command(["screen", "-ls"])
     if code not in (0, 1):
         return {"kind": "screen", "available": False, "status": "error", "error": stderr.strip() or stdout.strip()}
 
     lines = [line.strip() for line in stdout.splitlines() if line.strip()]
-    matches = [line for line in lines if session_name and session_name in line]
-    if session_name:
-        status = "active" if matches else "missing"
-    else:
-        status = "not_checked"
+    status, matches, session_name_source = match_host_entries(lines, session_name, hints)
     return {
         "kind": "screen",
         "available": True,
         "status": status,
         "session_name": session_name,
+        "session_name_source": session_name_source,
+        "hint_terms": hints,
         "matches": matches,
     }
 
 
-def inspect_tmux(session_name: str) -> dict[str, Any]:
+def inspect_tmux(session_name: str, hints: list[str]) -> dict[str, Any]:
     code, stdout, stderr = run_command(["tmux", "list-sessions", "-F", "#{session_name}"])
     if code != 0:
         return {"kind": "tmux", "available": False, "status": "error", "error": stderr.strip() or stdout.strip()}
 
     sessions = [line.strip() for line in stdout.splitlines() if line.strip()]
-    matches = [name for name in sessions if session_name and session_name in name]
-    if session_name:
-        status = "active" if matches else "missing"
-    else:
-        status = "not_checked"
+    status, matches, session_name_source = match_host_entries(sessions, session_name, hints)
     return {
         "kind": "tmux",
         "available": True,
         "status": status,
         "session_name": session_name,
+        "session_name_source": session_name_source,
+        "hint_terms": hints,
         "matches": matches,
     }
 
 
-def inspect_persistent_host(host_kind: str, session_name: str) -> dict[str, Any]:
+def inspect_persistent_host(host_kind: str, session_name: str, hints: list[str]) -> dict[str, Any]:
     if host_kind == "none":
-        return {"kind": "none", "available": False, "status": "disabled", "session_name": session_name, "matches": []}
+        return {
+            "kind": "none",
+            "available": False,
+            "status": "disabled",
+            "session_name": session_name,
+            "session_name_source": "none",
+            "hint_terms": hints,
+            "matches": [],
+        }
     if host_kind == "tmux":
-        return inspect_tmux(session_name)
-    return inspect_screen(session_name)
+        return inspect_tmux(session_name, hints)
+    return inspect_screen(session_name, hints)
 
 
-def inspect_processes(worktree: str) -> dict[str, Any]:
+def line_matches_worker_process(line: str, worktree: str, change: str, issue_id: str) -> bool:
+    lowered = line.lower()
+    if "codex exec" in lowered and worktree in line:
+        return True
+    if change and issue_id and change in line and issue_id in line and any(token in lowered for token in ("screen", "tmux", "codex exec")):
+        return True
+    return False
+
+
+def inspect_processes(worktree: str, change: str, issue_id: str) -> dict[str, Any]:
     code, stdout, stderr = run_command(["ps", "-axww", "-o", "pid=,ppid=,stat=,command="])
     if code != 0:
         return {"status": "error", "error": stderr.strip()}
 
     matches = []
     for line in stdout.splitlines():
-        if worktree in line or f"codex exec -C {worktree}" in line:
+        if line_matches_worker_process(line, worktree, change, issue_id):
             matches.append(" ".join(line.split()))
     return {"status": "active" if matches else "missing", "matches": matches[:20]}
 
 
-def inspect_session_files(worktree: str, codex_home: Path, recent_limit: int, validation_commands: list[str]) -> dict[str, Any]:
+def score_session_candidate(text: str, worktree: str, change: str, issue_id: str) -> int:
+    score = 0
+    if worktree in text:
+        score += 2
+    if change and change in text:
+        score += 2
+    if issue_id and issue_id in text:
+        score += 3
+    return score
+
+
+def inspect_session_files(
+    worktree: str,
+    codex_home: Path,
+    recent_limit: int,
+    validation_commands: list[str],
+    change: str,
+    issue_id: str,
+) -> dict[str, Any]:
     sessions_root = codex_home / "sessions"
     if not sessions_root.exists():
         return {"status": "missing", "latest_session": "", "signals": {}, "validation_signals": []}
 
     candidates = sorted(sessions_root.rglob("*.jsonl"), key=lambda path: path.stat().st_mtime, reverse=True)
     latest_match: Path | None = None
+    latest_score = 0
     for path in candidates:
         try:
             text = path.read_text(errors="ignore")
         except OSError:
             continue
-        if worktree in text:
+        score = score_session_candidate(text, worktree, change, issue_id)
+        if score > latest_score:
             latest_match = path
-            break
+            latest_score = score
+            if score >= 7:
+                break
 
-    if latest_match is None:
+    if latest_match is None or latest_score == 0:
         return {"status": "missing", "latest_session": "", "signals": {}, "validation_signals": []}
 
     text = latest_match.read_text(errors="ignore")
@@ -218,6 +271,7 @@ def main() -> None:
     worktree, worktree_source = resolve_worktree(args, repo_root, config)
     codex_home = Path(args.codex_home).expanduser() if args.codex_home else Path(config["codex_home"]).expanduser()
     host_kind = args.host_kind or config["persistent_host"]["kind"]
+    host_hints = [args.change or "", args.issue_id or ""]
     validation_commands = list(config["validation_commands"])
     validation_source = "config_default"
     if args.change and args.issue_id:
@@ -228,9 +282,16 @@ def main() -> None:
             config=config,
         )
 
-    host_info = inspect_persistent_host(host_kind, args.session_name)
-    process_info = inspect_processes(worktree)
-    session_info = inspect_session_files(worktree, codex_home, args.recent_limit, validation_commands)
+    host_info = inspect_persistent_host(host_kind, args.session_name, host_hints)
+    process_info = inspect_processes(worktree, args.change or "", args.issue_id or "")
+    session_info = inspect_session_files(
+        worktree,
+        codex_home,
+        args.recent_limit,
+        validation_commands,
+        args.change or "",
+        args.issue_id or "",
+    )
     worktree_info = inspect_worktree(worktree)
 
     result = {

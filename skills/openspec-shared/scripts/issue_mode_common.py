@@ -22,6 +22,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "base_ref": "HEAD",
         "branch_prefix": "opsx",
     },
+    "coordinator_heartbeat": {
+        "interval_seconds": 60,
+        "stale_seconds": 900,
+        "notify_topic": "",
+    },
 }
 
 
@@ -133,6 +138,23 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
     base_ref = str(worker_worktree.get("base_ref", DEFAULT_CONFIG["worker_worktree"]["base_ref"])).strip() or "HEAD"
     branch_prefix = str(worker_worktree.get("branch_prefix", DEFAULT_CONFIG["worker_worktree"]["branch_prefix"])).strip() or "opsx"
 
+    coordinator_heartbeat = config.get("coordinator_heartbeat", {})
+    if not isinstance(coordinator_heartbeat, dict):
+        coordinator_heartbeat = {}
+    interval_seconds = int(
+        coordinator_heartbeat.get("interval_seconds", DEFAULT_CONFIG["coordinator_heartbeat"]["interval_seconds"])
+    )
+    stale_seconds = int(
+        coordinator_heartbeat.get("stale_seconds", DEFAULT_CONFIG["coordinator_heartbeat"]["stale_seconds"])
+    )
+    if interval_seconds <= 0:
+        raise SystemExit(f"{CONFIG_RELATIVE_PATH} field `coordinator_heartbeat.interval_seconds` must be > 0.")
+    if stale_seconds <= 0:
+        raise SystemExit(f"{CONFIG_RELATIVE_PATH} field `coordinator_heartbeat.stale_seconds` must be > 0.")
+    notify_topic = str(
+        coordinator_heartbeat.get("notify_topic", DEFAULT_CONFIG["coordinator_heartbeat"]["notify_topic"])
+    ).strip()
+
     return {
         "worktree_root": worktree_root,
         "validation_commands": validation_commands,
@@ -144,6 +166,11 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
             "mode": worktree_mode,
             "base_ref": base_ref,
             "branch_prefix": branch_prefix,
+        },
+        "coordinator_heartbeat": {
+            "interval_seconds": interval_seconds,
+            "stale_seconds": stale_seconds,
+            "notify_topic": notify_topic,
         },
         "config_path": str(CONFIG_RELATIVE_PATH),
         "config_exists": config_path.exists(),

@@ -46,6 +46,7 @@ When artifact state looks stale or suspicious, use `../openspec-monitor-worker/S
 - Prefer issue progress artifacts over run artifacts.
 - Use issue docs to discover pending work that has not started yet.
 - If a worker may be stuck or dead and artifacts are stale, inspect it with `openspec-monitor-worker` before redispatching.
+- If the user wants periodic polling or proactive notifications instead of one-shot reconcile, run `.codex/skills/openspec-shared/scripts/coordinator_heartbeat.py`.
 - If the helper finds no issue artifacts, fall back to normal OpenSpec routing.
 
 ## Output Style
