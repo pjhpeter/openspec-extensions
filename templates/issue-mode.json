@@ -1,0 +1,16 @@
+{
+  "worktree_root": ".worktree",
+  "validation_commands": [
+    "pnpm lint",
+    "pnpm type-check"
+  ],
+  "codex_home": "~/.codex",
+  "persistent_host": {
+    "kind": "screen"
+  },
+  "worker_worktree": {
+    "mode": "detach",
+    "base_ref": "HEAD",
+    "branch_prefix": "opsx"
+  }
+}
