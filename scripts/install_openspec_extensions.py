@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import stat
 import shutil
 from pathlib import Path
 
@@ -20,10 +19,16 @@ SKILL_NAMES = [
     "openspec-reconcile-change",
     "openspec-shared",
 ]
-HEARTBEAT_WRAPPER_PATH = Path("scripts/openspec_coordinator_heartbeat.py")
+RUNTIME_SCRIPTS = [
+    Path("scripts/openspec_coordinator_heartbeat.py"),
+    Path("scripts/openspec_coordinator_heartbeat_start.py"),
+    Path("scripts/openspec_coordinator_heartbeat_status.py"),
+    Path("scripts/openspec_coordinator_heartbeat_stop.py"),
+]
 GITIGNORE_ENTRIES = [
     ".worktree/",
     "openspec/changes/*/runs/COORDINATOR-HEARTBEAT.state.json",
+    "openspec/changes/*/runs/COORDINATOR-HEARTBEAT.exec.log",
 ]
 
 
@@ -111,10 +116,13 @@ def validate_source_layout(source_repo: Path) -> None:
     ensure_directory(source_repo, "Source repo")
     ensure_directory(source_repo / SOURCE_SKILLS_ROOT, "Source skills root")
     missing = [name for name in SKILL_NAMES if not (source_repo / SOURCE_SKILLS_ROOT / name).exists()]
+    missing_runtime = [str(path) for path in RUNTIME_SCRIPTS if not (source_repo / path).exists()]
     if missing:
         raise SystemExit(f"Source repo is missing required skills: {', '.join(missing)}")
     if not (source_repo / CONFIG_TEMPLATE_PATH).exists():
         raise SystemExit(f"Source repo is missing config template: {CONFIG_TEMPLATE_PATH}")
+    if missing_runtime:
+        raise SystemExit(f"Source repo is missing required runtime scripts: {', '.join(missing_runtime)}")
 
 
 def ensure_target_repo(target_repo: Path) -> None:
@@ -192,43 +200,33 @@ def update_gitignore(target_repo: Path, dry_run: bool) -> tuple[str, list[str]]:
     return ".gitignore", missing_entries
 
 
-def heartbeat_wrapper_text() -> str:
-    return """#!/usr/bin/env python3
-from __future__ import annotations
+def install_runtime_scripts(
+    source_repo: Path,
+    target_repo: Path,
+    force: bool,
+    dry_run: bool,
+) -> tuple[list[str], list[str], list[str]]:
+    installed: list[str] = []
+    overwritten: list[str] = []
+    preserved: list[str] = []
 
-import subprocess
-import sys
-from pathlib import Path
+    for relative_path in RUNTIME_SCRIPTS:
+        source_path = source_repo / relative_path
+        target_path = target_repo / relative_path
+        display_path = relative_str(relative_path)
 
+        if target_path.exists():
+            if not force:
+                preserved.append(display_path)
+                continue
+            overwritten.append(display_path)
 
-def main() -> int:
-    repo_root = Path(__file__).resolve().parents[1]
-    runner = repo_root / ".codex" / "skills" / "openspec-shared" / "scripts" / "coordinator_heartbeat.py"
-    if not runner.exists():
-        print(f"Heartbeat runner not found: {runner}", file=sys.stderr)
-        return 1
-    command = [sys.executable, str(runner), "--repo-root", str(repo_root), *sys.argv[1:]]
-    return subprocess.call(command)
+        if not dry_run:
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, target_path)
+        installed.append(display_path)
 
-
-if __name__ == "__main__":
-    raise SystemExit(main())
-"""
-
-
-def install_heartbeat_wrapper(target_repo: Path, force: bool, dry_run: bool) -> tuple[str, str]:
-    target_path = target_repo / HEARTBEAT_WRAPPER_PATH
-    existed_before = target_path.exists()
-
-    if existed_before and not force:
-        return relative_str(HEARTBEAT_WRAPPER_PATH), "preserved"
-
-    if not dry_run:
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        target_path.write_text(heartbeat_wrapper_text())
-        current_mode = target_path.stat().st_mode
-        target_path.chmod(current_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    return relative_str(HEARTBEAT_WRAPPER_PATH), "overwritten" if existed_before else "installed"
+    return installed, overwritten, preserved
 
 
 def main() -> None:
@@ -256,10 +254,12 @@ def main() -> None:
         dry_run=args.dry_run,
     )
 
-    heartbeat_wrapper_path = ""
-    heartbeat_wrapper_status = "skipped"
+    runtime_installed: list[str] = []
+    runtime_overwritten: list[str] = []
+    runtime_preserved: list[str] = []
     if not args.skip_heartbeat_wrapper:
-        heartbeat_wrapper_path, heartbeat_wrapper_status = install_heartbeat_wrapper(
+        runtime_installed, runtime_overwritten, runtime_preserved = install_runtime_scripts(
+            source_repo=source_repo,
             target_repo=target_repo,
             force=args.force,
             dry_run=args.dry_run,
@@ -284,9 +284,10 @@ def main() -> None:
             "status": config_status,
             "overrides": config_overrides_from_args(args),
         },
-        "heartbeat_wrapper": {
-            "path": heartbeat_wrapper_path,
-            "status": heartbeat_wrapper_status,
+        "runtime_scripts": {
+            "installed": runtime_installed,
+            "overwritten": runtime_overwritten,
+            "preserved": runtime_preserved,
             "skipped": args.skip_heartbeat_wrapper,
         },
         "gitignore": {

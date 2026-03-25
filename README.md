@@ -98,12 +98,16 @@ python3 scripts/install_openspec_extensions.py \
 - `.codex/skills/openspec-shared`
 - `openspec/issue-mode.json`
 - `scripts/openspec_coordinator_heartbeat.py`
+- `scripts/openspec_coordinator_heartbeat_start.py`
+- `scripts/openspec_coordinator_heartbeat_status.py`
+- `scripts/openspec_coordinator_heartbeat_stop.py`
 
 并在需要时向目标项目 `.gitignore` 追加：
 
 ```text
 .worktree/
 openspec/changes/*/runs/COORDINATOR-HEARTBEAT.state.json
+openspec/changes/*/runs/COORDINATOR-HEARTBEAT.exec.log
 ```
 
 如果要在安装时一并写入 heartbeat 默认通知配置：
@@ -166,6 +170,7 @@ new -> ff -> plan-issues -> dispatch-issue -> execute-issue -> reconcile -> veri
 5. worker 写 `progress.json` 和 `RUN-*.json`
 6. 主会话用 `openspec-reconcile-change` 收敛状态，决定下一步
 7. 如果希望主会话自动轮询并通知，启动 `scripts/openspec_coordinator_heartbeat.py`
+8. 如果希望常驻 `screen` 托管，用 `start/status/stop` 三个脚本管理 heartbeat
 
 ## 可直接复制的话术模板
 
@@ -194,6 +199,9 @@ new -> ff -> plan-issues -> dispatch-issue -> execute-issue -> reconcile -> veri
 - `同步 <change-name> 当前所有 worker 的 issue 状态，并决定下一步`
 - `看看 worker1 还活着吗`
 - `开启 <change-name> 的 coordinator heartbeat，有结果就通知我`
+- `启动 <change-name> 的 heartbeat`
+- `看看 <change-name> 的 heartbeat 状态`
+- `停止 <change-name> 的 heartbeat`
 
 ### worker 新会话模板
 
@@ -258,6 +266,27 @@ python3 scripts/openspec_coordinator_heartbeat.py \
 python3 scripts/openspec_coordinator_heartbeat.py \
   --change <change-name> \
   --auto-dispatch-next
+```
+
+如果你想让 heartbeat 挂在常驻 `screen` 里：
+
+```bash
+python3 scripts/openspec_coordinator_heartbeat_start.py \
+  --change <change-name>
+```
+
+查看状态：
+
+```bash
+python3 scripts/openspec_coordinator_heartbeat_status.py \
+  --change <change-name>
+```
+
+停止：
+
+```bash
+python3 scripts/openspec_coordinator_heartbeat_stop.py \
+  --change <change-name>
 ```
 
 ## `openspec/issue-mode.json`

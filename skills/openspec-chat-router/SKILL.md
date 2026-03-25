@@ -1,6 +1,6 @@
 ---
 name: openspec-chat-router
-description: Route natural-language chat or IM requests into the correct OpenSpec workflow step without requiring slash commands. Use when the user wants to drive the OpenSpec change workflow in plain language, such as “进入openspec模式”, “进入 openspec 模式”, “开启openspec模式”, “给我 openspec 话术模板”, “列出当前 change 列表”, “起一个变更”, “继续当前 change”, “把文档补齐后开始做”, “检查能不能归档”, “同步 delta spec”, “按 issue 模式继续”, “拆成 issue”, “给我 ISSUE-001 的 worker 模板”, “执行 ISSUE-001”, “同步 worker 进度”, “收敛 issue 状态”, “根据 worker 结果继续推进”, “开启 coordinator heartbeat”, “自动检查 worker 并通知我”, or similar requests about proposal/design/tasks/spec/archive work.
+description: Route natural-language chat or IM requests into the correct OpenSpec workflow step without requiring slash commands. Use when the user wants to drive the OpenSpec change workflow in plain language, such as “进入openspec模式”, “进入 openspec 模式”, “开启openspec模式”, “给我 openspec 话术模板”, “列出当前 change 列表”, “起一个变更”, “继续当前 change”, “把文档补齐后开始做”, “检查能不能归档”, “同步 delta spec”, “按 issue 模式继续”, “拆成 issue”, “给我 ISSUE-001 的 worker 模板”, “执行 ISSUE-001”, “同步 worker 进度”, “收敛 issue 状态”, “根据 worker 结果继续推进”, “开启 coordinator heartbeat”, “自动检查 worker 并通知我”, “启动 heartbeat”, “看看 heartbeat 状态”, “停止 heartbeat”, or similar requests about proposal/design/tasks/spec/archive work.
 ---
 
 # OpenSpec Chat Router
@@ -65,6 +65,9 @@ Map the user's request to the closest OpenSpec action.
 | They want to observe a worker process, inspect whether it is still alive, or recover what it is doing from persistent-host/process/session files/worktree state | `monitor-worker` |
 | They want to sync worker outputs, collect issue progress, or decide the next coordinator step | `reconcile` |
 | They want the coordinator to poll worker state, notify proactively, or auto-dispatch mechanical next steps | `heartbeat` |
+| They want to start the persistent heartbeat screen session | `heartbeat-start` |
+| They want to inspect heartbeat screen/session state | `heartbeat-status` |
+| They want to stop the persistent heartbeat screen session | `heartbeat-stop` |
 | They want to verify completeness, readiness, or acceptance before closing the change | `verify` |
 | They want to merge delta specs into the main specs | `sync-specs` |
 | They want to finish, archive, close out, or收尾 the change | `archive` |
@@ -87,6 +90,9 @@ Use these defaults when the user does not name a stage explicitly:
 - “看看 worker1 还活着吗 / 监控 worker / worker 做到哪一步了” -> `monitor-worker`
 - “同步 worker 进度 / 收敛 issue 状态 / 根据 worker 结果继续推进” -> `reconcile`
 - “开启 heartbeat / 自动检查 worker / 有结果就通知我 / 自动派发下一个 issue” -> `heartbeat`
+- “启动 heartbeat / 常驻运行 heartbeat / 开个 screen 挂着 heartbeat” -> `heartbeat-start`
+- “heartbeat 还在跑吗 / 看看 heartbeat 状态 / heartbeat 的 screen 在吗” -> `heartbeat-status`
+- “停止 heartbeat / 关掉 heartbeat / 把 heartbeat screen 停掉” -> `heartbeat-stop`
 - “看看做完没有 / 能不能验收 / 能不能归档” -> `verify`
 - “进入 openspec 模式 / 给我 openspec 话术模板 / 把命令表打出来” -> `mode`
 - “这个任务很复杂 / 按 issue 模式继续 / 给我多会话模板 / 给我 worker 会话模板” -> `issue-mode`
@@ -279,6 +285,35 @@ python3 .codex/skills/openspec-shared/scripts/coordinator_heartbeat.py \
 
 Use repo defaults from `openspec/issue-mode.json` when present.
 Override `--notify-topic`, `--interval-seconds`, `--stale-seconds`, or `--auto-dispatch-next` only when the user asked for different behavior.
+
+### Special path: `heartbeat-start`
+
+If the user asks to start a persistent heartbeat session, prefer the target-side wrapper:
+
+```bash
+python3 scripts/openspec_coordinator_heartbeat_start.py \
+  --change "<change-name>"
+```
+
+Add `--auto-dispatch-next` only when the user explicitly wants automatic dispatch of the next mechanical step.
+
+### Special path: `heartbeat-status`
+
+If the user asks whether heartbeat is still running or wants the current screen/session state, run:
+
+```bash
+python3 scripts/openspec_coordinator_heartbeat_status.py \
+  --change "<change-name>"
+```
+
+### Special path: `heartbeat-stop`
+
+If the user asks to stop the persistent heartbeat session, run:
+
+```bash
+python3 scripts/openspec_coordinator_heartbeat_stop.py \
+  --change "<change-name>"
+```
 
 ### Special path: `monitor-worker`
 
