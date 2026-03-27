@@ -66,6 +66,40 @@
 
 扩展 skill 的定位是：把复杂实现从“单会话硬做完”改成“主会话协调，多个单 issue worker context 按工件推进”，并且在支持 delegation 的运行时里默认优先 `subagent-first`。
 
+## issue-mode 解决什么问题
+
+如果你们现在的复杂任务还是靠一个长会话从头做到尾，通常会遇到这些问题：
+
+- 任务一长，聊天上下文越来越乱，后面很难判断“当前做到哪一步”
+- 一个需求跨 UI、数据、Electron、i18n 等多个边界时，改动范围容易失控
+- 多个 worker 或多人一起推进时，没有明确 ownership，容易同时改同一处
+- 会话中断、worker 退出、或者隔天继续时，很难从磁盘恢复真实状态
+- 主会话不知道什么时候该 review、merge、verify，只能靠聊天记忆猜
+
+`issue-mode` 对应给出的解法是：
+
+- 用 `issues/INDEX.md` 和 `ISSUE-*.md` 先把复杂 change 拆成明确边界
+- 用 issue worktree 把每个 worker 的代码范围隔离开
+- 用 `issues/*.progress.json` 和 `runs/*.json` 把流程状态落盘，不依赖聊天上下文
+- 用 coordinator / worker ownership 约定，把 `tasks.md`、review、merge、commit 留在主会话
+- 在支持 delegation 的运行时里，默认一个 subagent 只做一个 issue，减少会话漂移
+
+简单说，issue-mode 不是为了“把流程搞复杂”，而是为了把复杂任务拆到可以稳定推进、可以恢复、可以并行、可以 review 的粒度。
+
+### 什么时候该用
+
+满足下面任一条件，就应该优先考虑 issue-mode：
+
+- 一个 change 会跨多个模块或多个技术边界
+- 预计不是一两个回合能做完
+- 需要主会话协调多个 issue 或多个 worker
+- 你希望中途可恢复，而不是把状态全压在聊天记录里
+- 你需要明确知道什么时候该 dispatch、review、merge、verify
+
+### 什么时候不必用
+
+如果是单点小改、单文件修复、或者一个会话就能稳定做完的小任务，继续走原生 OpenSpec 的 `propose -> apply -> archive` 通常更省事。
+
 ## 默认执行模型
 
 复杂任务的默认路径是：
