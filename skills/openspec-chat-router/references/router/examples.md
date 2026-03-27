@@ -1,0 +1,26 @@
+# OpenSpec Chat Router Examples
+
+Use these examples when you need quick intent-to-route references without re-reading the full router skill.
+
+- “进入 openspec 模式。” -> print the cheat sheet
+- “进入 openspec 模式，然后帮我起一个变更。” -> print the cheat sheet, then route to `propose`
+- “这个任务很复杂，按 issue 模式继续。” -> print the issue-mode template
+- “按 issue 模式继续 `add-infinite-canvas-node-naming`。” -> print the issue-mode template, then continue with that change
+- “把这个 change 拆成几个可并行 issue。” -> `plan-issues`
+- “给我 ISSUE-001 的 worker 派发模板。” -> `dispatch-issue`
+- “给 ISSUE-001 创建 worker worktree。” -> `dispatch-issue`
+- “给 ISSUE-001 准备 dispatch 并直接开一个 subagent。” -> `dispatch-issue`, then one delegated issue worker
+- “这个 worker 会话只做 ISSUE-002。” -> `execute-issue`
+- “看看 worker1 现在跑到哪一步了。” -> `monitor-worker`
+- “这个 worker 还活着吗？” -> `monitor-worker`
+- “同步一下当前 change 的 worker 进度。” -> `reconcile`
+- “根据 worker 结果继续推进这个 change。” -> `reconcile`
+- “这个需求我还没想清楚，你先帮我梳理一下。” -> `explore`
+- “帮我起一个登录重构的变更，把文档一次性补齐。” -> `propose`
+- “先建个 change，我想先看第一步文档模板。” -> `new`
+- “把当前 change 的文档补齐到可以开始做。” -> `ff`
+- “继续刚才那个 change。” -> `continue`
+- “现在开始实现这个变更。” -> `apply`
+- “检查一下当前变更能不能归档。” -> `verify`
+- “把这个 change 的 delta spec 同步到主 spec。” -> `sync-specs`
+- “这个变更做完了，帮我归档。” -> `archive`

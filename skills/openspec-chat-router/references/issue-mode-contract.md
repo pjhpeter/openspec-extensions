@@ -1,6 +1,7 @@
 # OpenSpec Issue Mode Contract
 
-Use this contract whenever a change is executed by coordinator + worker sessions.
+Use this contract whenever a change is executed by coordinator + worker contexts.
+The worker may be a spawned subagent or an external worker session.
 
 ## Repo Defaults
 
@@ -17,6 +18,9 @@ Use it for:
 - Codex session root for monitoring
 - persistent host kind
 - worker git worktree creation mode
+
+`persistent_host`, `coordinator_heartbeat`, and `worker_launcher` matter mainly for detached/background worker execution.
+They are fallback infrastructure, not the default subagent-first path.
 
 Issue docs should still materialize `worker_worktree` and `validation` when possible.
 Helper scripts may fall back to the repo config when those fields are missing.
@@ -35,10 +39,11 @@ Helper scripts may fall back to the repo config when those fields are missing.
   - one issue only
   - one assigned issue worktree only
   - issue-local progress artifact
-  - run artifact for that issue session
+  - run artifact for that worker context
 
 Workers must not directly update `tasks.md`.
 Workers must not merge their worktree back or create the final git commit for the issue.
+When subagents are available, prefer them as the default worker form factor.
 
 ## Directory Layout
 
@@ -102,7 +107,7 @@ Recommended enums:
 
 ## `RUN-*.json` Fields
 
-Use one run artifact per worker session:
+Use one run artifact per worker context:
 
 ```json
 {

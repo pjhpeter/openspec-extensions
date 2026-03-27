@@ -7,17 +7,7 @@ description: Split an implementation-ready OpenSpec change into issue-sized work
 
 Use this skill in the coordinator session after the change is implementation-ready.
 
-Read these before writing issue docs:
-
-- `../openspec-chat-router/references/issue-mode-contract.md`
-- `../openspec-chat-router/references/issue-mode-config.md`
-- `references/issue-doc-template.md`
-
-## Goals
-
-- split the change into bounded issues
-- create worker-facing issue docs on disk
-- keep issue boundaries stable enough for new sessions
+Read `../openspec-chat-router/references/issue-mode-contract.md`, `../openspec-chat-router/references/issue-mode-config.md`, and `references/issue-doc-template.md` first.
 
 ## Workflow
 
@@ -41,22 +31,15 @@ Read these before writing issue docs:
 ## Rules
 
 - Coordinator owns issue planning.
-- Do not let worker sessions invent or rewrite issue boundaries ad hoc.
+- Split the change into bounded, worker-facing issue docs that stay stable across fresh sessions.
 - Prefer 2-5 issues for a normal complex change. Split further only when boundaries are still mixed.
+- One issue should touch one bounded slice of the codebase.
+- Avoid mixing UI, Electron, i18n, and data/model changes unless the change is tiny.
+- If a candidate issue needs a long exception list, split it again.
+- Do not let worker sessions invent or rewrite issue boundaries ad hoc.
 - Do not rewrite checked tasks in `tasks.md` unless the user explicitly asks for task remapping.
 - Materialize `worker_worktree` and `validation` into each issue doc frontmatter, using repo defaults from `openspec/issue-mode.json` when present.
-
-## Required Fields In Each Issue Doc
-
-- `issue_id`
-- `title`
-- `worker_worktree`
-- `allowed_scope`
-- `out_of_scope`
-- `done_when`
-- `validation`
-
-These should live in the issue doc frontmatter so downstream tools can generate dispatch prompts deterministically.
+- Each issue doc frontmatter must include `issue_id`, `title`, `worker_worktree`, `allowed_scope`, `out_of_scope`, `done_when`, and `validation` so downstream dispatch stays deterministic.
 
 ## Output
 

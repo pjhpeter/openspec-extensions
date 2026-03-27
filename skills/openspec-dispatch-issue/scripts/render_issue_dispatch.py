@@ -62,7 +62,12 @@ def render_dispatch(
     def bullet_list(items: list[str]) -> str:
         return "\n".join(f"  - `{item}`" for item in items)
 
+    session_label = session_name.strip() or "<optional-for-detached-launch>"
+
     return f"""继续 OpenSpec change `{change}`，执行单个 issue。
+
+默认优先把这个 dispatch 交给主会话直接拉起的一个 subagent。
+只有需要后台脱机继续执行时，才使用外部 worker 会话。
 
 - Issue: `{issue_id}` - {title}
 - Worker worktree:
@@ -71,8 +76,8 @@ def render_dispatch(
   - `{repo_root}`
 - Run ID:
   - `{effective_run_id}`
-- Worker session:
-  - `{session_name or '<launcher-generated>'}`
+- Detached worker session label:
+  - `{session_label}`
 - Allowed scope:
 {bullet_list(allowed_scope)}
 - Out of scope:

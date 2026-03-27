@@ -1,34 +1,15 @@
 ---
 name: openspec-execute-issue
-description: 'Execute exactly one issue in an OpenSpec multi-session change. Use when a worker session is told to handle one issue only, with boundaries such as “Issue: ISSUE-001”, “Allowed scope”, “Out of scope”, “Done when”, or similar issue-scoped implementation instructions.'
+description: 'Execute exactly one issue in an OpenSpec multi-session change. Use when a worker subagent or external worker session is told to handle one issue only, with boundaries such as "Issue: ISSUE-001", "Allowed scope", "Out of scope", "Done when", or similar issue-scoped implementation instructions.'
 ---
 
 # OpenSpec Execute Issue
 
-Use this skill for worker sessions in OpenSpec issue-mode.
+Use this skill in one worker context only, whether that worker is a spawned subagent or an external worker session.
 
-Read these before writing any workflow artifacts:
+Read `../openspec-chat-router/references/issue-mode-contract.md` and `../openspec-chat-router/references/issue-mode-config.md` first.
 
-- `../openspec-chat-router/references/issue-mode-contract.md`
-- `../openspec-chat-router/references/issue-mode-config.md`
-
-## Rules
-
-- Execute one issue only.
-- Do not update `tasks.md`.
-- Do not run `verify` or `archive`.
-- Do not merge the worker worktree back or create the final git commit.
-- Treat `issues/<issue-id>.progress.json` as the worker-owned source of truth.
-- Write a run artifact under `runs/` for this worker session.
-
-## Required Inputs
-
-Do all non-blocked work first, then ask one short question only if one of these is missing and risky:
-
-- change name
-- issue id
-- allowed scope
-- done condition
+If the change name, issue id, allowed scope, or done condition is missing and risky, do all non-blocked work first and then ask one short question.
 
 ## Workflow
 
@@ -49,7 +30,7 @@ Do all non-blocked work first, then ask one short question only if one of these 
      --summary "已开始处理该 issue。"
    ```
    Save the returned `run_id`.
-3. Implement only the assigned issue.
+3. Implement only the assigned issue inside its allowed scope.
 4. Run the validation commands defined for the issue:
    - first use `issues/<issue-id>.md` frontmatter `validation`
    - if that field is missing, fall back to `openspec/issue-mode.json`
@@ -76,7 +57,15 @@ Do all non-blocked work first, then ask one short question only if one of these 
    - progress artifact path
    - run artifact path
    - whether coordinator action is needed
-7. Stop after handing off to the coordinator; review, merge, and commit happen in the main session unless the user explicitly overrides that rule.
+7. Stop after the handoff. Review, merge, and commit stay with the coordinator unless the user explicitly overrides that rule.
+
+## Rules
+
+- Execute one issue only.
+- Treat `issues/<issue-id>.progress.json` as the worker-owned source of truth.
+- Write a run artifact under `runs/` for this worker context.
+- Do not update `tasks.md`, run `verify` or `archive`, merge the worker worktree back, or create the final git commit.
+- This contract is the same whether the worker is a spawned subagent or a separately launched worker session.
 
 ## Blocker Handling
 

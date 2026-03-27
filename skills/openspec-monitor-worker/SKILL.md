@@ -6,6 +6,7 @@ description: Observe an OpenSpec worker session through persistent host state, O
 # OpenSpec Monitor Worker
 
 Use this skill when coordinator-side reconcile is insufficient because worker progress artifacts are stale, missing, or suspicious.
+This is primarily for detached/background workers, not for the default subagent-first path.
 
 Read these before monitoring:
 

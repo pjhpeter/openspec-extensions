@@ -1,6 +1,6 @@
 # Worker Monitoring
 
-Use this reference when coordinator-side artifact reconcile is not enough and you need fallback observability for a worker session.
+Use this reference when coordinator-side artifact reconcile is not enough and you need fallback observability for a detached/background worker context.
 
 Project-specific defaults should come from `openspec/issue-mode.json` when present.
 That file defines the worker worktree root, Codex session root, validation commands, and persistent host kind.
@@ -20,7 +20,7 @@ Issue doc frontmatter `worker_worktree` is allowed to override the repo default 
 
 ### 1. Persistent Hosting
 
-Workers are commonly hosted in `screen` so they do not die with the coordinator shell.
+Detached workers are commonly hosted in `screen` so they do not die with the coordinator shell.
 If the repo uses `tmux` or no host wrapper, follow `persistent_host.kind` from `openspec/issue-mode.json`.
 
 What to inspect:

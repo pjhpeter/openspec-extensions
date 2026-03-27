@@ -1,7 +1,7 @@
 interface:
   display_name: "OpenSpec Chat Router"
   short_description: "进入openspec模式并用自然语言驱动 OpenSpec。"
-  default_prompt: "Use $openspec-chat-router when I say things like 进入openspec模式, 列出当前 change 列表, 继续某个 change, 检查能不能归档, 按 issue 模式继续, 拆成 issue, 给我 ISSUE-001 的 worker 模板, 给 ISSUE-001 创建 worker worktree, 执行 ISSUE-001, 监控 worker, 看看 worker 还活着吗, 同步 worker 进度, 根据 worker 结果继续推进, 开启 coordinator heartbeat, 自动检查 worker 并通知我, 启动 heartbeat, 看看 heartbeat 状态, or 停止 heartbeat."
+  default_prompt: "Use $openspec-chat-router when I say things like 进入openspec模式, 列出当前 change 列表, 继续某个 change, 检查能不能归档, 按 issue 模式继续, 拆成 issue, 给我 ISSUE-001 的 worker 模板, 给 ISSUE-001 创建 worker worktree, 直接开 subagent 做 ISSUE-001, 执行 ISSUE-001, 监控 worker, 看看 worker 还活着吗, 同步 worker 进度, 根据 worker 结果继续推进, or, if I explicitly want background automation, 开启 coordinator heartbeat, 自动检查 worker 并通知我, 启动 heartbeat, 看看 heartbeat 状态, or 停止 heartbeat."
 
 policy:
   allow_implicit_invocation: true

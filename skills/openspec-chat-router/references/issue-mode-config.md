@@ -41,28 +41,31 @@ If this file is missing, the helpers fall back to these defaults:
 }
 ```
 
+Subagent-first flows usually ignore `persistent_host`, `coordinator_heartbeat`, and `worker_launcher`.
+Those fields are fallback configuration for detached/background workers and proactive automation.
+
 ## Fields
 
 - `worktree_root`: repo-relative root for worker git worktrees.
 - `validation_commands`: repo-level default validation commands used when an issue doc does not override `validation`.
 - `codex_home`: where monitoring should look for Codex session jsonl files.
-- `persistent_host.kind`: `screen`, `tmux`, or `none`.
+- `persistent_host.kind`: `screen`, `tmux`, or `none`. Mainly used for detached/background workers.
 - `worker_worktree.mode`: `detach` or `branch`.
 - `worker_worktree.base_ref`: base ref passed to `git worktree add`.
 - `worker_worktree.branch_prefix`: prefix used when `mode=branch`.
-- `coordinator_heartbeat.interval_seconds`: default polling interval for proactive coordinator checks.
+- `coordinator_heartbeat.interval_seconds`: default polling interval for proactive coordinator checks in detached/background automation mode.
 - `coordinator_heartbeat.stale_seconds`: how old an active issue can be before heartbeat falls back to worker monitoring.
 - `coordinator_heartbeat.notify_topic`: default ntfy topic used by the coordinator heartbeat helper.
 - `coordinator_heartbeat.auto_dispatch_next`: whether heartbeat should prepare the next issue dispatch automatically.
-- `coordinator_heartbeat.auto_launch_next`: whether heartbeat should launch the next worker session automatically after dispatch.
-- `worker_launcher.session_prefix`: prefix for `screen` / `tmux` worker session names.
+- `coordinator_heartbeat.auto_launch_next`: whether heartbeat should launch the next external worker session automatically after dispatch.
+- `worker_launcher.session_prefix`: prefix for `screen` / `tmux` external worker session names.
 - `worker_launcher.start_grace_seconds`: how long launcher confirmation can remain in `launching` before being considered failed.
-- `worker_launcher.launch_cooldown_seconds`: cooldown window before a failed launch should be retried again.
+- `worker_launcher.launch_cooldown_seconds`: cooldown window before a failed detached launch should be retried again.
 - `worker_launcher.max_launch_retries`: maximum automatic relaunch attempts after the initial start.
-- `worker_launcher.codex_bin`: Codex executable used by the worker launcher.
+- `worker_launcher.codex_bin`: Codex executable used by the detached worker launcher.
 - `worker_launcher.sandbox_mode`: sandbox mode used when `bypass_approvals=false`.
-- `worker_launcher.bypass_approvals`: whether worker launch uses `--dangerously-bypass-approvals-and-sandbox`.
-- `worker_launcher.json_output`: whether worker launch adds `codex exec --json`.
+- `worker_launcher.bypass_approvals`: whether detached worker launch uses `--dangerously-bypass-approvals-and-sandbox`.
+- `worker_launcher.json_output`: whether detached worker launch adds `codex exec --json`.
 
 ## Practical Rule
 
