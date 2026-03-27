@@ -6,12 +6,11 @@
 
 - 自然语言入口，不要求用户记 slash command
 - change 拆分为可并行 issue
-- 单 issue worker 会话边界约束
-- worker 进度与 run 工件落盘
-- coordinator 收敛 issue 状态
-- worker 存活监控与恢复
-- coordinator heartbeat 主动轮询 / 通知
-- heartbeat -> reconcile -> launch next worker 的自动续跑主链
+- coordinator 创建或复用 issue worktree，并生成派发工件
+- 默认由主会话直接拉起单 issue subagent
+- issue 进度与 run 工件落盘
+- coordinator 从磁盘工件收敛、review、merge、commit
+- detached worker 监控、heartbeat、worker launch 作为显式 fallback
 
 ## 仓库里有什么
 
@@ -45,9 +44,9 @@
 | --- | --- | --- |
 | `openspec-chat-router` | 自然语言路由到正确的 OpenSpec 阶段 | `进入 openspec 模式`、`按 issue 模式继续` |
 | `openspec-plan-issues` | 把已可实现的 change 拆成多个 issue，并生成 issue 文档 | `把这个 change 拆成 issue` |
-| `openspec-dispatch-issue` | 为某个 issue 生成 worker dispatch，并创建或复用 worktree | `给我 ISSUE-001 的 worker 模板` |
-| `openspec-execute-issue` | 在 worker 会话中只执行一个 issue，并写进度工件 | `本会话只处理 ISSUE-001` |
-| `openspec-monitor-worker` | 看 worker 是否还活着、做到哪一步 | `看看 worker1 还活着吗` |
+| `openspec-dispatch-issue` | 为某个 issue 生成 dispatch，创建或复用 worktree，并可直接作为 subagent handoff 来源 | `给我 ISSUE-001 的 worker 模板`、`直接开 subagent 做 ISSUE-001` |
+| `openspec-execute-issue` | 在单个 worker context 中只执行一个 issue，并写进度工件 | `本会话只处理 ISSUE-001` |
+| `openspec-monitor-worker` | 观察 detached/background worker 是否还活着、做到哪一步 | `看看 worker1 还活着吗` |
 | `openspec-reconcile-change` | 从 `issues/*.progress.json` 和 `runs/*.json` 收敛 coordinator 状态 | `同步 worker 进度` |
 | `openspec-shared` | 提供共享脚本、heartbeat、coordinator tick、worker launch/status 与配置逻辑 | 被其他扩展 skill 复用 |
 
@@ -65,7 +64,21 @@
 - `sync-specs`
 - `archive`
 
-扩展 skill 的定位是：把复杂实现从“单会话硬做完”改成“主会话协调，多个 worker 会话按 issue 落地”。
+扩展 skill 的定位是：把复杂实现从“单会话硬做完”改成“主会话协调，多个单 issue worker context 按工件推进”，并且在支持 delegation 的运行时里默认优先 `subagent-first`。
+
+## 默认执行模型
+
+复杂任务的默认路径是：
+
+1. 主会话先把 change 补到 implementation-ready。
+2. 用 `openspec-plan-issues` 生成 `issues/INDEX.md` 和每个 `ISSUE-*.md`。
+3. 用 `openspec-dispatch-issue` 创建或复用 issue worktree，并从 issue 文档渲染 dispatch。
+4. 如果运行时支持 delegation，主会话直接拉起一个只处理该 issue 的 subagent。
+5. worker 按 `openspec-execute-issue` 写 `issues/*.progress.json` 和 `runs/*.json`。
+6. 主会话用 `openspec-reconcile-change` 从磁盘工件收敛状态。
+7. 主会话 review、merge、commit，然后再进入 `verify` / `archive`。
+
+只有当你明确希望后台脱机继续执行、主动轮询通知、或者恢复 detached worker 时，才进入 heartbeat / monitor / worker launch 这些 fallback 路径。
 
 ## 安装到目标项目
 
@@ -167,60 +180,66 @@ propose -> apply -> archive
 - `开始实现当前变更`
 - `检查一下当前变更能不能归档`
 
-### 3. 大任务：先补齐 change，再切 issue
+### 3. 大任务：默认走 subagent-first issue-mode
 
 如果实现会跨多个模块、需要并行、或者单会话太长，推荐：
 
 ```text
-new -> ff -> plan-issues -> dispatch-issue -> execute-issue -> reconcile -> verify -> archive
+new -> ff -> plan-issues -> dispatch-issue -> reconcile/review -> verify -> archive
 ```
 
 推荐节奏：
 
 1. 主会话把 `proposal / design / tasks` 补齐到可实现状态
 2. 用 `openspec-plan-issues` 生成 `issues/INDEX.md` 和每个 `ISSUE-*.md`
-3. 用 `openspec-dispatch-issue` 为某个 issue 生成 worker dispatch
-4. 新开一个 worker 会话，只执行这一个 issue
+3. 用 `openspec-dispatch-issue` 为某个 issue 生成 dispatch，并创建或复用该 issue worktree
+4. 优先让主会话直接拉起一个只处理该 issue 的 subagent
 5. worker 写 `progress.json` 和 `RUN-*.json`
-6. 主会话用 `openspec-reconcile-change` 收敛状态，决定下一步
-7. 如果希望主会话自动轮询并通知，启动 `scripts/openspec_coordinator_heartbeat.py`
-8. 如果希望常驻 `screen` 托管，用 `start/status/stop` 三个脚本管理 heartbeat
-9. 如果希望 heartbeat 自动启动下一个 worker，显式开启 `auto_launch_next`
+6. 主会话用 `openspec-reconcile-change` 收敛状态，review 通过后 merge / commit
+7. 只有当你明确需要后台自动化或 detached worker 时，再启用 heartbeat / monitor / worker launch
+
+### 4. 后台自动化：只在显式需要时开启
+
+这些路径不是默认主链，只在下面场景使用：
+
+- 希望主会话退出后，流程继续后台跑
+- 希望 coordinator 定时轮询并主动通知
+- 希望自动派发或自动拉起下一个 detached worker
+- 希望恢复一个看起来已经卡住或脱离主会话的 worker
 
 ## 可直接复制的话术模板
 
-### 通用 OpenSpec 入口
+README 里的话术按四层理解最不容易乱：
 
-| 自然语言话术 | 路由结果 |
-| --- | --- |
-| `帮我梳理一下这个需求` | `explore` |
-| `帮我起一个变更，把文档补齐` | `propose` |
-| `先建个 change，我想先看模板` | `new` |
-| `把当前 change 的文档补齐到可以开始做` | `ff` |
-| `继续刚才那个 change` | `continue` |
-| `开始实现当前变更` | `apply` |
-| `检查一下当前变更能不能归档` | `verify` |
-| `把这个 change 的 delta spec 同步到主 spec` | `sync-specs` |
-| `这个变更做完了，帮我归档` | `archive` |
+### 1. 模式入口
 
-### issue-mode coordinator 话术
+- `进入 openspec 模式`
+- `给我 openspec 话术模板`
+- `按 issue 模式继续`
+- `按 issue 模式继续 <change-name>`
+- `继续刚才那个 change`
 
-这些话术适合主会话：
+### 2. 主会话话术
 
-- `把 <change-name> 拆成可并行的 issue，并给出每个 issue 的边界和验收标准`
-- `为 <change-name> 生成 issues/INDEX.md 和每个 issue 文档`
-- `为 ISSUE-001 生成 worker dispatch 模板`
-- `给 ISSUE-001 创建 worker worktree`
-- `同步 <change-name> 当前所有 worker 的 issue 状态，并决定下一步`
-- `看看 worker1 还活着吗`
-- `开启 <change-name> 的 coordinator heartbeat，有结果就通知我`
-- `启动 <change-name> 的 heartbeat`
-- `看看 <change-name> 的 heartbeat 状态`
-- `停止 <change-name> 的 heartbeat`
+这些话术适合 coordinator 主会话：
 
-### worker 新会话模板
+- `把 <change-name> 的文档补齐到可以开始做`
+- `把 <change-name> 拆成可并行的 issue，并生成 issue 文档`
+- `为 <issue-id> 生成 dispatch，并创建或复用 worker worktree`
+- `为 <issue-id> 准备 dispatch，并直接开一个 subagent 执行`
+- `收敛 <change-name> 当前 issue 状态，并决定下一步`
+- `验证 <change-name> 是否可以归档`
+- `把 <change-name> 的 delta spec 同步到主 spec`
+- `归档 <change-name>`
 
-下面这段可以直接发给新的 worker 会话：
+### 3. 单 issue worker / subagent 话术
+
+如果 issue 文档已经存在，通常这两句就够了：
+
+- `执行 ISSUE-001`
+- `本会话只处理 ISSUE-001`
+
+如果你要手工复制一段完整上下文给 subagent 或外部 worker，可以用下面这个模板：
 
 ```text
 继续 OpenSpec change `<change-name>`，执行单个 issue。
@@ -236,10 +255,15 @@ new -> ff -> plan-issues -> dispatch-issue -> execute-issue -> reconcile -> veri
   - 验收条件 2
 ```
 
-如果 issue 文档已经存在，也可以直接说：
+### 4. 后台自动化话术
 
-- `执行 ISSUE-001`
-- `本会话只处理 ISSUE-001`
+这组只在你明确要 detached/background automation 时使用：
+
+- `开启 <change-name> 的 coordinator heartbeat，有结果就通知我`
+- `启动 <change-name> 的 heartbeat`
+- `看看 <change-name> 的 heartbeat 状态`
+- `停止 <change-name> 的 heartbeat`
+- `看看 ISSUE-001 的 detached worker 还活着吗`
 
 ## issue-mode 的工件约定
 
@@ -268,6 +292,9 @@ openspec/changes/<change-name>/
 
 ## coordinator heartbeat
 
+下面这些命令只服务于 fallback 的后台自动化路径。
+默认的 subagent-first issue-mode 不要求 heartbeat 常驻。
+
 安装后，目标项目可以直接运行：
 
 ```bash
@@ -290,7 +317,7 @@ python3 scripts/openspec_coordinator_heartbeat.py \
   --auto-dispatch-next
 ```
 
-如果你希望 heartbeat 在判定出 `dispatch_next_issue` 时直接启动下一个 worker：
+如果你希望 heartbeat 在判定出 `dispatch_next_issue` 时直接启动下一个 detached worker：
 
 ```bash
 python3 scripts/openspec_coordinator_heartbeat.py \
@@ -313,7 +340,7 @@ python3 scripts/openspec_coordinator_heartbeat_start.py \
   --auto-launch-next
 ```
 
-如果你只想人工预览下一次 worker 启动参数：
+如果你只想人工预览下一次 detached worker 启动参数：
 
 ```bash
 python3 scripts/openspec_worker_launch.py \
@@ -322,7 +349,7 @@ python3 scripts/openspec_worker_launch.py \
   --dry-run
 ```
 
-如果你想看某个 worker 当前是否处于 `launching` / `running` / `failed` / `orphaned`：
+如果你想看某个 detached worker 当前是否处于 `launching` / `running` / `failed` / `orphaned`：
 
 ```bash
 python3 scripts/openspec_worker_status.py \
@@ -394,12 +421,15 @@ python3 scripts/openspec_coordinator_heartbeat_stop.py \
 - coordinator heartbeat 是否自动 dispatch / 自动 launch 下一个 worker
 - worker launch 的 session 前缀、启动确认宽限期、失败重试节流与 Codex 启动参数
 
-默认建议：
+`persistent_host`、`coordinator_heartbeat` 和 `worker_launcher` 这些字段主要服务于 detached/background 路径。
+默认的 subagent-first 主链通常不会直接用到它们。
+
+当前模板里：
 
 - `auto_dispatch_next=true`
 - `auto_launch_next=false`
 
-也就是默认会自动准备下一个 dispatch，但不会默认自动拉起新的 worker 会话。要做到真正无人值守，请显式开启 `auto_launch_next`。
+也就是 heartbeat 路径默认会自动准备下一轮 dispatch，但不会默认自动拉起新的 detached worker。要做到真正无人值守，请显式开启 `auto_launch_next`。
 
 建议 issue 文档里仍然显式写出 `worker_worktree` 和 `validation`，不要完全依赖默认值推断。
 
@@ -407,9 +437,9 @@ python3 scripts/openspec_coordinator_heartbeat_stop.py \
 
 - 小任务直接走原生 OpenSpec，不必强行拆 issue
 - 大任务先把 change 文档补齐，再切 issue，不要一边做一边临时发散
-- 一个 worker 会话只做一个 issue，不要在同一会话里并发处理多个 issue
+- 默认优先一个 subagent 只做一个 issue，不要在同一 worker context 里并发处理多个 issue
 - 主会话在继续推进前，先跑一次 reconcile，不要靠聊天上下文猜当前状态
-- 真正的流程状态以 `issues/*.progress.json` 和 `runs/*.json` 为准；`worker-session.json` 只负责 coordinator 侧 launch lease 与恢复
+- 真正的流程状态以 `issues/*.progress.json` 和 `runs/*.json` 为准；`worker-session.json` 只负责 detached launch 的 coordinator 侧 lease 与恢复
 
 ## Notes
 
