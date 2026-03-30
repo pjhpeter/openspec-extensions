@@ -1,11 +1,11 @@
 ---
 name: openspec-subagent-team
-description: Coordinate an OpenSpec change or issue through a subagent team development -> check -> repair -> review loop. Use when the user explicitly asks for subagent team collaboration or needs a bounded multi-round control plane for complex issue-mode work.
+description: Coordinate an OpenSpec change or issue through a subagent team development -> check -> repair -> review loop. Use as the default coordinator entry path for complex issue-mode work, or whenever a bounded multi-round control plane is needed.
 ---
 
 # OpenSpec Subagent Team
 
-Use this skill in the coordinator session when the user explicitly wants subagent team collaboration for the whole OpenSpec complex-change lifecycle.
+Use this skill in the coordinator session as the default entry path for the whole OpenSpec complex-change lifecycle.
 
 Read these first:
 
@@ -65,7 +65,8 @@ Read these first:
 
 ## Rules
 
-- Only use this path when the user explicitly asks for subagents / team collaboration, or when the request already assumes subagent-team orchestration.
+- This is the default entry path for complex issue-mode execution.
+- Use the single-worker issue path only when the user explicitly narrows execution to one bounded issue worker, or the current step clearly only needs one issue-local implementation context.
 - `subagent_team.*` now controls full-process auto-advance, not just the design-review checkpoint.
 - `semi_auto` means the lifecycle pauses after each review gate; `full_auto` means the lifecycle auto-continues across `spec_readiness -> issue_planning -> issue_execution -> change_acceptance -> change_verify -> archive` while still respecting RRA gates.
 - One issue stays one bounded execution unit even when multiple subagents participate in the round.

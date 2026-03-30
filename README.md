@@ -51,7 +51,7 @@
 3. 用 `plan-issues` 生成 `issues/INDEX.md` 和各个 `ISSUE-*.md`。
 4. 主会话做 issue-planning review，确认边界、ownership、依赖和 acceptance。
 5. 只为当前 round 已批准的 issue 创建或复用 worktree，并生成 dispatch / team dispatch。
-6. 单个 issue 用一个 subagent；复杂 round 用 subagent team。
+6. 复杂 change 的默认入口就是 subagent team；只有在显式收窄到单个 issue worker 时，才走单 worker subagent。
 7. worker 只写 issue-local progress 和 run 工件，不自合并、不自提交。
 8. 主会话用 `reconcile` 从磁盘工件收敛状态，并整理 change 级 backlog / round verdict。
 9. 主会话 review、merge、commit。
@@ -107,6 +107,9 @@
   - `auto_advance_to_next_issue_after_issue_pass`：单个 issue 审查通过后自动进入下一个 issue 或 change acceptance
   - `auto_run_change_verify`：change acceptance 通过后自动进入 verify
   - `auto_archive_after_verify`：verify 通过后自动进入 archive
+- `subagent_team.*` 不负责决定默认入口拓扑：
+  - issue-mode 下，coordinator 默认入口就是 `openspec-subagent-team`
+  - 单 worker issue path 只在显式收窄到一个 issue worker 时使用
 - runtime 会基于这些值派生一个 automation profile：
   - `semi_auto`：`rra.gate_mode=advisory` 且五个 `subagent_team` 开关全为 `false`
   - `full_auto`：`rra.gate_mode=enforce` 且五个 `subagent_team` 开关全为 `true`
@@ -243,5 +246,6 @@ openspec/changes/*/runs/CHANGE-VERIFY.json
 
 - 主链只有 coordinator + subagents
 - `worker_worktree` 作为 issue 边界与 merge 隔离层继续保留
+- 复杂 change 在 issue-mode 下默认从 `openspec-subagent-team` 入口进入；单 worker path 是特例，不是默认入口
 - `subagent_team.*` 覆盖 `spec_readiness -> issue_planning -> issue_execution -> change_acceptance -> verify -> archive` 全流程
 - 通过 `openspec/issue-mode.json` 可以切换 `semi_auto`、`full_auto` 或自定义混合模式

@@ -55,6 +55,12 @@ The repo config is a reusable default layer, not a replacement for clear issue d
 
 `worker_worktree` is part of the intended steady-state contract. It is kept as the issue-isolation and coordinator-merge boundary for the subagent-team flow.
 
+Important:
+
+- `subagent_team.*` controls auto-advance behavior after the coordinator has already entered the subagent-team flow
+- it does not choose the default coordinator entry topology
+- in issue mode, the default coordinator entry is `openspec-subagent-team` regardless of whether the active automation profile is `semi_auto`, `full_auto`, or `custom`
+
 ## Automation Profiles
 
 The runtime derives a profile from `rra.gate_mode` plus the five `subagent_team.*` switches:

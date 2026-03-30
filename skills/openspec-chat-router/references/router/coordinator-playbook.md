@@ -10,8 +10,8 @@ This is the normal flow when the runtime supports delegation and the user wants 
 1. Get the change to implementation-ready state, then run a spec-readiness review for the current target mode.
 2. Run `plan-issues`, then review the issue breakdown before dispatching work.
 3. Dispatch only issues that are approved for the active round.
-4. When the user explicitly wants subagent team orchestration, render `ISSUE-*.team.dispatch.md` and use it as the round control packet.
-5. For bounded implementation slices, spawn exactly one worker subagent for one approved issue.
+4. By default, render the subagent-team lifecycle packet and use it as the round control packet.
+5. For bounded implementation slices that are explicitly narrowed to one issue worker, spawn exactly one worker subagent for one approved issue.
 6. Pass the generated dispatch content or file to the worker or team as the source of truth.
 7. Have code-writing subagents follow `openspec-execute-issue`, including issue-local progress and run artifacts.
 8. Reconcile from disk, normalize any findings into the change-level backlog, and decide whether the issue passes the round.
@@ -21,7 +21,8 @@ This is the normal flow when the runtime supports delegation and the user wants 
 ## Rules
 
 - one worker context handles one issue only
-- use explicit subagent-team rounds only when the user asks for team collaboration or the task already requires that topology
+- use subagent-team rounds as the default issue-mode coordinator topology
+- fall back to the single-worker issue path only when the user explicitly narrows execution to one issue worker or the current step is already a bounded worker handoff
 - keep a change-level normalized backlog and round verdict for complex changes
 - do not let workers update `tasks.md`
 - do not let workers self-merge or create the final git commit

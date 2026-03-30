@@ -1,7 +1,7 @@
 # OpenSpec Issue Mode Contract
 
 Use this contract whenever a change is executed by a coordinator plus issue-scoped worker contexts.
-In the default path, workers are spawned subagents bounded to one issue and one issue worktree.
+In the default path, the coordinator enters through subagent-team orchestration, and any issue-scoped workers stay bounded to one issue and one issue worktree.
 
 Read `issue-mode-rra.md` as the change-level control-plane reference.
 
@@ -129,5 +129,5 @@ If `worker_worktree` or `validation` is missing, helpers fall back to `openspec/
 Chat text is not the workflow state.
 Issue progress files are the execution state.
 Control backlog and round reports are the acceptance state.
-Team dispatch artifacts are the coordinator handoff state for explicit subagent-team rounds.
+Team dispatch artifacts are the coordinator handoff state for the default subagent-team rounds in issue mode.
 In issue mode, accepted code lands through coordinator review plus coordinator-owned merge and commit, not through worker self-merge.

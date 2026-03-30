@@ -1,7 +1,7 @@
 interface:
   display_name: "OpenSpec Chat Router"
   short_description: "进入openspec模式并用自然语言驱动 OpenSpec。"
-  default_prompt: "Use $openspec-chat-router when I say things like 进入openspec模式, 列出当前 change 列表, 继续某个 change, 检查能不能归档, 按 issue 模式继续, 拆成 issue, 给我 ISSUE-001 的 worker 模板, 给 ISSUE-001 创建 worker worktree, 直接开 subagent 做 ISSUE-001, 用 subagent team 推进 ISSUE-001, 执行 ISSUE-001, 同步 worker 进度, 根据 worker 结果继续推进."
+  default_prompt: "Use $openspec-chat-router when I say things like 进入openspec模式, 列出当前 change 列表, 继续某个 change, 检查能不能归档, 按 issue 模式继续, 拆成 issue, 给我 ISSUE-001 的 worker 模板, 给 ISSUE-001 创建 worker worktree, 直接开 subagent 做 ISSUE-001, 用 subagent team 推进 ISSUE-001, 执行 ISSUE-001, 同步 worker 进度, 根据 worker 结果继续推进. In issue-mode, default the coordinator entry path to subagent-team unless I explicitly narrow the work to one issue worker."
 
 policy:
   allow_implicit_invocation: true

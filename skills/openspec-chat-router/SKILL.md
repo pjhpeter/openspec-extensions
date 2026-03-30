@@ -43,9 +43,10 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - If the user asks to enter OpenSpec mode, print the OpenSpec mode cheat sheet instead of running a workflow stage.
 - For large or complex work, prefer issue-based execution plus a change-level review/repair/re-review/acceptance loop rather than one long-running session.
 - In issue-based execution, one worker context handles one issue only.
-- When the user explicitly asks for subagent team collaboration, prefer the coordinator owning a development / check / repair / review round via `openspec-subagent-team`.
+- In issue-mode, default the coordinator entry path to `openspec-subagent-team`.
 - In runtimes that support subagents or delegation, prefer the coordinator spawning one worker subagent per issue.
-- The default issue-mode flow is: coordinator creates or reuses the issue worktree, dispatches one worker subagent or one subagent team into that issue scope, waits for completion, then reviews the issue from the main session before accepting it.
+- Use the single-worker `dispatch-issue` / `execute-issue` path only when the user explicitly wants one bounded issue worker, or the current phase has already been narrowed to that one issue.
+- The default issue-mode flow is: coordinator enters through `openspec-subagent-team`, creates or reuses approved issue worktrees as needed, drives the current round, then reviews accepted issue output from the main session before merge and commit.
 - In multi-session work on the same change, the coordinator session owns `tasks.md`, change-level backlog, merge, commit, `verify`, and `archive`.
 - Workers must write issue-local progress and run artifacts. They must not directly update `tasks.md`, self-merge, or create the final git commit.
 - Before a coordinator continues a change that already has issue artifacts, reconcile worker state from disk first and read change-level control artifacts if present instead of trusting chat memory.
@@ -64,6 +65,7 @@ Prefer the project-local companion skill first when the route becomes concrete:
 | They want to implement, code, land, or continue coding from the change tasks | `apply` |
 | They want to split a complex change into issue-sized work packages or create issue docs | `plan-issues` |
 | They want to generate the next worker prompt, create the worker worktree, or prepare a subagent handoff for one issue | `dispatch-issue` |
+| They want to continue a complex change in issue mode and did not explicitly narrow the work to one issue worker | `subagent-team` |
 | They explicitly want a subagent team / development-check-review loop for one issue or round | `subagent-team` |
 | They want one worker subagent to execute a single issue with explicit scope boundaries | `execute-issue` |
 | They want to sync worker outputs, collect issue progress, or decide the next coordinator step | `reconcile` |
@@ -88,7 +90,7 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - “同步 worker 进度 / 收敛 issue 状态 / 根据 worker 结果继续推进” -> `reconcile`
 - “看看做完没有 / 能不能验收 / 能不能归档” -> `verify`
 - “进入 openspec 模式 / 给我 openspec 话术模板 / 把命令表打出来” -> `mode`
-- “这个任务很复杂 / 按 issue 模式继续 / 给我多会话模板” -> `issue-mode`
+- “这个任务很复杂 / 按 issue 模式继续 / 给我多会话模板” -> `issue-mode`，随后默认进入 `subagent-team`
 
 ## Complex Change Rules
 
@@ -99,8 +101,8 @@ Preferred flow:
 3. Split implementation into issue-sized units with clear boundaries.
 4. Review the issue plan before dispatching issue work.
 5. For each approved issue, create or reuse the worker git worktree before handoff.
-6. If the user explicitly wants team orchestration, render `ISSUE-*.team.dispatch.md` and run a bounded subagent-team round from the coordinator session.
-7. Otherwise, spawn one worker subagent for one approved issue and keep it inside that issue worktree only.
+6. By default, render the subagent-team lifecycle packet and use it as the coordinator control packet for the current phase.
+7. Use one worker subagent for one approved issue only when the user explicitly narrows execution to that one issue, or the current step is already a bounded issue-worker handoff.
 8. After the worker reports `review_required`, let the coordinator review the worktree, update the change-level backlog, merge accepted changes back to the coordinator branch, and create the commit.
 9. Repeat for the next approved issue, then run a change-level acceptance round before `verify` and `archive`.
 
@@ -118,8 +120,9 @@ Rules:
 
 - Tell the user not to keep multiple issues in one long-running session.
 - Default the coordinator to the main session.
+- Default the coordinator execution entry to `openspec-subagent-team`.
 - Remind the user that the coordinator should create or reuse the issue worktree before handing the issue to a worker.
-- Remind the user that subagent-first is the default when delegation is available.
+- Remind the user that subagent-team is the default coordinator topology when delegation is available.
 - If the task artifacts are not ready yet, route to `new`, `propose`, or `ff` before encouraging worker sessions.
 - If the user is setting up issue-mode for the first time, remind them that workers should not touch `tasks.md`.
 - Remind the user that workers should not merge or commit; the coordinator reviews, merges, and commits after accepting the issue.
@@ -127,20 +130,22 @@ Rules:
 
 ## Special Path: `dispatch-issue`
 
-If the user asks for the next worker template, a dispatch prompt, or a copy-paste message for one issue, prefer `openspec-dispatch-issue`.
+If the user asks for the next worker template, a dispatch prompt, or a copy-paste message for one explicitly narrowed issue worker, prefer `openspec-dispatch-issue`.
 
 Rules:
 
 - dispatch is generated from the issue doc on disk, not improvised from chat memory
+- this is the bounded single-worker path, not the default complex-change entry path
 - when the runtime supports delegation and the user wants the coordinator to proceed immediately, use the generated dispatch as the input for one spawned worker subagent
 
 ## Special Path: `subagent-team`
 
-If the user explicitly wants development / check / repair / review team orchestration for an issue or round, prefer `openspec-subagent-team`.
+If the user is executing a complex change by issue and has not explicitly narrowed the work to one issue worker, prefer `openspec-subagent-team`.
 
 Summary rule:
 
 - render `ISSUE-*.team.dispatch.md`
+- treat `subagent-team` as the default issue-mode coordinator entry
 - keep the main agent as control plane owner
 - use subagent teams only for the approved round scope
 
@@ -160,8 +165,8 @@ Read `references/router/coordinator-playbook.md`.
 
 Summary rule:
 
-- `dispatch-issue` prepares the issue worktree and source-of-truth dispatch
-- one subagent handles one issue
+- `subagent-team` is the default issue-mode coordinator entry
+- `dispatch-issue` prepares the issue worktree and source-of-truth dispatch when execution is explicitly narrowed to one issue worker
 - reconcile, review, merge, change-level acceptance, verify, and archive stay in the coordinator session
 
 ## Preferred Path: Route To The Dedicated Project-Local OpenSpec Skill
