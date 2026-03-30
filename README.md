@@ -96,17 +96,20 @@
 
 - `worktree_root`、`worker_worktree.*` 仍是 active 配置
 - `validation_commands` 是 issue 默认校验命令
-- `rra.gate_mode` 控制 advisory / enforce
+- `rra.gate_mode` 控制 RRA 这个 change-level control plane 是“给建议”还是“做硬门禁”
+  - `advisory`：
+    - 继续计算 round backlog / round scope / verify 放行这些 gate
+    - 但只把结果写进 dispatch packet 和 reconcile 输出，不直接阻断流程
+    - 适合希望流程尽量无人值守推进、由 coordinator 自己决定是否接受建议的场景
+  - `enforce`：
+    - 命中 gate 时会把 RRA 结论变成硬约束
+    - 例如当前 round 还有 `Must fix now` 未处理，或某个 issue 不在当前 round scope 内，就会直接阻止 dispatch
+    - 所有 issue 做完但 round 还没明确放行 verify 时，也会强制下一步先回到 change-level acceptance
+    - 适合你希望整个生命周期严格服从 round contract，而不是允许 coordinator 自行越过 gate 的场景
+  - 可以把它理解成：
+    - `advisory` = 红灯会提示，但不会强制拦车
+    - `enforce` = 红灯就是红灯，不满足条件就不能继续
 - `subagent_team.auto_advance_after_design_review` 控制 design review 通过后是否自动进入 issue planning
-
-旧的这些字段已经不再属于支持契约：
-
-- `codex_home`
-- `persistent_host`
-- `coordinator_heartbeat`
-- `worker_launcher`
-
-如果旧仓库里还保留这些键，当前 helper 会忽略它们；建议逐步删掉。
 
 ## 安装到目标项目
 
@@ -123,7 +126,7 @@ python3 scripts/install_openspec_extensions.py \
   --dry-run
 ```
 
-覆盖已有同名 skills，并在升级旧安装时清理 legacy detached-worker runtime 残留：
+覆盖已有同名 skills：
 
 ```bash
 python3 scripts/install_openspec_extensions.py \
@@ -149,13 +152,6 @@ python3 scripts/install_openspec_extensions.py \
 - `.codex/skills/openspec-subagent-team`
 - `.codex/skills/openspec-shared`
 - `openspec/issue-mode.json`
-
-当目标项目里已经存在旧版安装时：
-
-- 带 `--force` 会覆盖现有 active skill 目录，并清理旧的 `openspec-monitor-worker` 和 `scripts/openspec_*` fallback runtime 残留
-- 不带 `--force` 会保留现有 skill 目录，此时安装器不会强行删除 legacy runtime，避免新旧 skill 混搭
-- 带 `--force-config` 会把 `openspec/issue-mode.json` 重写成当前最小契约
-- 如果保留现有 config，安装器会在输出 JSON 里提示仍然存在的 legacy config keys；这些键当前会被 runtime 忽略
 
 并在需要时向目标项目 `.gitignore` 追加：
 
