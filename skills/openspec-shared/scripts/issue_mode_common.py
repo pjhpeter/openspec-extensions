@@ -16,6 +16,7 @@ NUMBERED_TITLE_RE = re.compile(r"^\s*\d+\.\s+(.+?)\s*$")
 BOLD_TITLE_RE = re.compile(r"^\s*\*\*(.+?)\*\*\s*$")
 CHECKBOX_ITEM_RE = re.compile(r"^\s*(?:[-*+]|\d+\.)\s+\[(?P<state>[ xX])\]\s+(?P<text>.+?)\s*$")
 LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]|\d+\.)\s+(?P<text>.+?)\s*$")
+PLACEHOLDER_WORK_ITEM_RE = re.compile(r"[\s`*_~\-.。,，;；:：!?！？()\[\]{}<>/\\]+")
 BACKLOG_SECTION_ALIASES = {
     "must_fix_now": (
         "must fix now",
@@ -283,6 +284,31 @@ def dedupe_strings(values: list[str]) -> list[str]:
     return result
 
 
+EMPTY_WORK_ITEM_SENTINELS = {
+    "none",
+    "n/a",
+    "na",
+    "empty",
+    "nothing",
+    "noopenitems",
+    "noopenitem",
+    "noblocker",
+    "noblockers",
+    "无",
+    "暂无",
+    "没有",
+    "无待办",
+    "无待处理项",
+    "无阻塞",
+    "无阻塞项",
+}
+
+
+def is_placeholder_work_item(text: str) -> bool:
+    normalized = PLACEHOLDER_WORK_ITEM_RE.sub("", text).casefold()
+    return normalized in EMPTY_WORK_ITEM_SENTINELS
+
+
 def extract_open_work_items(lines: list[str]) -> list[str]:
     items: list[str] = []
     for raw_line in lines:
@@ -293,11 +319,17 @@ def extract_open_work_items(lines: list[str]) -> list[str]:
         if checkbox_match:
             if checkbox_match.group("state").strip().casefold() == "x":
                 continue
-            items.append(checkbox_match.group("text").strip())
+            text = checkbox_match.group("text").strip()
+            if is_placeholder_work_item(text):
+                continue
+            items.append(text)
             continue
         list_match = LIST_ITEM_RE.match(line)
         if list_match:
-            items.append(list_match.group("text").strip())
+            text = list_match.group("text").strip()
+            if is_placeholder_work_item(text):
+                continue
+            items.append(text)
     return dedupe_strings(items)
 
 
