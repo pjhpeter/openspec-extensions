@@ -57,7 +57,9 @@ Those fields are fallback configuration for detached/background workers and proa
 - `coordinator_heartbeat.stale_seconds`: how old an active issue can be before heartbeat falls back to worker monitoring.
 - `coordinator_heartbeat.notify_topic`: default ntfy topic used by the coordinator heartbeat helper.
 - `coordinator_heartbeat.auto_dispatch_next`: whether heartbeat should prepare the next issue dispatch automatically.
-- `coordinator_heartbeat.auto_launch_next`: whether heartbeat should launch the next external worker session automatically after dispatch.
+- `coordinator_heartbeat.auto_launch_next`: whether heartbeat should keep the detached issue pipeline moving automatically; when enabled, heartbeat can launch the next worker, and by default also inherits to review acceptance and final verify unless explicitly overridden.
+- `coordinator_heartbeat.auto_accept_review`: whether heartbeat should automatically accept `review_required` issues by merging the worker worktree back into the coordinator branch and creating the acceptance commit. If omitted, it inherits `auto_launch_next`.
+- `coordinator_heartbeat.auto_verify_change`: whether heartbeat should automatically run change-level verify after all issues are completed. If omitted, it inherits `auto_accept_review`.
 - `worker_launcher.session_prefix`: prefix for `screen` / `tmux` external worker session names.
 - `worker_launcher.start_grace_seconds`: how long launcher confirmation can remain in `launching` before being considered failed.
 - `worker_launcher.launch_cooldown_seconds`: cooldown window before a failed detached launch should be retried again.

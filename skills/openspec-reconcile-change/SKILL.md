@@ -32,9 +32,11 @@ When artifact state looks stale or suspicious, use `../openspec-monitor-worker/S
 5. Update coordinator-owned files only, such as `tasks.md` or change-level summaries.
 6. Follow the helper result:
    - `resolve_blocker` -> stop and surface blocker
+   - `resolve_verify_failure` -> inspect the verify artifact and fix the failing validation or unchecked tasks
    - `coordinator_review` -> review the issue, then accept it with `coordinator_merge_issue.py`
    - `dispatch_next_issue` -> prepare the next worker issue
    - `verify_change` -> move to `openspec-verify-change`
+   - `ready_for_archive` -> verify has passed and the change can move to archive when desired
    - `wait_for_active_issue` -> do not force progress
 
 ## Rules

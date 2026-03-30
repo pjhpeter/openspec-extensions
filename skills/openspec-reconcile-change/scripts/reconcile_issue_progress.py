@@ -3,7 +3,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
+
+SHARED_SCRIPTS = Path(__file__).resolve().parents[2] / "openspec-shared" / "scripts"
+if str(SHARED_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SHARED_SCRIPTS))
+
+from coordinator_change_common import read_json, verification_artifact_is_current, verify_artifact_path  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -11,11 +18,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--repo-root", required=True)
     parser.add_argument("--change", required=True)
     return parser.parse_args()
-
-
-def read_json(path: Path) -> dict:
-    return json.loads(path.read_text())
-
 
 def issue_id_from_doc(path: Path) -> str:
     return path.stem
@@ -72,7 +74,7 @@ def count_statuses(issues: list[dict]) -> dict[str, int]:
     }
 
 
-def determine_next_action(issues: list[dict]) -> tuple[str, str, str]:
+def determine_next_action(repo_root: Path, change: str, issues: list[dict]) -> tuple[str, str, str]:
     if not issues:
         return "no_issue_artifacts", "", "未找到 issue 工件。"
 
@@ -99,6 +101,11 @@ def determine_next_action(issues: list[dict]) -> tuple[str, str, str]:
 
     completed = [issue for issue in issues if issue.get("status") == "completed"]
     if completed and len(completed) == len(issues):
+        verify_artifact = read_json(verify_artifact_path(repo_root, change))
+        if verify_artifact and verification_artifact_is_current(issues, verify_artifact):
+            if verify_artifact.get("status") == "passed":
+                return "ready_for_archive", "", "全部 issue 已完成且 change 已通过 verify。"
+            return "resolve_verify_failure", "", "全部 issue 已完成，但最近一次 verify 未通过。"
         return "verify_change", completed[0]["issue_id"], "全部 issue 已完成，可进入 verify。"
 
     return "inspect_change", issues[0]["issue_id"], "需要 coordinator 人工检查当前 change 状态。"
@@ -110,7 +117,7 @@ def main() -> None:
     issues = collect_issues(repo_root, args.change)
 
     counts = count_statuses(issues)
-    next_action, recommended_issue_id, reason = determine_next_action(issues)
+    next_action, recommended_issue_id, reason = determine_next_action(repo_root, args.change, issues)
     result = {
         "change": args.change,
         "issue_count": len(issues),

@@ -6,3 +6,4 @@ progress.md
 .worktree/
 openspec/changes/*/runs/COORDINATOR-HEARTBEAT.state.json
 openspec/changes/*/runs/COORDINATOR-HEARTBEAT.exec.log
+openspec/changes/*/runs/CHANGE-VERIFY.json

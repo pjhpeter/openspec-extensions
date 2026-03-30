@@ -10,6 +10,7 @@
 - 默认由主会话直接拉起单 issue subagent
 - issue 进度与 run 工件落盘
 - coordinator 从磁盘工件收敛、review、merge、commit
+- detached/background 路径下可继续自动 dispatch、launch、accept review、verify change
 - detached worker 监控、heartbeat、worker launch 作为显式 fallback
 
 ## 仓库里有什么
@@ -48,7 +49,7 @@
 | `openspec-execute-issue` | 在单个 worker context 中只执行一个 issue，并写进度工件 | `本会话只处理 ISSUE-001` |
 | `openspec-monitor-worker` | 观察 detached/background worker 是否还活着、做到哪一步 | `看看 worker1 还活着吗` |
 | `openspec-reconcile-change` | 从 `issues/*.progress.json` 和 `runs/*.json` 收敛 coordinator 状态 | `同步 worker 进度` |
-| `openspec-shared` | 提供共享脚本、heartbeat、coordinator tick、worker launch/status 与配置逻辑 | 被其他扩展 skill 复用 |
+| `openspec-shared` | 提供共享脚本、heartbeat、coordinator tick、worker launch/status、change verify 与配置逻辑 | 被其他扩展 skill 复用 |
 
 ## 前置依赖
 
@@ -166,6 +167,7 @@ python3 scripts/install_openspec_extensions.py \
 .worktree/
 openspec/changes/*/runs/COORDINATOR-HEARTBEAT.state.json
 openspec/changes/*/runs/COORDINATOR-HEARTBEAT.exec.log
+openspec/changes/*/runs/CHANGE-VERIFY.json
 openspec/changes/*/runs/ISSUE-*.worker-session.json
 openspec/changes/*/runs/RUN-*.worker.exec.log
 openspec/changes/*/runs/RUN-*.worker.last-message.txt
@@ -313,6 +315,7 @@ openspec/changes/<change-name>/
 │   ├── ISSUE-001.progress.json
 │   └── ISSUE-002.progress.json
 └── runs/
+    ├── CHANGE-VERIFY.json
     ├── RUN-20260325T103000-ISSUE-001.json
     └── RUN-20260325T111500-ISSUE-002.json
 ```
@@ -323,6 +326,7 @@ openspec/changes/<change-name>/
 - worker 一次只处理一个 issue
 - worker 不要直接改 `tasks.md`
 - 真正的流程状态以 `issues/*.progress.json` 为准，不以聊天记录为准
+- detached 自动化完成最终 verify 后，会额外写出 `runs/CHANGE-VERIFY.json`
 
 ## coordinator heartbeat
 
@@ -351,13 +355,23 @@ python3 scripts/openspec_coordinator_heartbeat.py \
   --auto-dispatch-next
 ```
 
-如果你希望 heartbeat 在判定出 `dispatch_next_issue` 时直接启动下一个 detached worker：
+如果你希望 heartbeat 在 detached/background 路径下无人值守地继续推进下一步：
 
 ```bash
 python3 scripts/openspec_coordinator_heartbeat.py \
   --change <change-name> \
   --auto-launch-next
 ```
+
+`--auto-launch-next` 现在不只代表“启动下一个 detached worker”。当配置里没有显式覆盖时，它还会默认继承到：
+
+- 自动 accept `review_required` issue
+- 自动运行 change-level verify
+
+如果你想把这些自动化步骤拆开控制，可以在 `openspec/issue-mode.json` 里单独设置：
+
+- `coordinator_heartbeat.auto_accept_review`
+- `coordinator_heartbeat.auto_verify_change`
 
 如果你想让 heartbeat 挂在常驻 `screen` 里：
 
@@ -366,13 +380,15 @@ python3 scripts/openspec_coordinator_heartbeat_start.py \
   --change <change-name>
 ```
 
-常驻模式下同样可以开启自动启动：
+常驻模式下同样可以开启自动推进：
 
 ```bash
 python3 scripts/openspec_coordinator_heartbeat_start.py \
   --change <change-name> \
   --auto-launch-next
 ```
+
+注意：自动 accept 仍然要求 coordinator worktree 干净。如果主工作区有未提交改动，heartbeat 会停在 `manual_intervention_required`，并通过通知提示你先清理工作区，再继续自动收敛。
 
 如果你只想人工预览下一次 detached worker 启动参数：
 
@@ -463,7 +479,23 @@ python3 scripts/openspec_coordinator_heartbeat_stop.py \
 - `auto_dispatch_next=true`
 - `auto_launch_next=false`
 
-也就是 heartbeat 路径默认会自动准备下一轮 dispatch，但不会默认自动拉起新的 detached worker。要做到真正无人值守，请显式开启 `auto_launch_next`。
+也就是 heartbeat 路径默认会自动准备下一轮 dispatch，但不会默认进入 detached 无人值守流水线。显式开启 `auto_launch_next` 后，如果没有额外覆盖：
+
+- 下一个 detached worker 会自动启动
+- `review_required` issue 会自动 accept / merge / commit
+- 所有 issue 完成后会自动跑 change-level verify，并写出 `openspec/changes/<change-name>/runs/CHANGE-VERIFY.json`
+
+如果你只想自动 launch，但不想自动 accept 或自动 verify，再显式加上：
+
+```json
+{
+  "coordinator_heartbeat": {
+    "auto_launch_next": true,
+    "auto_accept_review": false,
+    "auto_verify_change": false
+  }
+}
+```
 
 建议 issue 文档里仍然显式写出 `worker_worktree` 和 `validation`，不要完全依赖默认值推断。
 

@@ -28,6 +28,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--notify-topic", default="")
     parser.add_argument("--auto-dispatch-next", action="store_true")
     parser.add_argument("--auto-launch-next", action="store_true")
+    parser.add_argument("--auto-accept-review", action="store_true")
+    parser.add_argument("--auto-verify-change", action="store_true")
     parser.add_argument("--restart", action="store_true")
     return parser.parse_args()
 
@@ -72,6 +74,8 @@ def main() -> None:
         notify_topic=args.notify_topic,
         auto_dispatch_next=args.auto_dispatch_next,
         auto_launch_next=args.auto_launch_next,
+        auto_accept_review=args.auto_accept_review,
+        auto_verify_change=args.auto_verify_change,
     )
     shell_command = build_screen_shell_command(repo_root, runner_args, log_path)
     code, stdout, stderr = run_command(["screen", "-dmS", session_name, "bash", "-lc", shell_command])

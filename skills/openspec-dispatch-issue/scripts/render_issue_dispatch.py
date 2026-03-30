@@ -66,8 +66,8 @@ def render_dispatch(
 
     return f"""继续 OpenSpec change `{change}`，执行单个 issue。
 
-默认优先把这个 dispatch 交给主会话直接拉起的一个 subagent。
-只有需要后台脱机继续执行时，才使用外部 worker 会话。
+如果你已经是被启动的 detached/background worker，会话内直接执行这个 issue，不要再派生 subagent、worker 或新的 detached 会话。
+只有 coordinator 主会话在人工派发时，才会把这个 dispatch 交给一个新的 subagent 或外部 worker。
 
 - Issue: `{issue_id}` - {title}
 - Worker worktree:

@@ -29,6 +29,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-iterations", type=int, default=0)
     parser.add_argument("--auto-dispatch-next", action="store_true")
     parser.add_argument("--auto-launch-next", action="store_true")
+    parser.add_argument("--auto-accept-review", action="store_true")
+    parser.add_argument("--auto-verify-change", action="store_true")
     return parser.parse_args()
 
 
@@ -88,6 +90,10 @@ def snapshot_once(args: argparse.Namespace, repo_root: Path) -> dict[str, Any]:
         command.append("--auto-dispatch-next")
     if args.auto_launch_next:
         command.append("--auto-launch-next")
+    if args.auto_accept_review:
+        command.append("--auto-accept-review")
+    if args.auto_verify_change:
+        command.append("--auto-verify-change")
     return run_json(
         command,
         cwd=repo_root,
@@ -104,6 +110,8 @@ def main() -> None:
     notify_topic = args.notify_topic or str(heartbeat_config["notify_topic"])
     auto_dispatch_next = args.auto_dispatch_next or bool(heartbeat_config["auto_dispatch_next"])
     auto_launch_next = args.auto_launch_next or bool(heartbeat_config["auto_launch_next"])
+    auto_accept_review = args.auto_accept_review or bool(heartbeat_config["auto_accept_review"])
+    auto_verify_change = args.auto_verify_change or bool(heartbeat_config["auto_verify_change"])
     state_path = state_path_for_change(repo_root, args.change)
     state = load_state(state_path)
     iteration = 0
@@ -113,6 +121,8 @@ def main() -> None:
         args.stale_seconds = stale_seconds
         args.auto_dispatch_next = auto_dispatch_next
         args.auto_launch_next = auto_launch_next
+        args.auto_accept_review = auto_accept_review
+        args.auto_verify_change = auto_verify_change
         snapshot = snapshot_once(args, repo_root)
         event_key = json.dumps(
             {
@@ -153,6 +163,8 @@ def main() -> None:
             "notify_topic": notify_topic,
             "auto_dispatch_next": auto_dispatch_next,
             "auto_launch_next": auto_launch_next,
+            "auto_accept_review": auto_accept_review,
+            "auto_verify_change": auto_verify_change,
             "config_path": config["config_path"],
         }
         snapshot["state_path"] = str(state_path.relative_to(repo_root))

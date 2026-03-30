@@ -103,7 +103,7 @@ Recommended enums:
 
 - `status`: `pending` | `in_progress` | `completed` | `blocked`
 - `boundary_status`: `working` | `review_required` | `done` | `blocked`
-- `next_action`: `continue_issue` | `coordinator_review` | `dispatch_next_issue` | `verify_change` | `resolve_blocker`
+- `next_action`: `continue_issue` | `coordinator_review` | `dispatch_next_issue` | `verify_change` | `ready_for_archive` | `resolve_blocker` | `resolve_verify_failure`
 
 ## `RUN-*.json` Fields
 
@@ -149,6 +149,8 @@ Use one run artifact per worker context:
    - any `review_required` -> review that issue in its worker worktree first; if accepted, merge it back to the coordinator branch and create the commit before moving on
    - any issue doc without progress -> dispatch that next issue
    - all issues `completed` -> move to `verify`
+   - if the latest verify artifact is current and passed -> move to `ready_for_archive`
+   - if the latest verify artifact is current and failed -> stop and resolve verify failure
    - some issues still `pending` and none blocked -> dispatch next issue
 
 ## `ISSUE-*.md` Frontmatter

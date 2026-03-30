@@ -112,6 +112,8 @@ def build_runner_args(
     notify_topic: str,
     auto_dispatch_next: bool,
     auto_launch_next: bool,
+    auto_accept_review: bool,
+    auto_verify_change: bool,
 ) -> list[str]:
     runner = heartbeat_runner_path(repo_root)
     args = [sys.executable, str(runner), "--repo-root", str(repo_root), "--change", change]
@@ -125,6 +127,10 @@ def build_runner_args(
         args.append("--auto-dispatch-next")
     if auto_launch_next:
         args.append("--auto-launch-next")
+    if auto_accept_review:
+        args.append("--auto-accept-review")
+    if auto_verify_change:
+        args.append("--auto-verify-change")
     return args
 
 

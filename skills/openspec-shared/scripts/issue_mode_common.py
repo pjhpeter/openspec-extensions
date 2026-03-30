@@ -29,6 +29,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "notify_topic": "",
         "auto_dispatch_next": False,
         "auto_launch_next": False,
+        "auto_accept_review": False,
+        "auto_verify_change": False,
     },
     "worker_launcher": {
         "session_prefix": "opsx-worker",
@@ -183,6 +185,18 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
         coordinator_heartbeat.get("auto_launch_next", DEFAULT_CONFIG["coordinator_heartbeat"]["auto_launch_next"]),
         bool(DEFAULT_CONFIG["coordinator_heartbeat"]["auto_launch_next"]),
     )
+    raw_auto_accept_review = coordinator_heartbeat.get("auto_accept_review")
+    auto_accept_review = (
+        auto_launch_next
+        if raw_auto_accept_review is None
+        else normalize_bool(raw_auto_accept_review, auto_launch_next)
+    )
+    raw_auto_verify_change = coordinator_heartbeat.get("auto_verify_change")
+    auto_verify_change = (
+        auto_accept_review
+        if raw_auto_verify_change is None
+        else normalize_bool(raw_auto_verify_change, auto_accept_review)
+    )
 
     worker_launcher = config.get("worker_launcher", {})
     if not isinstance(worker_launcher, dict):
@@ -245,6 +259,8 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
             "notify_topic": notify_topic,
             "auto_dispatch_next": auto_dispatch_next,
             "auto_launch_next": auto_launch_next,
+            "auto_accept_review": auto_accept_review,
+            "auto_verify_change": auto_verify_change,
         },
         "worker_launcher": {
             "session_prefix": session_prefix,

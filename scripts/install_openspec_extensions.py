@@ -32,6 +32,7 @@ GITIGNORE_ENTRIES = [
     ".worktree/",
     "openspec/changes/*/runs/COORDINATOR-HEARTBEAT.state.json",
     "openspec/changes/*/runs/COORDINATOR-HEARTBEAT.exec.log",
+    "openspec/changes/*/runs/CHANGE-VERIFY.json",
     "openspec/changes/*/runs/ISSUE-*.worker-session.json",
     "openspec/changes/*/runs/RUN-*.worker.exec.log",
     "openspec/changes/*/runs/RUN-*.worker.last-message.txt",

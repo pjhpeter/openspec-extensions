@@ -23,7 +23,7 @@ Use these paths only when the user explicitly asks for one of the following:
 
 ## `heartbeat`
 
-If the user asks for proactive polling, heartbeat monitoring,主动通知, or automatic dispatch of obvious next steps, use:
+If the user asks for proactive polling, heartbeat monitoring,主动通知, or unattended issue-mode progression, use:
 
 ```bash
 python3 .codex/skills/openspec-shared/scripts/coordinator_heartbeat.py \
@@ -32,7 +32,7 @@ python3 .codex/skills/openspec-shared/scripts/coordinator_heartbeat.py \
 ```
 
 Use repo defaults from `openspec/issue-mode.json` when present.
-Override `--notify-topic`, `--interval-seconds`, `--stale-seconds`, `--auto-dispatch-next`, or `--auto-launch-next` only when the user asked for different behavior.
+Override `--notify-topic`, `--interval-seconds`, `--stale-seconds`, `--auto-dispatch-next`, `--auto-launch-next`, `--auto-accept-review`, or `--auto-verify-change` only when the user asked for different behavior.
 
 ## `heartbeat-start`
 
@@ -44,7 +44,8 @@ python3 scripts/openspec_coordinator_heartbeat_start.py \
 ```
 
 Add `--auto-dispatch-next` only when the user explicitly wants automatic dispatch of the next mechanical step.
-Add `--auto-launch-next` only when the user explicitly wants heartbeat to launch the next detached worker session as well.
+Add `--auto-launch-next` when the user explicitly wants unattended progression; by default this also enables automatic review acceptance and final verify unless the repo config overrides those sub-steps.
+Add `--auto-accept-review` or `--auto-verify-change` only when the user wants those sub-steps enabled independently of `--auto-launch-next`.
 
 ## `heartbeat-status`
 

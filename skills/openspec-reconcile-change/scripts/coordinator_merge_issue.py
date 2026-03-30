@@ -13,6 +13,7 @@ SHARED_SCRIPTS = Path(__file__).resolve().parents[2] / "openspec-shared" / "scri
 if str(SHARED_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SHARED_SCRIPTS))
 
+from coordinator_change_common import sync_tasks_for_issues  # noqa: E402
 from issue_mode_common import display_path, issue_worker_worktree_path, load_issue_mode_config  # noqa: E402
 
 UNMERGED_STATUSES = {"DD", "AU", "UD", "UA", "DU", "AA", "UU"}
@@ -315,6 +316,7 @@ def main() -> None:
 
     updated_at = now_iso()
     summary = f"Coordinator accepted and merged {args.issue_id} from {worker_display} into {target_ref}."
+    tasks_sync = sync_tasks_for_issues(repo_root, args.change, [args.issue_id])
 
     progress["change"] = args.change
     progress["issue_id"] = args.issue_id
@@ -328,6 +330,9 @@ def main() -> None:
     write_json(progress_path, progress)
 
     extra_paths = [progress_path]
+    tasks_path = repo_root / tasks_sync["tasks_path"]
+    if tasks_sync.get("changed") and tasks_path.exists():
+        extra_paths.append(tasks_path)
 
     if run_path is not None:
         run = read_json(run_path)
@@ -352,6 +357,7 @@ def main() -> None:
 
     result["commit_sha"] = commit_sha
     result["commit_summary"] = summary
+    result["tasks_sync"] = tasks_sync
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 

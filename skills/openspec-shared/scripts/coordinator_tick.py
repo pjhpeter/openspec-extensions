@@ -15,6 +15,8 @@ if str(SHARED_SCRIPTS) not in sys.path:
 
 from issue_mode_common import load_issue_mode_config, now_iso  # noqa: E402
 
+MAX_AUTOMATION_STEPS = 8
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
@@ -23,6 +25,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stale-seconds", type=int)
     parser.add_argument("--auto-dispatch-next", action="store_true")
     parser.add_argument("--auto-launch-next", action="store_true")
+    parser.add_argument("--auto-accept-review", action="store_true")
+    parser.add_argument("--auto-verify-change", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -61,6 +65,10 @@ def render_reconcile_message(change: str, reconcile: dict[str, Any]) -> str:
         return f"⚠️ 需要处理: {change} | {issue_id} 等待 review"
     if next_action == "verify_change":
         return f"⚠️ 需要处理: {change} | 可以 verify"
+    if next_action == "ready_for_archive":
+        return f"✅ 完成: {change} | 已 verify，可 archive"
+    if next_action == "resolve_verify_failure":
+        return f"❌ 失败: {change} | verify 失败"
     if next_action == "resolve_blocker":
         return f"❌ 失败: {change} | {issue_id} blocked"
     return f"⚠️ 需要处理: {change} | {reason or next_action}"
@@ -76,6 +84,20 @@ def render_stale_message(change: str, issue_id: str, monitor: dict[str, Any], ag
     if host_status in {"missing", "ambiguous"}:
         return f"⚠️ 需要处理: {change}/{issue_id} | {age_minutes}m 未更新，托管状态异常"
     return f"⚠️ 需要处理: {change}/{issue_id} | {age_minutes}m 未更新，建议人工确认"
+
+
+def reconcile_change(repo_root: Path, change: str) -> dict[str, Any]:
+    return run_json(
+        [
+            sys.executable,
+            ".codex/skills/openspec-reconcile-change/scripts/reconcile_issue_progress.py",
+            "--repo-root",
+            ".",
+            "--change",
+            change,
+        ],
+        cwd=repo_root,
+    )
 
 
 def dispatch_next_issue(repo_root: Path, change: str, issue_id: str, dry_run: bool) -> dict[str, Any]:
@@ -141,6 +163,36 @@ def launch_worker(repo_root: Path, change: str, issue_id: str, dry_run: bool) ->
     return run_json(command, cwd=repo_root)
 
 
+def accept_review(repo_root: Path, change: str, issue_id: str, dry_run: bool) -> dict[str, Any]:
+    command = [
+        sys.executable,
+        ".codex/skills/openspec-reconcile-change/scripts/coordinator_merge_issue.py",
+        "--repo-root",
+        ".",
+        "--change",
+        change,
+        "--issue-id",
+        issue_id,
+    ]
+    if dry_run:
+        command.append("--dry-run")
+    return run_json(command, cwd=repo_root)
+
+
+def verify_change(repo_root: Path, change: str, dry_run: bool) -> dict[str, Any]:
+    command = [
+        sys.executable,
+        ".codex/skills/openspec-shared/scripts/coordinator_verify_change.py",
+        "--repo-root",
+        ".",
+        "--change",
+        change,
+    ]
+    if dry_run:
+        command.append("--dry-run")
+    return run_json(command, cwd=repo_root)
+
+
 def main() -> None:
     args = parse_args()
     repo_root = Path(args.repo_root).resolve()
@@ -149,18 +201,10 @@ def main() -> None:
     stale_seconds = args.stale_seconds or int(heartbeat_config["stale_seconds"])
     auto_dispatch_next = args.auto_dispatch_next or bool(heartbeat_config["auto_dispatch_next"])
     auto_launch_next = args.auto_launch_next or bool(heartbeat_config["auto_launch_next"])
+    auto_accept_review = args.auto_accept_review or bool(heartbeat_config["auto_accept_review"])
+    auto_verify_change = args.auto_verify_change or bool(heartbeat_config["auto_verify_change"])
 
-    reconcile = run_json(
-        [
-            sys.executable,
-            ".codex/skills/openspec-reconcile-change/scripts/reconcile_issue_progress.py",
-            "--repo-root",
-            ".",
-            "--change",
-            args.change,
-        ],
-        cwd=repo_root,
-    )
+    reconcile = reconcile_change(repo_root, args.change)
 
     result: dict[str, Any] = {
         "checked_at": now_iso(),
@@ -174,10 +218,103 @@ def main() -> None:
             "stale_seconds": stale_seconds,
             "auto_dispatch_next": auto_dispatch_next,
             "auto_launch_next": auto_launch_next,
+            "auto_accept_review": auto_accept_review,
+            "auto_verify_change": auto_verify_change,
             "dry_run": args.dry_run,
             "config_path": config["config_path"],
         },
     }
+
+    automation_steps: list[dict[str, Any]] = []
+    last_automation_message = ""
+
+    for _ in range(MAX_AUTOMATION_STEPS):
+        next_action = str(reconcile.get("next_action", ""))
+        issue_id = str(reconcile.get("recommended_issue_id", ""))
+
+        if next_action == "coordinator_review" and issue_id and auto_accept_review:
+            try:
+                accept_payload = accept_review(repo_root, args.change, issue_id, args.dry_run)
+            except RuntimeError as error:
+                result["decision"] = {
+                    "action": "manual_intervention_required",
+                    "issue_id": issue_id,
+                    "reason": str(error),
+                }
+                result["notification_message"] = f"⚠️ 需要处理: {args.change}/{issue_id} | 自动收敛失败: {error}"
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+                return
+            automation_steps.append(
+                {
+                    "action": "accept_review",
+                    "issue_id": issue_id,
+                    "result": accept_payload,
+                }
+            )
+            last_automation_message = f"✅ 完成: {args.change} | 已自动收敛 {issue_id}"
+            if args.dry_run:
+                result["automation"] = {"steps": automation_steps}
+                result["decision"] = {
+                    "action": "preview_accept_review",
+                    "issue_id": issue_id,
+                    "reason": "dry_run",
+                }
+                result["notification_message"] = last_automation_message
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+                return
+            reconcile = reconcile_change(repo_root, args.change)
+            result["reconcile"] = reconcile
+            continue
+
+        if next_action == "verify_change" and auto_verify_change:
+            try:
+                verify_payload = verify_change(repo_root, args.change, args.dry_run)
+            except RuntimeError as error:
+                result["decision"] = {
+                    "action": "manual_intervention_required",
+                    "issue_id": issue_id,
+                    "reason": str(error),
+                }
+                result["notification_message"] = f"⚠️ 需要处理: {args.change} | 自动 verify 失败: {error}"
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+                return
+            automation_steps.append(
+                {
+                    "action": "verify_change",
+                    "issue_id": issue_id,
+                    "result": verify_payload,
+                }
+            )
+            result["verify"] = verify_payload
+            if verify_payload.get("status") != "passed":
+                result["decision"] = {
+                    "action": "resolve_verify_failure",
+                    "issue_id": issue_id,
+                    "reason": verify_payload.get("summary", ""),
+                }
+                result["automation"] = {"steps": automation_steps}
+                result["notification_message"] = f"❌ 失败: {args.change} | 自动 verify 未通过"
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+                return
+            last_automation_message = f"✅ 完成: {args.change} | 已自动完成 verify"
+            if args.dry_run:
+                result["automation"] = {"steps": automation_steps}
+                result["decision"] = {
+                    "action": "preview_verify_change",
+                    "issue_id": issue_id,
+                    "reason": "dry_run",
+                }
+                result["notification_message"] = last_automation_message
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+                return
+            reconcile = reconcile_change(repo_root, args.change)
+            result["reconcile"] = reconcile
+            continue
+
+        break
+
+    if automation_steps:
+        result["automation"] = {"steps": automation_steps}
 
     next_action = str(reconcile.get("next_action", ""))
     issue_id = str(reconcile.get("recommended_issue_id", ""))
@@ -209,6 +346,8 @@ def main() -> None:
                 "issue_id": issue_id,
                 "reason": status_payload.get("reason", ""),
             }
+        elif last_automation_message:
+            result["notification_message"] = last_automation_message
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
 
@@ -222,6 +361,8 @@ def main() -> None:
                 "issue_id": issue_id,
                 "reason": candidate_status.get("reason", ""),
             }
+            if last_automation_message:
+                result["notification_message"] = last_automation_message
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return
 
@@ -267,6 +408,8 @@ def main() -> None:
 
     if next_action != "wait_for_active_issue":
         result["notification_message"] = render_reconcile_message(args.change, reconcile)
+    elif last_automation_message:
+        result["notification_message"] = last_automation_message
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
