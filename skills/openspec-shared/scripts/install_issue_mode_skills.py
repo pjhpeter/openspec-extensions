@@ -18,6 +18,23 @@ SKILL_DIRECTORIES = [
 CONFIG_PATH = Path("openspec/issue-mode.json")
 GITIGNORE_ENTRIES = [
     ".worktree/",
+    "openspec/changes/*/runs/CHANGE-VERIFY.json",
+]
+LEGACY_RUNTIME_PATHS = [
+    Path(".codex/skills/openspec-monitor-worker"),
+    Path("scripts/openspec_coordinator_heartbeat.py"),
+    Path("scripts/openspec_coordinator_heartbeat_start.py"),
+    Path("scripts/openspec_coordinator_heartbeat_status.py"),
+    Path("scripts/openspec_coordinator_heartbeat_stop.py"),
+    Path("scripts/openspec_coordinator_tick.py"),
+    Path("scripts/openspec_worker_launch.py"),
+    Path("scripts/openspec_worker_status.py"),
+]
+LEGACY_CONFIG_KEYS = [
+    "codex_home",
+    "persistent_host",
+    "coordinator_heartbeat",
+    "worker_launcher",
 ]
 
 
@@ -77,6 +94,68 @@ def deep_merge(base: dict, override: dict) -> dict:
             continue
         result[key] = value
     return result
+
+
+def delete_path(path: Path) -> None:
+    if path.is_dir():
+        shutil.rmtree(path)
+        return
+    path.unlink()
+
+
+def cleanup_legacy_runtime(
+    target_repo: Path,
+    *,
+    dry_run: bool,
+    allow_cleanup: bool,
+) -> tuple[list[str], list[str], str]:
+    removed: list[str] = []
+    skipped: list[str] = []
+    for relative_path in LEGACY_RUNTIME_PATHS:
+        target_path = target_repo / relative_path
+        if not target_path.exists():
+            continue
+        if not allow_cleanup:
+            skipped.append(relative_str(relative_path))
+            continue
+        if not dry_run:
+            delete_path(target_path)
+        removed.append(relative_str(relative_path))
+
+    reason = ""
+    if skipped:
+        reason = "Existing installed skill directories were preserved. Re-run with --force to upgrade skills and remove legacy detached-worker artifacts safely."
+    return removed, skipped, reason
+
+
+def load_json_object(path: Path) -> tuple[dict, bool]:
+    try:
+        payload = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return {}, True
+    if not isinstance(payload, dict):
+        return {}, False
+    return payload, False
+
+
+def inspect_config_state(
+    *,
+    source_repo: Path,
+    target_repo: Path,
+    config_status: str,
+    overrides: dict,
+) -> tuple[list[str], bool]:
+    if config_status in {"installed", "overwritten"}:
+        payload = deep_merge(json.loads((source_repo / CONFIG_PATH).read_text()), overrides)
+        return [key for key in LEGACY_CONFIG_KEYS if key in payload], False
+
+    target_config = target_repo / CONFIG_PATH
+    if not target_config.exists():
+        return [], False
+    payload, invalid_json = load_json_object(target_config)
+    if invalid_json:
+        return [], True
+    return [key for key in LEGACY_CONFIG_KEYS if key in payload], False
 
 
 def install_skill_directories(
@@ -169,12 +248,23 @@ def main() -> None:
         force=args.force,
         dry_run=args.dry_run,
     )
+    removed_legacy_runtime, skipped_legacy_runtime, legacy_cleanup_reason = cleanup_legacy_runtime(
+        target_repo,
+        dry_run=args.dry_run,
+        allow_cleanup=not preserved,
+    )
     config_path, config_status = install_config_template(
         source_repo=source_repo,
         target_repo=target_repo,
         force_config=args.force_config,
         overrides={},
         dry_run=args.dry_run,
+    )
+    config_legacy_keys, config_invalid_json = inspect_config_state(
+        source_repo=source_repo,
+        target_repo=target_repo,
+        config_status=config_status,
+        overrides={},
     )
 
     gitignore_path = ""
@@ -191,10 +281,17 @@ def main() -> None:
         "installed_skill_dirs": installed,
         "overwritten_skill_dirs": overwritten,
         "preserved_skill_dirs": preserved,
+        "legacy_runtime_cleanup": {
+            "removed_paths": removed_legacy_runtime,
+            "skipped_paths": skipped_legacy_runtime,
+            "reason": legacy_cleanup_reason,
+        },
         "config": {
             "path": config_path,
             "status": config_status,
             "overrides": {},
+            "legacy_keys_present": config_legacy_keys,
+            "invalid_json": config_invalid_json,
         },
         "gitignore": {
             "path": gitignore_path,

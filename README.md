@@ -123,7 +123,7 @@ python3 scripts/install_openspec_extensions.py \
   --dry-run
 ```
 
-覆盖已有同名 skills：
+覆盖已有同名 skills，并在升级旧安装时清理 legacy detached-worker runtime 残留：
 
 ```bash
 python3 scripts/install_openspec_extensions.py \
@@ -149,6 +149,13 @@ python3 scripts/install_openspec_extensions.py \
 - `.codex/skills/openspec-subagent-team`
 - `.codex/skills/openspec-shared`
 - `openspec/issue-mode.json`
+
+当目标项目里已经存在旧版安装时：
+
+- 带 `--force` 会覆盖现有 active skill 目录，并清理旧的 `openspec-monitor-worker` 和 `scripts/openspec_*` fallback runtime 残留
+- 不带 `--force` 会保留现有 skill 目录，此时安装器不会强行删除 legacy runtime，避免新旧 skill 混搭
+- 带 `--force-config` 会把 `openspec/issue-mode.json` 重写成当前最小契约
+- 如果保留现有 config，安装器会在输出 JSON 里提示仍然存在的 legacy config keys；这些键当前会被 runtime 忽略
 
 并在需要时向目标项目 `.gitignore` 追加：
 
