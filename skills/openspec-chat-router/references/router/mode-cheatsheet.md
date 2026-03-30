@@ -15,33 +15,74 @@
   - `长时间等待 subagent 完成，使用 1 小时阻塞等待，不要 30 秒短轮询`
   - `对当前 subagent team 使用长等待，直到 subagent 完成再返回`
 
-推荐直接复制：
+完整链路案例：
 
-- 默认进入 issue-mode，并走 `subagent-team`
+### 简单任务短链路
 
-```text
-按 issue 模式继续当前 change，默认入口使用 subagent-team。
-```
-
-- 明确要求多 agent 编排
+1. 进入 OpenSpec 模式
 
 ```text
-按 issue 模式继续当前 change，启用 subagent-team，用多 agent 编排推进整个复杂变更生命周期。
+进入 OpenSpec 模式。我接下来要做一个简单任务，先按短链路推进，不要默认拆成多个 issue。
 ```
 
-- 明确要求长时间等待 subagent
+2. 创建 change 并补齐文档
 
 ```text
-按 issue 模式继续当前 change，启用 subagent-team。
-对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
+帮我为这个需求创建 change，并把 proposal、design、tasks 一次性补齐到可实现。
 ```
 
-- 当前仓库是全自动配置，希望真正无人值守
+3. 直接实现
+
+```text
+开始实现当前 change；如果任务规模仍然简单，就不要进入 issue-mode，直接完成实现并运行校验。
+```
+
+4. 收尾
+
+```text
+检查当前 change 是否可以归档；如果 verify 通过，就同步 spec 并归档。
+```
+
+### 复杂任务全生命周期链路
+
+1. 进入 OpenSpec 模式
+
+```text
+进入 OpenSpec 模式。我接下来要做一个复杂变更，需要按完整生命周期推进。
+```
+
+2. 创建 change 并补齐 proposal / design / tasks
+
+```text
+帮我为这个需求创建 change，并补齐 proposal、design、tasks；完成后先不要直接开始实现。
+```
+
+3. 进入 issue-mode，并默认走 `subagent-team`
+
+```text
+按 issue 模式继续当前 change，默认入口使用 subagent-team，用多 agent 编排推进整个复杂变更生命周期。
+```
+
+4. 按全自动配置无人值守推进
 
 ```text
 按当前 openspec/issue-mode.json 配置继续当前 change。
 默认入口使用 subagent-team，按全自动方式推进整个生命周期。
-对 subagent 使用 1 小时阻塞等待，直到完成再返回。
+对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
+```
+
+5. 如果你想先看设计和任务拆分
+
+```text
+先按 issue 模式补齐 proposal、design、tasks 和 issue 规划。
+暂时不要自动进入下一阶段，我要先看设计文档和任务拆分结果。
+```
+
+6. 如果中途返回过早，继续推进
+
+```text
+继续当前 change，保持 subagent-team 主链推进。
+如果需要等待 subagent，使用 1 小时阻塞等待，直到 subagent 完成再返回。
 ```
 
 你可以直接这样说：

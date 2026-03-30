@@ -75,51 +75,86 @@
   - `长时间等待 subagent 完成，使用 1 小时阻塞等待，不要 30 秒短轮询`
   - `对当前 subagent team 使用长等待，直到 subagent 完成再返回`
 
-## 可直接复制的话术模板
+## 从进入 OpenSpec 模式开始的完整链路话术
 
-下面这些话术建议直接复制给 Codex，用来避免 runtime 因为缺少显式授权或等待策略而没有真正进入 `subagent-team` 主链。
+下面这些话术建议直接复制给 Codex。目标不是只告诉它“进入 issue-mode”，而是从“进入 OpenSpec 模式”开始，把简单任务和复杂任务的整条推进链路写清楚。
 
-常用入口：
+### 简单任务短链路
 
-- 进入 issue-mode 并默认走 `subagent-team`
+适合不需要拆成多个 issue 的需求，例如小范围页面调整、单点逻辑修复、局部交互优化。
 
-```text
-按 issue 模式继续当前 change，默认入口使用 subagent-team。
-```
-
-- 进入 issue-mode，并明确要求多 agent 编排
+1. 进入 OpenSpec 模式
 
 ```text
-按 issue 模式继续当前 change，启用 subagent-team，用多 agent 编排推进整个复杂变更生命周期。
+进入 OpenSpec 模式。我接下来要做一个简单任务，先按短链路推进，不要默认拆成多个 issue。
 ```
 
-- 进入 issue-mode，并明确要求长时间阻塞等待 subagent
+2. 创建 change 并补齐文档
 
 ```text
-按 issue 模式继续当前 change，启用 subagent-team。
-对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
+帮我为这个需求创建 change，并把 proposal、design、tasks 一次性补齐到可实现。
 ```
 
-- 当前仓库已经配置为全自动，希望真正无人值守推进
+3. 直接实现当前 change
+
+```text
+开始实现当前 change；如果任务规模仍然简单，就不要进入 issue-mode，直接完成实现并运行校验。
+```
+
+4. verify / archive 收尾
+
+```text
+检查当前 change 是否可以归档；如果 verify 通过，就同步 spec 并归档。
+```
+
+5. 如果中途会话返回过早，继续推进
+
+```text
+继续当前 change，保持 OpenSpec 主链推进，直接完成剩余实现、verify 和 archive。
+```
+
+### 复杂任务全生命周期链路
+
+适合需要拆 issue、跑开发组/检查组/审查组回合、并由 `subagent-team` 推进的复杂变更。
+
+1. 进入 OpenSpec 模式
+
+```text
+进入 OpenSpec 模式。我接下来要做一个复杂变更，需要按完整生命周期推进。
+```
+
+2. 创建 change 并补齐 proposal / design / tasks
+
+```text
+帮我为这个需求创建 change，并补齐 proposal、design、tasks；完成后先不要直接开始实现。
+```
+
+3. 进入 issue-mode，并明确默认入口就是 `subagent-team`
+
+```text
+按 issue 模式继续当前 change，默认入口使用 subagent-team，用多 agent 编排推进整个复杂变更生命周期。
+```
+
+4. 如果希望真正无人值守推进
 
 ```text
 按当前 openspec/issue-mode.json 配置继续当前 change。
 默认入口使用 subagent-team，按全自动方式推进整个生命周期。
-对 subagent 使用 1 小时阻塞等待，直到完成再返回。
+对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
 ```
 
-- 当前仓库是半自动，希望先看设计文档再决定是否继续
+5. 如果你想先看设计文档和任务拆分，再人工决定是否继续
 
 ```text
-先按 issue 模式补齐 proposal、design、tasks。
+先按 issue 模式补齐 proposal、design、tasks 和 issue 规划。
 暂时不要自动进入下一阶段，我要先看设计文档和任务拆分结果。
 ```
 
-- 已经在 issue-mode 里，希望继续当前 change
+6. 如果中途会话返回过早，继续推进
 
 ```text
 继续当前 change，保持 subagent-team 主链推进。
-如果需要等待 subagent，使用 1 小时阻塞等待。
+如果需要等待 subagent，使用 1 小时阻塞等待，直到 subagent 完成再返回。
 ```
 
 ## 配置契约
