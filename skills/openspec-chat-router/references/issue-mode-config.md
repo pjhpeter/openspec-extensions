@@ -38,8 +38,8 @@ If this file is missing, the helpers fall back to these defaults:
 - `worker_worktree.base_ref`: base ref passed to `git worktree add`.
 - `worker_worktree.branch_prefix`: prefix used when `mode=branch`.
 - `rra.gate_mode`: `advisory` or `enforce`.
-- `subagent_team.auto_accept_spec_readiness`: automatically accept the spec-readiness gate once proposal/design/tasks are implementation-ready, then continue into issue planning without waiting for human sign-off.
-- `subagent_team.auto_accept_issue_planning`: automatically accept the issue-planning gate once INDEX/ISSUE docs are dispatch-ready, then dispatch the approved issue set without waiting for human sign-off.
+- `subagent_team.auto_accept_spec_readiness`: automatically accept the spec-readiness gate once proposal/design have passed the 3-subagent design review, then continue into task splitting / issue planning without waiting for human sign-off.
+- `subagent_team.auto_accept_issue_planning`: automatically accept the issue-planning gate once `tasks.md` plus INDEX/ISSUE docs are dispatch-ready, then dispatch the approved issue set without waiting for human sign-off.
 - `subagent_team.auto_accept_issue_review`: automatically accept an eligible `review_required` issue after its issue-local validation passes, then merge/commit it and continue to the next issue or change acceptance.
 - `subagent_team.auto_accept_change_acceptance`: automatically accept the change-acceptance gate and continue into change-level verify.
 - `subagent_team.auto_archive_after_verify`: continue from a passed verify result into archive automatically.
@@ -104,7 +104,7 @@ Use this when a human should still inspect design readiness, issue planning, iss
 
 Behavior:
 
-- spec-readiness waits for human acceptance before issue planning
+- spec-readiness waits for human acceptance after the 3-subagent design review, then issue planning can start task splitting
 - issue planning waits for human acceptance before first dispatch
 - issue review waits for human acceptance before dispatching the next issue
 - change acceptance waits for human acceptance before verify
@@ -139,7 +139,7 @@ Use this when subagent-team should own the full lifecycle, not just issue execut
 
 Behavior:
 
-- spec-readiness is auto-accepted and immediately enters issue planning
+- spec-readiness is auto-accepted after design review and immediately enters task splitting / issue planning
 - issue planning is auto-accepted and immediately dispatches approved issues
 - eligible issue review is auto-accepted and immediately merges/continues
 - change acceptance is auto-accepted and immediately enters verify

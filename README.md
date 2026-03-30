@@ -46,10 +46,10 @@
 
 复杂任务的默认路径是：
 
-1. 主会话把 change 补到 implementation-ready。
-2. 主会话做 change 级 spec-readiness review。
-3. 用 `plan-issues` 生成 `issues/INDEX.md` 和各个 `ISSUE-*.md`。
-4. 主会话做 issue-planning review，确认边界、ownership、依赖和 acceptance。
+1. 主会话先把 proposal / design 补到可评审状态。
+2. 主会话进入 change 级 spec-readiness；这里的审查组固定是 3 个 review subagent，设计评审通过后才能做任务拆分。
+3. 用 `plan-issues` 生成或修订 `tasks.md`、`issues/INDEX.md` 和各个 `ISSUE-*.md`。
+4. 主会话做 issue-planning review，确认任务拆分、边界、ownership、依赖和 acceptance。
 5. 只为当前 round 已批准的 issue 创建或复用 worktree，并生成 dispatch / team dispatch。
 6. 复杂 change 的默认入口就是 subagent team；只有在显式收窄到单个 issue worker 时，才走单 worker subagent。
 7. worker 只写 issue-local progress 和 run 工件，不自合并、不自提交。
@@ -123,10 +123,10 @@
 进入 OpenSpec 模式。我接下来要做一个复杂变更，需要按完整生命周期推进。
 ```
 
-2. 创建 change 并补齐 proposal / design / tasks
+2. 创建 change 并补齐 proposal / design
 
 ```text
-帮我为这个需求创建 change，并补齐 proposal、design、tasks；完成后先不要直接开始实现。
+帮我为这个需求创建 change，并补齐 proposal、design；完成后先不要直接开始实现，也不要先拆任务。
 ```
 
 3. 进入 issue-mode，并明确默认入口就是 `subagent-team`
@@ -146,8 +146,8 @@
 5. 如果你想先看设计文档和任务拆分，再人工决定是否继续
 
 ```text
-先按 issue 模式补齐 proposal、design、tasks 和 issue 规划。
-暂时不要自动进入下一阶段，我要先看设计文档和任务拆分结果。
+先按 issue 模式补齐 proposal、design，并完成设计评审。
+设计评审通过后再做任务拆分；暂时不要自动进入下一阶段，我要先看设计文档和任务拆分结果。
 ```
 
 6. 如果中途会话返回过早，继续推进
@@ -202,8 +202,8 @@
     - `advisory` = 红灯会提示，但不会强制拦车
     - `enforce` = 红灯就是红灯，不满足条件就不能继续
 - `subagent_team.*` 控制 subagent team 是否自动接受当前 gate 并跨 phase 推进：
-  - `auto_accept_spec_readiness`：proposal / design / tasks 达到 implementation-ready 后，自动接受 spec-readiness，不再等待人工评审签字，直接进入 issue planning
-  - `auto_accept_issue_planning`：INDEX / ISSUE 文档达到可派发状态后，自动接受 issue planning，不再等待人工评审签字，直接派发当前 round 的 issue
+  - `auto_accept_spec_readiness`：proposal / design 经过 3 个 review subagent 的设计评审后，自动接受 spec-readiness，不再等待人工评审签字，直接进入任务拆分 / issue planning
+  - `auto_accept_issue_planning`：`tasks.md` 以及 INDEX / ISSUE 文档达到可派发状态后，自动接受 issue planning，不再等待人工评审签字，直接派发当前 round 的 issue
   - `auto_accept_issue_review`：issue 进入 `review_required` 且 issue-local validation 全部通过后，coordinator 自动接受并 merge/commit，然后进入下一个 issue 或 change acceptance
   - `auto_accept_change_acceptance`：change acceptance 满足放行条件后，自动接受该 gate 并进入 verify
   - `auto_archive_after_verify`：verify 通过后自动进入 archive
@@ -246,7 +246,7 @@
 
 说明：
 
-- spec-readiness 达标后仍会暂停，等待 coordinator 人工接受，再进入 issue planning
+- spec-readiness 中的 3 个 design review subagent 通过后仍会暂停，等待 coordinator 人工接受，再进入任务拆分 / issue planning
 - issue planning 达标后仍会暂停，等待 coordinator 人工接受后再派发 issue
 - 单个 issue 达到 review_required 后仍会暂停，等待 coordinator 人工接受并决定是否派发下一 issue
 - change acceptance 达标后仍会暂停，等待 coordinator 决定是否运行 verify
@@ -284,7 +284,7 @@
 
 - `rra.gate_mode=enforce` 让全自动推进仍然服从 round contract，而不是无条件往下跑
 - `subagent_team` 现在已经覆盖：
-  - spec-readiness 自动接受后进入 issue planning
+  - spec-readiness 中的设计评审自动接受后进入任务拆分 / issue planning
   - issue planning 自动接受后派发当前 round 的 issue
   - 单个 issue 自动接受并 merge/commit 后进入下一个 issue 或 change acceptance
   - change acceptance 自动接受后进入 verify

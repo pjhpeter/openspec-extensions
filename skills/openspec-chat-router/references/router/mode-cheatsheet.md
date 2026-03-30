@@ -51,10 +51,10 @@
 进入 OpenSpec 模式。我接下来要做一个复杂变更，需要按完整生命周期推进。
 ```
 
-2. 创建 change 并补齐 proposal / design / tasks
+2. 创建 change 并补齐 proposal / design
 
 ```text
-帮我为这个需求创建 change，并补齐 proposal、design、tasks；完成后先不要直接开始实现。
+帮我为这个需求创建 change，并补齐 proposal、design；完成后先不要直接开始实现，也不要先拆任务。
 ```
 
 3. 进入 issue-mode，并默认走 `subagent-team`
@@ -71,11 +71,11 @@
 对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
 ```
 
-5. 如果你想先看设计和任务拆分
+5. 如果你想先看设计评审和任务拆分
 
 ```text
-先按 issue 模式补齐 proposal、design、tasks 和 issue 规划。
-暂时不要自动进入下一阶段，我要先看设计文档和任务拆分结果。
+先按 issue 模式补齐 proposal、design，并完成设计评审。
+设计评审通过后再做任务拆分；暂时不要自动进入下一阶段，我要先看设计文档和任务拆分结果。
 ```
 
 6. 如果中途返回过早，继续推进

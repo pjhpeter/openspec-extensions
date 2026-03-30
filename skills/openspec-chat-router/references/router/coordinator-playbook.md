@@ -7,8 +7,8 @@ This is the normal flow when the runtime supports delegation and the user wants 
 
 ## Default Flow
 
-1. Get the change to implementation-ready state, then run a spec-readiness review for the current target mode. If `auto_accept_spec_readiness=true`, do not pause for human sign-off once the gate is satisfied.
-2. Run `plan-issues`, then review the issue breakdown before dispatching work. If `auto_accept_issue_planning=true`, do not pause for human sign-off once the issue docs are dispatch-ready.
+1. Get the change to proposal/design-ready state, then run a spec-readiness design review for the current target mode. In this gate, the review group is 3 subagents and task splitting must not start before they pass. If `auto_accept_spec_readiness=true`, do not pause for human sign-off once the gate is satisfied.
+2. After spec-readiness passes, run `plan-issues` to create or refresh `tasks.md` plus the issue breakdown, then review that task-splitting result before dispatching work. If `auto_accept_issue_planning=true`, do not pause for human sign-off once `tasks.md` and the issue docs are dispatch-ready.
 3. Dispatch only issues that are approved for the active round.
 4. By default, render the subagent-team lifecycle packet and use it as the round control packet.
 5. For bounded implementation slices that are explicitly narrowed to one issue worker, spawn exactly one worker subagent for one approved issue.

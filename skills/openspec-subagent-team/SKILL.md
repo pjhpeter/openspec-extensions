@@ -70,8 +70,10 @@ Read these first:
 - Use the single-worker issue path only when the user explicitly narrows execution to one bounded issue worker, or the current step clearly only needs one issue-local implementation context.
 - `subagent_team.*` now controls full-process auto-accept and continuation, not just the design-review checkpoint.
 - `semi_auto` means the lifecycle pauses after each review gate; `full_auto` means the lifecycle auto-continues across `spec_readiness -> issue_planning -> issue_execution -> change_acceptance -> change_verify -> archive` while still respecting RRA gates.
-- `auto_accept_spec_readiness=true` means spec-readiness does not wait for human sign-off once the change is implementation-ready.
-- `auto_accept_issue_planning=true` means issue planning does not wait for human sign-off once INDEX/ISSUE docs are dispatch-ready.
+- `spec_readiness` is the design-review gate in the complex-change path: proposal/design are prepared first, then 3 review subagents must pass it before task splitting begins.
+- `issue_planning` starts after design review passes, and is where coordinator-owned `tasks.md` plus `issues/INDEX.md` and `ISSUE-*.md` are produced/reviewed.
+- `auto_accept_spec_readiness=true` means spec-readiness does not wait for human sign-off once proposal/design have passed the 3-subagent design review.
+- `auto_accept_issue_planning=true` means issue planning does not wait for human sign-off once tasks.md plus INDEX/ISSUE docs are dispatch-ready.
 - `auto_accept_issue_review=true` means eligible `review_required` issues are coordinator-accepted, merged, and committed automatically once issue-local validation passes.
 - `auto_accept_change_acceptance=true` means change acceptance does not wait for human sign-off once verify is allowed.
 - One issue stays one bounded execution unit even when multiple subagents participate in the round.

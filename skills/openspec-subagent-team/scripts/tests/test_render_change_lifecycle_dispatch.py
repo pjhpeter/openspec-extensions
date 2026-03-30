@@ -41,9 +41,9 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
         self.assertEqual(payload["focus_issue_id"], "")
         self.assertFalse(payload["automation"]["accept_spec_readiness"])
         self.assertEqual(payload["automation_profile"], "semi_auto")
-        self.assertIn("proposal / design / tasks", dispatch_text)
+        self.assertIn("proposal / design", dispatch_text)
         self.assertIn("spec_readiness", dispatch_text)
-        self.assertIn("审查通过后暂停，等待人工确认后再进入 issue planning", dispatch_text)
+        self.assertIn("3 个 review subagent 评审通过后暂停，等待人工确认后再进入任务拆分 / issue planning", dispatch_text)
         self.assertIn("subagent_team.auto_accept_spec_readiness=false", dispatch_text)
 
     def test_allows_auto_accept_spec_readiness_when_config_enabled(self) -> None:
@@ -52,6 +52,7 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
             change_dir = repo_root / "openspec" / "changes" / "demo-change"
             change_dir.mkdir(parents=True)
             (change_dir / "proposal.md").write_text("# proposal\n")
+            (change_dir / "design.md").write_text("# design\n")
             (repo_root / "openspec" / "issue-mode.json").parent.mkdir(parents=True, exist_ok=True)
             (repo_root / "openspec" / "issue-mode.json").write_text(textwrap.dedent(
                 """\
@@ -82,8 +83,37 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
 
         self.assertEqual(payload["phase"], "spec_readiness")
         self.assertTrue(payload["automation"]["accept_spec_readiness"])
-        self.assertIn("coordinator 自动通过 spec-readiness 评审并进入 issue planning", dispatch_text)
+        self.assertIn("coordinator 自动通过 design review，并进入任务拆分 / issue planning", dispatch_text)
         self.assertIn("subagent_team.auto_accept_spec_readiness=true", dispatch_text)
+
+    def test_design_review_still_blocks_issue_planning_until_tasks_are_split(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            change_dir = repo_root / "openspec" / "changes" / "demo-change"
+            change_dir.mkdir(parents=True)
+            (change_dir / "proposal.md").write_text("# proposal\n")
+            (change_dir / "design.md").write_text("# design\n")
+
+            process = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT_PATH),
+                    "--repo-root",
+                    str(repo_root),
+                    "--change",
+                    "demo-change",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            payload = json.loads(process.stdout)
+            dispatch_text = (repo_root / payload["lifecycle_dispatch_path"]).read_text()
+
+        self.assertEqual(payload["phase"], "spec_readiness")
+        self.assertIn("设计文档已齐全，但必须先经过 3 个 review subagent 评审", payload["phase_reason"])
+        self.assertIn("只有评审通过，才允许进入 plan-issues / 任务拆分", dispatch_text)
 
     def test_issue_planning_can_auto_dispatch_when_enabled(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -125,6 +155,7 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
         self.assertTrue(payload["automation"]["accept_issue_planning"])
         self.assertIn("coordinator 自动通过 issue planning 评审并派发当前 round 已批准的 issue", dispatch_text)
         self.assertIn("subagent_team.auto_accept_issue_planning=true", dispatch_text)
+        self.assertIn("tasks.md、INDEX 和 ISSUE 文档齐全且相互一致", dispatch_text)
 
     def test_detects_issue_execution_and_renders_issue_packet(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

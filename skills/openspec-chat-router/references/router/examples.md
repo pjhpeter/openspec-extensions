@@ -6,7 +6,7 @@ Use these examples when you need quick intent-to-route references without re-rea
 - “进入 openspec 模式，然后帮我起一个变更。” -> print the cheat sheet, then route to `propose`
 - “这个任务很复杂，按 issue 模式继续。” -> print the issue-mode template, then default to `subagent-team` once the target change is concrete
 - “按 issue 模式继续 `add-infinite-canvas-node-naming`。” -> print the issue-mode template, then continue that change through `subagent-team`
-- “先对这个 change 做 implementation-ready review，再决定能不能拆 issue。” -> readiness review before `plan-issues`
+- “先对这个 change 做设计评审，通过后再决定能不能拆 issue。” -> readiness review before `plan-issues`
 - “把这个 change 拆成几个可并行 issue。” -> `plan-issues`
 - “先 review 这个 change 的 issue 规划，再决定 dispatch 哪个 issue。” -> `plan-issues`, then change-level issue-planning review
 - “给我 ISSUE-001 的 worker 派发模板。” -> `dispatch-issue`

@@ -149,13 +149,15 @@ def determine_phase(
     tasks_path = change_dir / "tasks.md"
     issues_index_path = change_dir / "issues" / "INDEX.md"
 
-    missing_core = [path.name for path in (proposal_path, design_path, tasks_path) if not path.exists()]
+    missing_core = [path.name for path in (proposal_path, design_path) if not path.exists()]
     if missing_core:
         return "spec_readiness", "", f"变更基础文档未齐全：{', '.join(missing_core)}。"
+    if not tasks_path.exists():
+        return "spec_readiness", "", "设计文档已齐全，但必须先经过 3 个 review subagent 评审；评审通过后才能进行任务拆分。"
 
     issue_docs = [issue for issue in issues if issue.get("issue_path")]
     if not issues_index_path.exists() or not issue_docs:
-        return "issue_planning", "", "issue 规划工件未完成，需先产出或修订 INDEX/ISSUE 文档。"
+        return "issue_planning", "", "任务拆分 / issue 规划工件未完成，需先产出或修订 tasks.md、INDEX 和 ISSUE 文档。"
 
     selected_issue_id = explicit_issue_id.strip() or focus_issue_id(issues)
     incomplete = [issue for issue in issues if str(issue.get("status", "")).strip() != "completed"]
@@ -194,9 +196,9 @@ def phase_goal(phase: str, change: str, issue_id: str, control_state: dict[str, 
     if explicit_goal:
         return explicit_goal
     if phase == "spec_readiness":
-        return f"把 {change} 的 proposal / design / tasks 补齐到 implementation-ready。"
+        return f"把 {change} 的 proposal / design 补齐到可评审状态，并完成设计评审后再进入任务拆分。"
     if phase == "issue_planning":
-        return f"把 {change} 拆成可调度 issue，并让 issue 规划通过审查。"
+        return f"基于已通过的设计评审，产出 {change} 的 tasks.md、INDEX 和 ISSUE 文档，并让任务拆分通过审查。"
     if phase == "issue_execution":
         return f"推进 {issue_id or '当前 issue'} 完成开发、检查、修复、审查回合。"
     if phase == "change_acceptance":
@@ -209,12 +211,13 @@ def phase_goal(phase: str, change: str, issue_id: str, control_state: dict[str, 
 def phase_acceptance_criteria(phase: str, issue_id: str, issues: list[dict[str, Any]]) -> list[str]:
     if phase == "spec_readiness":
         return [
-            "proposal / design / tasks 齐全且相互一致",
-            "范围、约束、非目标足够清楚",
-            "任务已经可拆 issue",
+            "proposal / design 齐全且相互一致",
+            "范围、约束、非目标足够清楚，足以进入任务拆分",
+            "3 个 review subagent 对设计给出通过结论，允许进入 plan-issues",
         ]
     if phase == "issue_planning":
         return [
+            "tasks.md、INDEX 和 ISSUE 文档齐全且相互一致",
             "INDEX 和 ISSUE 文档可由新鲜 worker 直接消费",
             "每个 issue 的边界、ownership、validation 明确",
             "当前 round 已批准可派发 issue",
@@ -250,10 +253,10 @@ def phase_scope_items(phase: str, change_dir: Path, issue_id: str, issues: list[
         return [
             display_path(change_dir.parent.parent.parent, change_dir / "proposal.md"),
             display_path(change_dir.parent.parent.parent, change_dir / "design.md"),
-            display_path(change_dir.parent.parent.parent, change_dir / "tasks.md"),
         ]
     if phase == "issue_planning":
         return [
+            display_path(change_dir.parent.parent.parent, change_dir / "tasks.md"),
             display_path(change_dir.parent.parent.parent, change_dir / "issues" / "INDEX.md"),
             "openspec/changes/<change>/issues/ISSUE-*.md",
         ]
@@ -317,9 +320,9 @@ def render_phase_packet(
 
     phase_next_step = {
         "spec_readiness": (
-            "coordinator 自动通过 spec-readiness 评审并进入 issue planning"
+            "coordinator 自动通过 design review，并进入任务拆分 / issue planning"
             if auto_accept_spec_readiness
-            else "审查通过后暂停，等待人工确认后再进入 issue planning"
+            else "3 个 review subagent 评审通过后暂停，等待人工确认后再进入任务拆分 / issue planning"
         ),
         "issue_planning": (
             "coordinator 自动通过 issue planning 评审并派发当前 round 已批准的 issue"
@@ -350,16 +353,17 @@ def render_phase_packet(
 
     phase_specific_rules = {
         "spec_readiness": [
-            "开发组负责补 proposal / design / tasks，不直接跳到 issue 执行。",
-            "检查组只指出实现前仍会阻塞 issue 切分的缺口。",
+            "开发组负责补 proposal / design，不在 design review 通过前做任务拆分。",
+            "检查组只指出会阻塞设计评审或后续任务拆分的缺口。",
+            "审查组固定为 3 个 review subagent；只有评审通过，才允许进入 plan-issues / 任务拆分。",
             (
-                "当 `auto_accept_spec_readiness=true` 时，coordinator 不等待人工签字，直接把 spec-readiness 视为通过并进入 plan-issues。"
+                "当 `auto_accept_spec_readiness=true` 时，coordinator 不等待人工签字，直接把 design review 视为通过并进入 plan-issues。"
                 if auto_accept_spec_readiness
-                else "审查组通过后默认停住，先让人看 design / tasks，再决定是否进入 plan-issues。"
+                else "审查组通过后默认停住，先让人看 design，再决定是否进入 plan-issues。"
             ),
         ],
         "issue_planning": [
-            "开发组负责修订 INDEX 和 ISSUE 文档。",
+            "开发组负责基于已通过的设计评审产出或修订 tasks.md、INDEX 和 ISSUE 文档。",
             "检查组确认 allowed_scope / out_of_scope / done_when / validation 可执行。",
             (
                 "当 `auto_accept_issue_planning=true` 时，coordinator 不等待人工签字，直接把 issue planning 视为通过并派发当前 round 已批准的 issue。"

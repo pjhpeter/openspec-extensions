@@ -9,8 +9,8 @@
 
 推荐方式：
 
-1. 主会话先补齐 proposal / design / tasks，并做 change 级 implementation-ready review；如果 `auto_accept_spec_readiness=true`，这一关不需要人工签字
-2. 把复杂实现拆成多个 issue，并对 issue 边界做一轮 review；如果 `auto_accept_issue_planning=true`，这一关不需要人工签字
+1. 主会话先补齐 proposal / design，并做 change 级 design review；这里的审查组固定是 3 个 review subagent。如果 `auto_accept_spec_readiness=true`，这一关不需要人工签字
+2. design review 通过后，再把复杂实现拆成 `tasks.md` 和多个 issue，并对任务拆分边界做一轮 review；如果 `auto_accept_issue_planning=true`，这一关不需要人工签字
 3. 主会话维护 change 级 backlog / round report，不把门禁判断只留在聊天里
 4. 主会话只为当前 round 已批准的 issue 创建或复用 worker worktree，并渲染 subagent-team lifecycle packet / `ISSUE-*.team.dispatch.md`
 5. 默认用 subagent team 驱动开发 / 检查 / 修复 / 审查小组，作为整个 complex change 的协调入口
@@ -27,10 +27,10 @@
 进入 OpenSpec 模式。我接下来要做一个复杂变更，需要按完整生命周期推进。
 ```
 
-2. 创建 change 并补齐 proposal / design / tasks
+2. 创建 change 并补齐 proposal / design
 
 ```text
-帮我为这个需求创建 change，并补齐 proposal、design、tasks；完成后先不要直接开始实现。
+帮我为这个需求创建 change，并补齐 proposal、design；完成后先不要直接开始实现，也不要先拆任务。
 ```
 
 3. 进入 issue-mode，并默认走 `subagent-team`
@@ -47,11 +47,11 @@
 对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
 ```
 
-5. 如果你想先看设计和任务拆分
+5. 如果你想先看设计评审和任务拆分
 
 ```text
-先按 issue 模式补齐 proposal、design、tasks 和 issue 规划。
-暂时不要自动进入下一阶段，我要先看设计文档和任务拆分结果。
+先按 issue 模式补齐 proposal、design，并完成设计评审。
+设计评审通过后再做任务拆分；暂时不要自动进入下一阶段，我要先看设计文档和任务拆分结果。
 ```
 
 6. 如果中途返回过早，继续推进

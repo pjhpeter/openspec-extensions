@@ -50,7 +50,7 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - In multi-session work on the same change, the coordinator session owns `tasks.md`, change-level backlog, merge, commit, `verify`, and `archive`.
 - Workers must write issue-local progress and run artifacts. They must not directly update `tasks.md`, self-merge, or create the final git commit.
 - Before a coordinator continues a change that already has issue artifacts, reconcile worker state from disk first and read change-level control artifacts if present instead of trusting chat memory.
-- Use `openspec/issue-mode.json` only for active repo defaults: worktree location, validation commands, worktree creation mode, RRA gate mode, and subagent-team auto-advance switches.
+- Use `openspec/issue-mode.json` only for active repo defaults: worktree location, validation commands, worktree creation mode, RRA gate mode, and subagent-team auto-accept switches.
 - If the intent is still ambiguous after doing all non-blocked work, ask exactly one short targeted question.
 
 ## Intent Routing
@@ -96,9 +96,9 @@ Prefer the project-local companion skill first when the route becomes concrete:
 
 Preferred flow:
 
-1. Use the main session to get the change to implementation-ready state.
-2. Run a change-level readiness review and keep a normalized backlog for the current round.
-3. Split implementation into issue-sized units with clear boundaries.
+1. Use the main session to get the change to proposal/design-ready state.
+2. Run a change-level spec-readiness design review with 3 review subagents and keep a normalized backlog for that gate.
+3. Only after design review passes, split implementation into coordinator-owned `tasks.md` plus issue-sized units with clear boundaries.
 4. Review the issue plan before dispatching issue work.
 5. For each approved issue, create or reuse the worker git worktree before handoff.
 6. By default, render the subagent-team lifecycle packet and use it as the coordinator control packet for the current phase.
@@ -197,7 +197,7 @@ If the dedicated skill is unavailable, use the closest OpenSpec CLI flow and con
 - `propose` or `ff` -> create or select the change, then use `openspec status --change "<name>" --json` and `openspec instructions <artifact> --change "<name>" --json`
 - `continue` -> inspect `openspec status --change "<name>" --json`, find the first ready artifact, and create only that next artifact
 - `apply` -> use `openspec instructions apply --change "<name>" --json`, read the context files it returns, implement pending tasks, and update task checkboxes
-- `plan-issues` -> read proposal, design, tasks, and `references/issue-mode-config.md`, then create `issues/INDEX.md` plus `ISSUE-*.md` files with explicit scope boundaries
+- `plan-issues` -> read proposal, design, and `references/issue-mode-config.md`, then create or refresh `tasks.md`, `issues/INDEX.md`, and `ISSUE-*.md` files with explicit scope boundaries
 - `dispatch-issue` -> read the selected `ISSUE-*.md`, create or reuse the worker git worktree when appropriate, render a worker dispatch prompt/file, and prefer the next pending issue from reconcile when the user did not specify one
 - `execute-issue` -> read `references/issue-mode-contract.md` plus repo defaults, implement only the assigned issue, write `issues/ISSUE-*.progress.json` and `runs/RUN-*.json`, and do not update `tasks.md`
 - `reconcile` -> read `references/issue-mode-contract.md`, inspect `openspec/changes/<name>/issues/ISSUE-*.md`, `openspec/changes/<name>/issues/*.progress.json`, and `openspec/changes/<name>/runs/*.json`, update coordinator-owned checklists if needed, then choose the next OpenSpec action
@@ -207,7 +207,7 @@ If the dedicated skill is unavailable, use the closest OpenSpec CLI flow and con
 
 ## IM-Friendly Output Style
 
-- Prefer natural confirmations like “我先帮你把 proposal / design / tasks 补齐，然后再进入实现” instead of telling the user to type a command.
+- Prefer natural confirmations like “我先帮你把 proposal / design 补齐，先过设计评审，再进入任务拆分或实现” instead of telling the user to type a command.
 - Mention raw commands only if the user explicitly asks what happened underneath.
 - When the route is inferred, say it in one short line.
 
