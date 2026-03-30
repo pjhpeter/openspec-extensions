@@ -165,6 +165,7 @@ def main() -> None:
             "auto_launch_next": auto_launch_next,
             "auto_accept_review": auto_accept_review,
             "auto_verify_change": auto_verify_change,
+            "rra_gate_mode": config.get("rra", {}).get("gate_mode", "advisory"),
             "config_path": config["config_path"],
         }
         snapshot["state_path"] = str(state_path.relative_to(repo_root))

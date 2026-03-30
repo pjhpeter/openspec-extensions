@@ -5,6 +5,7 @@
 这些扩展不是替代原生 OpenSpec，而是在已有 `change -> proposal/design/tasks -> apply -> verify -> archive` 工作流之上，补齐一套适合复杂任务的 coordinator + worker 多会话执行模式：
 
 - 自然语言入口，不要求用户记 slash command
+- change 级 backlog / round report / acceptance gate，不把门禁状态只留在聊天里
 - change 拆分为可并行 issue
 - coordinator 创建或复用 issue worktree，并生成派发工件
 - 默认由主会话直接拉起单 issue subagent
@@ -12,6 +13,7 @@
 - coordinator 从磁盘工件收敛、review、merge、commit
 - detached/background 路径下可继续自动 dispatch、launch、accept review、verify change
 - detached worker 监控、heartbeat、worker launch 作为显式 fallback
+- RRA 门禁默认以 advisory 形式暴露在状态输出里，不阻断无人值守；需要严格门禁时再切成 enforce
 
 ## 仓库里有什么
 
@@ -87,6 +89,55 @@
 
 简单说，issue-mode 不是为了“把流程搞复杂”，而是为了把复杂任务拆到可以稳定推进、可以恢复、可以并行、可以 review 的粒度。
 
+## RRA 如何融合进整个 issue-mode
+
+这里的推荐模型不是“只在单个 issue 里做 review”，而是把 RRA 提升为整个 change 的控制平面：
+
+- `issue-mode` 负责执行平面：
+  - `issues/INDEX.md`
+  - `ISSUE-*.md`
+  - issue worktree
+  - `issues/*.progress.json`
+  - `runs/*.json`
+  - reconcile / monitor / heartbeat
+- RRA 负责控制平面：
+  - 当前 round target
+  - acceptance criteria
+  - normalized backlog
+  - acceptance verdict
+  - next action
+
+也就是：
+
+- `issue-mode` 回答“现在做到哪了，哪些 worker 在跑，哪些状态已经落盘”
+- RRA 回答“这一轮是否允许继续 dispatch、merge、verify、archive”
+
+推荐把 change 级控制工件也落盘，例如：
+
+```text
+openspec/changes/<change-name>/control/
+├── BACKLOG.md
+└── ROUND-01.md
+```
+
+推荐的四个 round：
+
+1. implementation-ready round
+   - review `proposal / design / tasks`
+   - 目标是让 change 达到可拆 issue 的状态
+2. issue-planning round
+   - review issue 边界、依赖、ownership、validation
+   - 目标是决定哪些 issue 可以进入 dispatch
+3. issue-execution rounds
+   - reconcile worker 结果后做 review / repair / re-review / acceptance
+   - 目标是决定某个 issue 是 accept、repair 还是重新切边界
+4. change-acceptance round
+   - 所有必要 issue 被主会话 accept 后，再决定是否进入 `verify / archive`
+
+这样处理后，`openspec` 解决的是可恢复的多会话执行，`rra` 解决的是全流程门禁与验收；两者不是二选一关系。
+默认情况下，这套 change 级 RRA 控制平面只在复杂 change 的 `issue-mode` 主链中启用；简单任务仍走原生 OpenSpec 小流程，除非用户显式要求更严格的 round-based review。
+脚本实现层的默认策略是：RRA gate 先作为 advisory 暴露到 `reconcile`、`heartbeat status`、`worker_status`、`monitor_worker` 和 dispatch 输出里，不主动阻断无人值守自动推进。只有在 `openspec/issue-mode.json` 里显式设置 `rra.gate_mode: "enforce"` 时，才会把这些 gate 变成真正的执行门禁。
+
 ### 什么时候该用
 
 满足下面任一条件，就应该优先考虑 issue-mode：
@@ -105,13 +156,14 @@
 
 复杂任务的默认路径是：
 
-1. 主会话先把 change 补到 implementation-ready。
+1. 主会话先把 change 补到 implementation-ready，并做一轮 change 级 readiness review。
 2. 用 `openspec-plan-issues` 生成 `issues/INDEX.md` 和每个 `ISSUE-*.md`。
-3. 用 `openspec-dispatch-issue` 创建或复用 issue worktree，并从 issue 文档渲染 dispatch。
-4. 如果运行时支持 delegation，主会话直接拉起一个只处理该 issue 的 subagent。
-5. worker 按 `openspec-execute-issue` 写 `issues/*.progress.json` 和 `runs/*.json`。
-6. 主会话用 `openspec-reconcile-change` 从磁盘工件收敛状态。
-7. 主会话 review、merge、commit，然后再进入 `verify` / `archive`。
+3. 主会话做一轮 issue-planning review，确认 issue 边界、依赖、ownership 和 acceptance 条件。
+4. 只为当前 round 已批准的 issue 用 `openspec-dispatch-issue` 创建或复用 worktree，并从 issue 文档渲染 dispatch。
+5. 如果运行时支持 delegation，主会话直接拉起一个只处理该 issue 的 subagent。
+6. worker 按 `openspec-execute-issue` 写 `issues/*.progress.json` 和 `runs/*.json`。
+7. 主会话用 `openspec-reconcile-change` 从磁盘工件收敛状态，并把结论整理成 change 级 backlog / acceptance verdict。
+8. 主会话 review、merge、commit；所有必要 issue 都 accept 后，再做一轮 change 级 acceptance，然后进入 `verify` / `archive`。
 
 只有当你明确希望后台脱机继续执行、主动轮询通知、或者恢复 detached worker 时，才进入 heartbeat / monitor / worker launch 这些 fallback 路径。
 
@@ -210,6 +262,8 @@ python3 scripts/install_openspec_extensions.py \
 propose -> apply -> archive
 ```
 
+默认不启用 change 级 `control/BACKLOG.md`、`control/ROUND-*.md` 或 issue-mode RRA rounds。
+
 可直接这样说：
 
 - `帮我起一个变更，把文档一次性补齐`
@@ -221,18 +275,20 @@ propose -> apply -> archive
 如果实现会跨多个模块、需要并行、或者单会话太长，推荐：
 
 ```text
-new -> ff -> plan-issues -> dispatch-issue -> reconcile/review -> verify -> archive
+new -> ff/review -> plan-issues/review -> dispatch-issue -> reconcile/review -> change-acceptance -> verify -> archive
 ```
 
 推荐节奏：
 
-1. 主会话把 `proposal / design / tasks` 补齐到可实现状态
+1. 主会话把 `proposal / design / tasks` 补齐到可实现状态，并先做 implementation-ready review
 2. 用 `openspec-plan-issues` 生成 `issues/INDEX.md` 和每个 `ISSUE-*.md`
-3. 用 `openspec-dispatch-issue` 为某个 issue 生成 dispatch，并创建或复用该 issue worktree
-4. 优先让主会话直接拉起一个只处理该 issue 的 subagent
-5. worker 写 `progress.json` 和 `RUN-*.json`
-6. 主会话用 `openspec-reconcile-change` 收敛状态，review 通过后 merge / commit
-7. 只有当你明确需要后台自动化或 detached worker 时，再启用 heartbeat / monitor / worker launch
+3. 主会话先做 issue-plan review，再决定哪些 issue 现在可以 dispatch
+4. 用 `openspec-dispatch-issue` 为某个已批准 issue 生成 dispatch，并创建或复用该 issue worktree
+5. 优先让主会话直接拉起一个只处理该 issue 的 subagent
+6. worker 写 `progress.json` 和 `RUN-*.json`
+7. 主会话用 `openspec-reconcile-change` 收敛状态，输出 normalized backlog / acceptance verdict，review 通过后 merge / commit
+8. 所有 issue 接受后，再做 change-level acceptance，然后进入 `verify`
+9. 只有当你明确需要后台自动化或 detached worker 时，再启用 heartbeat / monitor / worker launch
 
 ### 4. 后台自动化：只在显式需要时开启
 
@@ -260,10 +316,13 @@ README 里的话术按四层理解最不容易乱：
 这些话术适合 coordinator 主会话：
 
 - `把 <change-name> 的文档补齐到可以开始做`
+- `先对 <change-name> 做 implementation-ready review，并列出当前 round backlog`
 - `把 <change-name> 拆成可并行的 issue，并生成 issue 文档`
+- `先 review <change-name> 的 issue 规划，再决定 dispatch 哪个 issue`
 - `为 <issue-id> 生成 dispatch，并创建或复用 worker worktree`
 - `为 <issue-id> 准备 dispatch，并直接开一个 subagent 执行`
-- `收敛 <change-name> 当前 issue 状态，并决定下一步`
+- `收敛 <change-name> 当前 issue 状态，输出 normalized backlog / acceptance verdict / 下一步`
+- `对 <change-name> 做 change-level acceptance review，再决定是否进入 verify`
 - `验证 <change-name> 是否可以归档`
 - `把 <change-name> 的 delta spec 同步到主 spec`
 - `归档 <change-name>`
@@ -289,6 +348,10 @@ README 里的话术按四层理解最不容易乱：
 - Done when:
   - 验收条件 1
   - 验收条件 2
+
+如果发现 issue 外的新问题：
+- 记录为 blocker 或 backlog candidate
+- 不要直接扩大当前 issue scope
 ```
 
 ### 4. 后台自动化话术
@@ -307,6 +370,9 @@ README 里的话术按四层理解最不容易乱：
 
 ```text
 openspec/changes/<change-name>/
+├── control/
+│   ├── BACKLOG.md
+│   └── ROUND-01.md
 ├── tasks.md
 ├── issues/
 │   ├── INDEX.md
@@ -323,9 +389,12 @@ openspec/changes/<change-name>/
 关键规则：
 
 - coordinator 负责 `tasks.md`、`verify`、`archive`
+- coordinator 负责 change 级 backlog / round report / acceptance verdict
 - worker 一次只处理一个 issue
 - worker 不要直接改 `tasks.md`
-- 真正的流程状态以 `issues/*.progress.json` 为准，不以聊天记录为准
+- `issues/*.progress.json` 和 `runs/*.json` 是执行状态
+- `control/BACKLOG.md` 和 `control/ROUND-*.md` 是门禁与验收状态
+- dispatch / verify / archive 决策不要只靠聊天记录
 - detached 自动化完成最终 verify 后，会额外写出 `runs/CHANGE-VERIFY.json`
 
 ## coordinator heartbeat
@@ -421,6 +490,18 @@ python3 scripts/openspec_coordinator_heartbeat_stop.py \
   --change <change-name>
 ```
 
+`heartbeat status` 现在会额外给出一行 `summary`，把当前 `running/stopped`、`next_action` 和 `control_gate` 压成一行，适合手机上快速看：
+
+- `demo-change: running | next=dispatch_next_issue(ISSUE-002) | gate=resolve_round_backlog[advisory]`
+
+对应地，`scripts/openspec_worker_status.py` 也会输出：
+
+- 顶层 `summary`
+- 顶层 `control_gate`
+- 当前 `rra_gate_mode`
+
+这样看 issue 级状态时，不必先翻完整 JSON 才知道当前 issue 是否被 round/backlog 约束。
+
 ## `openspec/issue-mode.json`
 
 安装后会带一个默认配置模板：
@@ -448,6 +529,9 @@ python3 scripts/openspec_coordinator_heartbeat_stop.py \
     "auto_dispatch_next": true,
     "auto_launch_next": false
   },
+  "rra": {
+    "gate_mode": "advisory"
+  },
   "worker_launcher": {
     "session_prefix": "opsx-worker",
     "start_grace_seconds": 120,
@@ -469,6 +553,7 @@ python3 scripts/openspec_coordinator_heartbeat_stop.py \
 - 持久宿主类型：`screen` / `tmux` / `none`
 - coordinator heartbeat 的轮询频率、stale 判定与默认通知 topic
 - coordinator heartbeat 是否自动 dispatch / 自动 launch 下一个 worker
+- RRA gate 是只做 advisory 观测，还是转为严格 enforce 门禁
 - worker launch 的 session 前缀、启动确认宽限期、失败重试节流与 Codex 启动参数
 
 `persistent_host`、`coordinator_heartbeat` 和 `worker_launcher` 这些字段主要服务于 detached/background 路径。
@@ -478,12 +563,30 @@ python3 scripts/openspec_coordinator_heartbeat_stop.py \
 
 - `auto_dispatch_next=true`
 - `auto_launch_next=false`
+- `rra.gate_mode="advisory"`
 
 也就是 heartbeat 路径默认会自动准备下一轮 dispatch，但不会默认进入 detached 无人值守流水线。显式开启 `auto_launch_next` 后，如果没有额外覆盖：
 
 - 下一个 detached worker 会自动启动
 - `review_required` issue 会自动 accept / merge / commit
 - 所有 issue 完成后会自动跑 change-level verify，并写出 `openspec/changes/<change-name>/runs/CHANGE-VERIFY.json`
+
+`rra.gate_mode="advisory"` 表示：
+
+- `control/BACKLOG.md` / `control/ROUND-*.md` 的结论会写进 `reconcile`、`heartbeat status`、`worker_status`、`monitor_worker` 和 dispatch 输出
+- 这些 gate 默认不会阻断无人值守自动推进
+
+如果你明确想把 change 级 RRA 门禁升级成脚本级强约束，再切到：
+
+```json
+{
+  "rra": {
+    "gate_mode": "enforce"
+  }
+}
+```
+
+切到 `enforce` 后，未清空的 `Must fix now`、未获当前 round 批准的 issue dispatch、或未明确放行的 change acceptance，都可以真正阻断对应脚本动作。
 
 如果你只想自动 launch，但不想自动 accept 或自动 verify，再显式加上：
 
@@ -503,6 +606,7 @@ python3 scripts/openspec_coordinator_heartbeat_stop.py \
 
 - 小任务直接走原生 OpenSpec，不必强行拆 issue
 - 大任务先把 change 文档补齐，再切 issue，不要一边做一边临时发散
+- 大任务把 `control/BACKLOG.md` 和 `control/ROUND-*.md` 也一起维护起来，避免 change 级门禁只存在聊天里
 - 默认优先一个 subagent 只做一个 issue，不要在同一 worker context 里并发处理多个 issue
 - 主会话在继续推进前，先跑一次 reconcile，不要靠聊天上下文猜当前状态
 - 真正的流程状态以 `issues/*.progress.json` 和 `runs/*.json` 为准；`worker-session.json` 只负责 detached launch 的 coordinator 侧 lease 与恢复

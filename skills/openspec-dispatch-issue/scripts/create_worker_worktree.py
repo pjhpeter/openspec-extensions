@@ -13,8 +13,10 @@ if str(SHARED_SCRIPTS) not in sys.path:
 
 from issue_mode_common import (  # noqa: E402
     display_path,
+    ensure_issue_dispatch_allowed,
     issue_worker_worktree_path,
     load_issue_mode_config,
+    read_change_control_state,
     worker_branch_name,
 )
 
@@ -45,6 +47,8 @@ def main() -> None:
     args = parse_args()
     repo_root = Path(args.repo_root).resolve()
     config = load_issue_mode_config(repo_root)
+    control_state = read_change_control_state(repo_root, args.change)
+    dispatch_gate = ensure_issue_dispatch_allowed(config, control_state, args.issue_id)
     worktree_path, worktree_display, worktree_source = issue_worker_worktree_path(
         repo_root=repo_root,
         change=args.change,
@@ -87,6 +91,7 @@ def main() -> None:
         "worktree": str(worktree_path),
         "worktree_relative": display_path(repo_root, worktree_path),
         "worktree_source": worktree_source,
+        "control_gate": dispatch_gate,
         "config_path": config["config_path"],
         "config_exists": config["config_exists"],
         "mode": mode,

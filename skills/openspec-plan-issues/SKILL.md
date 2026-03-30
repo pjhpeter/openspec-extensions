@@ -7,7 +7,7 @@ description: Split an implementation-ready OpenSpec change into issue-sized work
 
 Use this skill in the coordinator session after the change is implementation-ready.
 
-Read `../openspec-chat-router/references/issue-mode-contract.md`, `../openspec-chat-router/references/issue-mode-config.md`, and `references/issue-doc-template.md` first.
+Read `../openspec-chat-router/references/issue-mode-contract.md`, `../openspec-chat-router/references/issue-mode-config.md`, `../openspec-chat-router/references/issue-mode-rra.md`, and `references/issue-doc-template.md` first.
 
 ## Workflow
 
@@ -26,7 +26,11 @@ Read `../openspec-chat-router/references/issue-mode-contract.md`, `../openspec-c
    - short goal per issue
    - dependency order if any
 5. Create one `ISSUE-*.md` per issue using the template reference.
-6. Keep each issue doc explicit enough that a fresh worker session can execute it without additional coordinator narration.
+6. Record the issue-planning review result in change-level control artifacts, for example:
+   - `openspec/changes/<change>/control/BACKLOG.md`
+   - `openspec/changes/<change>/control/ROUND-*.md`
+7. Keep each issue doc explicit enough that a fresh worker session can execute it without additional coordinator narration.
+8. Only move to dispatch once issue-planning `Must fix now` items are resolved or explicitly deferred.
 
 ## Rules
 
@@ -40,17 +44,20 @@ Read `../openspec-chat-router/references/issue-mode-contract.md`, `../openspec-c
 - Do not rewrite checked tasks in `tasks.md` unless the user explicitly asks for task remapping.
 - Materialize `worker_worktree` and `validation` into each issue doc frontmatter, using repo defaults from `openspec/issue-mode.json` when present.
 - Each issue doc frontmatter must include `issue_id`, `title`, `worker_worktree`, `allowed_scope`, `out_of_scope`, `done_when`, and `validation` so downstream dispatch stays deterministic.
+- For complex changes, the coordinator should update change-level backlog and round artifacts after issue planning instead of leaving approval state only in chat.
+- Do not dispatch issue work while issue-planning `Must fix now` items remain open.
 
 ## Output
 
 Keep the coordinator summary short:
 
 ```text
-已为 `<change-name>` 拆出 3 个 issue。
+已为 `<change-name>` 拆出 3 个 issue，并完成当前 issue-plan round 的整理。
 
 - ISSUE-001: ...
 - ISSUE-002: ...
 - ISSUE-003: ...
+- Must fix now: none
 
 下一步可以直接让我为 `ISSUE-001` 生成 worker dispatch。
 ```

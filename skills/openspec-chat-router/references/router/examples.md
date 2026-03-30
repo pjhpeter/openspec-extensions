@@ -6,7 +6,9 @@ Use these examples when you need quick intent-to-route references without re-rea
 - “进入 openspec 模式，然后帮我起一个变更。” -> print the cheat sheet, then route to `propose`
 - “这个任务很复杂，按 issue 模式继续。” -> print the issue-mode template
 - “按 issue 模式继续 `add-infinite-canvas-node-naming`。” -> print the issue-mode template, then continue with that change
+- “先对这个 change 做 implementation-ready review，再决定能不能拆 issue。” -> readiness review before `plan-issues`
 - “把这个 change 拆成几个可并行 issue。” -> `plan-issues`
+- “先 review 这个 change 的 issue 规划，再决定 dispatch 哪个 issue。” -> `plan-issues`, then change-level issue-planning review
 - “给我 ISSUE-001 的 worker 派发模板。” -> `dispatch-issue`
 - “给 ISSUE-001 创建 worker worktree。” -> `dispatch-issue`
 - “给 ISSUE-001 准备 dispatch 并直接开一个 subagent。” -> `dispatch-issue`, then one delegated issue worker
@@ -15,6 +17,7 @@ Use these examples when you need quick intent-to-route references without re-rea
 - “这个 worker 还活着吗？” -> `monitor-worker`
 - “同步一下当前 change 的 worker 进度。” -> `reconcile`
 - “根据 worker 结果继续推进这个 change。” -> `reconcile`
+- “对这个 change 做 change-level acceptance review，再决定要不要 verify。” -> `reconcile`, then change-level acceptance decision
 - “这个需求我还没想清楚，你先帮我梳理一下。” -> `explore`
 - “帮我起一个登录重构的变更，把文档一次性补齐。” -> `propose`
 - “先建个 change，我想先看第一步文档模板。” -> `new`

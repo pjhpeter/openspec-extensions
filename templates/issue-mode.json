@@ -20,6 +20,9 @@
     "auto_dispatch_next": true,
     "auto_launch_next": false
   },
+  "rra": {
+    "gate_mode": "advisory"
+  },
   "worker_launcher": {
     "session_prefix": "opsx-worker",
     "start_grace_seconds": 120,

@@ -97,10 +97,15 @@ def determine_status(
     if not isinstance(worktree_payload, dict):
         worktree_payload = {}
     worktree_status = str(worktree_payload.get("status", ""))
+    has_launch_context = any(
+        bool(str(session_payload.get(key, "")).strip())
+        for key in ("run_id", "session_name", "launched_at")
+    )
+    has_runtime_evidence = progress_status in {"in_progress", "completed", "blocked"} or worktree_status == "dirty"
     alive = any(
         status == "active"
         for status in (host_status, process_status)
-    ) or session_file_status == "found"
+    ) or (session_file_status == "found" and has_launch_context and has_runtime_evidence)
 
     if progress_status == "completed":
         return "completed", "issue progress 已完成。"
@@ -121,13 +126,13 @@ def determine_status(
             return "failed", "worker 启动确认超时，且没有活动信号。"
         return "launching", "worker 处于启动宽限期内。"
     if session_status == "running":
-        if worktree_status == "dirty" or session_file_status == "found":
+        if worktree_status == "dirty" or (session_file_status == "found" and has_launch_context):
             return "orphaned", "worker 失去进程/host 信号，但已有中间痕迹，需人工接管。"
         return "failed", "worker 运行状态丢失且没有继续活动。"
     if session_status in {"failed", "orphaned"}:
         return session_status, str(session_payload.get("failure_reason", "")).strip() or "沿用已有 launch 状态。"
 
-    if worktree_status == "dirty" or session_file_status == "found":
+    if worktree_status == "dirty" or (session_file_status == "found" and has_launch_context):
         return "orphaned", "没有 launch lease，但发现 worker 痕迹。"
 
     return "pending", "尚未发现 worker 运行或 issue progress。"
@@ -180,6 +185,27 @@ def cooldown_expired(session_payload: dict[str, Any], cooldown_seconds: int) -> 
     return datetime.now().astimezone() >= reference_at.astimezone() + timedelta(seconds=cooldown_seconds)
 
 
+def build_summary(
+    issue_id: str,
+    status: str,
+    launchable: bool,
+    control_gate: dict[str, Any],
+) -> str:
+    parts = [f"{issue_id}: {status}"]
+    if status in {"pending", "failed"}:
+        parts.append("launchable" if launchable else "not_launchable")
+
+    if control_gate.get("active"):
+        action = str(control_gate.get("action", "")).strip() or "none"
+        mode = str(control_gate.get("mode", "")).strip() or "unknown"
+        gate_part = f"gate={action}[{mode}]"
+        if control_gate.get("enforced"):
+            gate_part += " enforced"
+        parts.append(gate_part)
+
+    return " | ".join(parts)
+
+
 def main() -> None:
     args = parse_args()
     repo_root = Path(args.repo_root).resolve()
@@ -216,17 +242,21 @@ def main() -> None:
         and cooldown_expired(synced_session or session_payload, launch_cooldown_seconds)
     )
     launchable = coordinator_status == "pending" or can_relaunch
+    control_gate = monitor_payload.get("control_gate", {})
 
     payload = {
         "change": args.change,
         "issue_id": args.issue_id,
         "status": coordinator_status,
         "reason": reason,
+        "rra_gate_mode": config.get("rra", {}).get("gate_mode", "advisory"),
+        "control_gate": control_gate,
         "launchable": launchable,
         "can_relaunch": can_relaunch,
         "attempt": attempt,
         "max_launch_retries": max_launch_retries,
         "launch_cooldown_seconds": launch_cooldown_seconds,
+        "summary": build_summary(args.issue_id, coordinator_status, launchable, control_gate),
         "worker_session_path": display_path(repo_root, session_path),
         "worker_session": synced_session or session_payload,
         "progress_path": display_path(repo_root, progress_path),

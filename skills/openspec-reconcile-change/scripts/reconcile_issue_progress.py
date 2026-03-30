@@ -5,12 +5,14 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 SHARED_SCRIPTS = Path(__file__).resolve().parents[2] / "openspec-shared" / "scripts"
 if str(SHARED_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SHARED_SCRIPTS))
 
 from coordinator_change_common import read_json, verification_artifact_is_current, verify_artifact_path  # noqa: E402
+from issue_mode_common import load_issue_mode_config, read_change_control_state  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -27,12 +29,12 @@ def issue_id_from_progress(path: Path) -> str:
     return path.name.replace(".progress.json", "")
 
 
-def collect_issues(repo_root: Path, change: str) -> list[dict]:
+def collect_issues(repo_root: Path, change: str) -> list[dict[str, Any]]:
     issues_dir = repo_root / "openspec" / "changes" / change / "issues"
     progress_by_issue = {issue_id_from_progress(path): path for path in sorted(issues_dir.glob("*.progress.json"))}
     issue_docs = [path for path in sorted(issues_dir.glob("ISSUE-*.md")) if not path.name.endswith(".dispatch.md")]
 
-    issues: list[dict] = []
+    issues: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
 
     for doc_path in issue_docs:
@@ -65,7 +67,7 @@ def collect_issues(repo_root: Path, change: str) -> list[dict]:
     return issues
 
 
-def count_statuses(issues: list[dict]) -> dict[str, int]:
+def count_statuses(issues: list[dict[str, Any]]) -> dict[str, int]:
     return {
         "pending": sum(1 for issue in issues if issue.get("status") in {"pending", ""}),
         "in_progress": sum(1 for issue in issues if issue.get("status") == "in_progress"),
@@ -74,7 +76,11 @@ def count_statuses(issues: list[dict]) -> dict[str, int]:
     }
 
 
-def determine_next_action(repo_root: Path, change: str, issues: list[dict]) -> tuple[str, str, str]:
+def determine_base_next_action(
+    repo_root: Path,
+    change: str,
+    issues: list[dict[str, Any]],
+) -> tuple[str, str, str]:
     if not issues:
         return "no_issue_artifacts", "", "未找到 issue 工件。"
 
@@ -111,13 +117,74 @@ def determine_next_action(repo_root: Path, change: str, issues: list[dict]) -> t
     return "inspect_change", issues[0]["issue_id"], "需要 coordinator 人工检查当前 change 状态。"
 
 
+def determine_control_gate(
+    control_state: dict[str, Any],
+    issues: list[dict[str, Any]],
+) -> tuple[str, str, str] | None:
+    if not control_state.get("enabled"):
+        return None
+
+    must_fix_now_open = int(control_state.get("must_fix_now", {}).get("open_count", 0) or 0)
+    pending = [issue for issue in issues if issue.get("status") in {"pending", ""}]
+    completed = [issue for issue in issues if issue.get("status") == "completed"]
+
+    if must_fix_now_open > 0 and (pending or (completed and len(completed) == len(issues))):
+        return "resolve_round_backlog", "", f"当前 RRA backlog 仍有 {must_fix_now_open} 个 Must fix now 未处理。"
+
+    latest_round = control_state.get("latest_round", {})
+    dispatchable_issue_ids = {
+        str(issue_id).strip()
+        for issue_id in latest_round.get("referenced_issue_ids", [])
+        if str(issue_id).strip()
+    }
+    if pending and latest_round.get("dispatch_gate_active") and dispatchable_issue_ids:
+        approved_pending = [issue for issue in pending if issue.get("issue_id") in dispatchable_issue_ids]
+        if approved_pending:
+            approved_count = len(approved_pending)
+            return (
+                "dispatch_next_issue",
+                approved_pending[0]["issue_id"],
+                f"当前 round 已批准 {approved_count} 个待派发 issue。",
+            )
+        pending_count = len(pending)
+        return (
+            "update_round_scope",
+            "",
+            f"当前 round 未批准剩余 {pending_count} 个 pending issue 的派发，请更新 round scope。",
+        )
+
+    if completed and len(completed) == len(issues):
+        if control_state.get("latest_round_path") and not latest_round.get("allows_verify", False):
+            return "change_acceptance_required", "", "全部 issue 已完成，但当前 change-level round 尚未明确放行 verify。"
+
+    return None
+
+
 def main() -> None:
     args = parse_args()
     repo_root = Path(args.repo_root).resolve()
+    config = load_issue_mode_config(repo_root)
     issues = collect_issues(repo_root, args.change)
+    control_state = read_change_control_state(repo_root, args.change)
+    gate_mode = str(config.get("rra", {}).get("gate_mode", "advisory"))
 
     counts = count_statuses(issues)
-    next_action, recommended_issue_id, reason = determine_next_action(repo_root, args.change, issues)
+    base_next_action, base_recommended_issue_id, base_reason = determine_base_next_action(repo_root, args.change, issues)
+    control_gate = determine_control_gate(control_state, issues)
+    next_action = base_next_action
+    recommended_issue_id = base_recommended_issue_id
+    reason = base_reason
+    if control_gate is not None and gate_mode == "enforce":
+        next_action, recommended_issue_id, reason = control_gate
+
+    control_gate_payload = {
+        "mode": gate_mode,
+        "active": control_gate is not None,
+        "enforced": control_gate is not None and gate_mode == "enforce",
+        "action": control_gate[0] if control_gate is not None else "",
+        "recommended_issue_id": control_gate[1] if control_gate is not None else "",
+        "reason": control_gate[2] if control_gate is not None else "",
+    }
     result = {
         "change": args.change,
         "issue_count": len(issues),
@@ -125,6 +192,15 @@ def main() -> None:
         "next_action": next_action,
         "recommended_issue_id": recommended_issue_id,
         "reason": reason,
+        "base_next_action": {
+            "action": base_next_action,
+            "recommended_issue_id": base_recommended_issue_id,
+            "reason": base_reason,
+        },
+        "control": {
+            **control_state,
+            "gate": control_gate_payload,
+        },
         "issues": issues,
     }
     print(json.dumps(result, ensure_ascii=False, indent=2))

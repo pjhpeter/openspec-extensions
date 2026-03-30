@@ -7,7 +7,7 @@ description: 'Execute exactly one issue in an OpenSpec multi-session change. Use
 
 Use this skill in one worker context only, whether that worker is a spawned subagent or an external worker session.
 
-Read `../openspec-chat-router/references/issue-mode-contract.md` and `../openspec-chat-router/references/issue-mode-config.md` first.
+Read `../openspec-chat-router/references/issue-mode-contract.md`, `../openspec-chat-router/references/issue-mode-config.md`, and `../openspec-chat-router/references/issue-mode-rra.md` first.
 
 If the change name, issue id, allowed scope, or done condition is missing and risky, do all non-blocked work first and then ask one short question.
 
@@ -18,6 +18,8 @@ If the change name, issue id, allowed scope, or done condition is missing and ri
    - `openspec/changes/<change>/design.md` if present
    - `openspec/changes/<change>/tasks.md`
    - `openspec/changes/<change>/issues/<issue-id>.md` if present
+   - `openspec/changes/<change>/control/BACKLOG.md` if present
+   - latest `openspec/changes/<change>/control/ROUND-*.md` if present
 2. Start worker state with the bundled helper:
    ```bash
    python3 .codex/skills/openspec-execute-issue/scripts/update_issue_progress.py start \
@@ -30,7 +32,7 @@ If the change name, issue id, allowed scope, or done condition is missing and ri
      --summary "已开始处理该 issue。"
    ```
    Save the returned `run_id`.
-3. Implement only the assigned issue inside its allowed scope.
+3. Implement only the assigned issue inside its allowed scope and current approved round scope.
 4. Run the validation commands defined for the issue:
    - first use `issues/<issue-id>.md` frontmatter `validation`
    - if that field is missing, fall back to `openspec/issue-mode.json`
@@ -65,6 +67,7 @@ If the change name, issue id, allowed scope, or done condition is missing and ri
 - Treat `issues/<issue-id>.progress.json` as the worker-owned source of truth.
 - Write a run artifact under `runs/` for this worker context.
 - Do not update `tasks.md`, run `verify` or `archive`, merge the worker worktree back, or create the final git commit.
+- If you discover out-of-scope gaps, report them as blockers or backlog candidates for the coordinator instead of silently widening the issue.
 - This contract is the same whether the worker is a spawned subagent or a separately launched worker session.
 
 ## Blocker Handling

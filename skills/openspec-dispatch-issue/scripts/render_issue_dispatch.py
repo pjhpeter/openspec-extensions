@@ -11,10 +11,12 @@ if str(SHARED_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SHARED_SCRIPTS))
 
 from issue_mode_common import (  # noqa: E402
+    ensure_issue_dispatch_allowed,
     issue_validation_commands,
     issue_worker_worktree_setting,
-    parse_frontmatter,
     load_issue_mode_config,
+    parse_frontmatter,
+    read_change_control_state,
 )
 
 
@@ -51,6 +53,7 @@ def render_dispatch(
     repo_root: Path,
     run_id: str,
     session_name: str,
+    dispatch_gate: dict[str, object],
 ) -> str:
     issue_id = require_str(frontmatter, "issue_id")
     title = require_str(frontmatter, "title")
@@ -63,6 +66,9 @@ def render_dispatch(
         return "\n".join(f"  - `{item}`" for item in items)
 
     session_label = session_name.strip() or "<optional-for-detached-launch>"
+    gate_status = str(dispatch_gate.get("status", "not_applicable")).strip() or "not_applicable"
+    gate_mode = str(dispatch_gate.get("mode", "advisory")).strip() or "advisory"
+    gate_reason = str(dispatch_gate.get("reason", "")).strip() or "none"
 
     return f"""继续 OpenSpec change `{change}`，执行单个 issue。
 
@@ -78,6 +84,10 @@ def render_dispatch(
   - `{effective_run_id}`
 - Detached worker session label:
   - `{session_label}`
+- RRA dispatch gate:
+  - mode=`{gate_mode}`
+  - status=`{gate_status}`
+  - reason=`{gate_reason}`
 - Allowed scope:
 {bullet_list(allowed_scope)}
 - Out of scope:
@@ -113,6 +123,8 @@ def main() -> None:
     args = parse_args()
     repo_root = Path(args.repo_root).resolve()
     config = load_issue_mode_config(repo_root)
+    control_state = read_change_control_state(repo_root, args.change)
+    dispatch_gate = ensure_issue_dispatch_allowed(config, control_state, args.issue_id)
     issues_dir = repo_root / "openspec" / "changes" / args.change / "issues"
     issue_path = issues_dir / f"{args.issue_id}.md"
     dispatch_path = issues_dir / f"{args.issue_id}.dispatch.md"
@@ -144,6 +156,7 @@ def main() -> None:
         repo_root,
         args.run_id,
         args.session_name,
+        dispatch_gate,
     )
     if not args.dry_run:
         dispatch_path.write_text(dispatch_text)
@@ -156,6 +169,7 @@ def main() -> None:
         "artifact_repo_root": str(repo_root),
         "run_id": args.run_id,
         "session_name": args.session_name,
+        "control_gate": dispatch_gate,
         "validation": validation,
         "validation_source": validation_source,
         "config_path": config["config_path"],

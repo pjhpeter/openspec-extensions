@@ -14,9 +14,11 @@ if str(SHARED_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SHARED_SCRIPTS))
 
 from issue_mode_common import (  # noqa: E402
+    evaluate_issue_dispatch_gate,
     issue_validation_commands,
     issue_worker_worktree_path,
     load_issue_mode_config,
+    read_change_control_state,
 )
 
 
@@ -281,6 +283,10 @@ def main() -> None:
             issue_id=args.issue_id,
             config=config,
         )
+    control_gate: dict[str, Any] = {}
+    if args.change and args.issue_id:
+        control_state = read_change_control_state(repo_root, args.change)
+        control_gate = evaluate_issue_dispatch_gate(config, control_state, args.issue_id)
 
     host_info = inspect_persistent_host(host_kind, args.session_name, host_hints)
     process_info = inspect_processes(worktree, args.change or "", args.issue_id or "")
@@ -309,7 +315,9 @@ def main() -> None:
             "codex_home": str(codex_home),
             "validation_commands": validation_commands,
             "validation_source": validation_source,
+            "rra_gate_mode": config.get("rra", {}).get("gate_mode", "advisory"),
         },
+        "control_gate": control_gate,
         "summary": summarize(host_info, process_info, session_info, worktree_info),
     }
     if host_kind == "screen":

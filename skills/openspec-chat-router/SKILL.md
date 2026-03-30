@@ -31,6 +31,7 @@ These companion skills live next to this router and should be treated as relativ
 - `../openspec-archive-change/SKILL.md`
 - `references/issue-mode-contract.md`
 - `references/issue-mode-config.md`
+- `references/issue-mode-rra.md`
 - `references/router/background-automation.md`
 - `references/router/coordinator-playbook.md`
 - `references/router/examples.md`
@@ -46,15 +47,16 @@ Do not rely on hardcoded absolute filesystem paths for these resources.
 - Keep the user-facing response natural and brief: first state the action you are taking, then proceed.
 - If the user explicitly names a stage or command, that overrides heuristic routing.
 - If the user asks to enter OpenSpec mode, print the OpenSpec mode cheat sheet instead of running a workflow stage.
-- For large or complex work, prefer issue-based multi-session execution rather than keeping one long-running session alive.
+- For large or complex work, prefer issue-based multi-session execution plus a change-level review/repair/re-review/acceptance loop rather than keeping one long-running session alive.
 - In issue-based execution, one worker context should handle one issue only.
 - In runtimes that support subagents or delegation, prefer the coordinator spawning one worker subagent per issue instead of asking the user to open a separate worker chat by default.
 - In issue-based execution, the default flow is: coordinator creates or reuses the issue worktree, dispatches one worker subagent or one external worker session into that worktree, waits for worker completion, then reviews the issue from the main session before accepting it.
 - In multi-session work on the same change, the coordinator session owns `tasks.md`, final progress, `verify`, and `archive` unless the user explicitly chooses a different owner.
+- In multi-session work on the same change, the coordinator session also owns the change-level normalized backlog, round target, and acceptance verdict.
 - In issue-based execution, the coordinator session also owns review of completed issues, merging accepted worker worktrees back to the coordinator branch, and creating the git commit after merge.
 - In issue-based execution, workers must write issue-local progress artifacts and run artifacts. They must not directly update `tasks.md`.
 - In issue-based execution, workers must not merge their own worktree back or create the final git commit for the issue unless the user explicitly overrides that rule.
-- Before a coordinator continues a change that already has issue artifacts, reconcile worker state from disk first instead of trusting chat memory.
+- Before a coordinator continues a change that already has issue artifacts, reconcile worker state from disk first and read change-level control artifacts if present instead of trusting chat memory.
 - When present, use `openspec/issue-mode.json` as the repo-level default config for worktree paths, validation, and monitoring.
 - Treat heartbeat, persistent host monitoring, and detached worker launch as explicit fallback tools for background or off-session automation, not as the default issue execution path.
 - In normal issue-mode guidance, do not proactively steer the user toward detached worker launch or heartbeat unless they asked for background automation.
@@ -117,12 +119,14 @@ When the task is complex, do not rely on one giant session.
 Preferred flow:
 
 1. Use the main session to get the change to implementation-ready state.
-2. Split implementation into issue-sized units with clear boundaries.
-3. For each issue, create or reuse the worker git worktree before handoff.
-4. If the runtime supports delegation, spawn one worker subagent per issue and keep it inside that issue worktree only.
-5. If detached/background execution is required, fall back to one external worker session per issue.
-6. After the worker reports `review_required`, let the coordinator review the worktree, merge accepted changes back to the coordinator branch, and create the commit.
-7. Let the coordinator session maintain the global checklist and final verification.
+2. Run a change-level readiness review and keep a normalized backlog for the current round.
+3. Split implementation into issue-sized units with clear boundaries.
+4. Review the issue plan before dispatching issue work.
+5. For each approved issue, create or reuse the worker git worktree before handoff.
+6. If the runtime supports delegation, spawn one worker subagent per issue and keep it inside that issue worktree only.
+7. If detached/background execution is required, fall back to one external worker session per issue.
+8. After the worker reports `review_required`, let the coordinator review the worktree, update the change-level backlog, merge accepted changes back to the coordinator branch, and create the commit.
+9. Let the coordinator session maintain the global checklist, change-level acceptance, and final verification.
 
 Issue sizing guidance:
 
@@ -134,12 +138,14 @@ Same-change multi-session rules:
 
 - Coordinator session:
   - owns `tasks.md`
+  - owns change-level backlog and round reports
   - owns final progress accounting
   - owns review of completed issues
   - owns merging accepted worker worktrees back to the coordinator branch
   - owns the final git commit after merge
   - owns `verify` and `archive`
   - reads `issues/*.progress.json` and `runs/*.json` before deciding the next step
+  - reads `control/BACKLOG.md` and the latest `control/ROUND-*.md` when present
   - is the only session allowed to update change-level checklists after reconciling worker state
   - uses worker monitoring only as a fallback when progress artifacts are stale, missing, or suspicious
 - Worker context:
@@ -149,6 +155,7 @@ Same-change multi-session rules:
   - writes `openspec/changes/<change>/issues/ISSUE-*.progress.json`
   - writes `openspec/changes/<change>/runs/RUN-*.json`
   - does not merge its worktree back or create the final git commit
+  - reports new out-of-scope findings as blockers or backlog candidates instead of widening scope silently
   - reports back with issue id, changed files, validation, and whether coordinator action is needed
 - Avoid having multiple worker contexts update the same checkbox list or spec file concurrently.
 - Read `references/issue-mode-contract.md` whenever you are setting up or reconciling issue-based work.
@@ -189,6 +196,7 @@ Rules for `issue-mode` output:
 - If the task artifacts are not ready yet, route to `new`, `propose`, or `ff` before encouraging worker sessions.
 - If the user is setting up issue-mode for the first time, remind them that workers should not touch `tasks.md`.
 - Remind the user that workers should not merge or commit; the coordinator reviews, merges, and commits after accepting the issue.
+- Remind the user that the coordinator should keep change-level backlog and acceptance decisions on disk for complex changes.
 - Do not mention heartbeat in the default issue-mode template unless the user explicitly asks for background or detached execution.
 
 ### Special path: `execute-issue`
@@ -250,7 +258,7 @@ Summary rule:
 
 - `dispatch-issue` prepares the issue worktree and source-of-truth dispatch
 - one subagent handles one issue
-- reconcile, review, merge, verify, and archive stay in the coordinator session
+- reconcile, review, merge, change-level acceptance, verify, and archive stay in the coordinator session
 - fall back to detached/background automation only when the user explicitly asks for it
 
 ### Preferred path: route to the dedicated project-local OpenSpec skill

@@ -69,6 +69,12 @@ def render_reconcile_message(change: str, reconcile: dict[str, Any]) -> str:
         return f"✅ 完成: {change} | 已 verify，可 archive"
     if next_action == "resolve_verify_failure":
         return f"❌ 失败: {change} | verify 失败"
+    if next_action == "resolve_round_backlog":
+        return f"⚠️ 需要处理: {change} | Must fix now 未清空"
+    if next_action == "update_round_scope":
+        return f"⚠️ 需要处理: {change} | 当前 round 未批准后续 issue"
+    if next_action == "change_acceptance_required":
+        return f"⚠️ 需要处理: {change} | 需要 change-level acceptance round"
     if next_action == "resolve_blocker":
         return f"❌ 失败: {change} | {issue_id} blocked"
     return f"⚠️ 需要处理: {change} | {reason or next_action}"
@@ -220,6 +226,7 @@ def main() -> None:
             "auto_launch_next": auto_launch_next,
             "auto_accept_review": auto_accept_review,
             "auto_verify_change": auto_verify_change,
+            "rra_gate_mode": config.get("rra", {}).get("gate_mode", "advisory"),
             "dry_run": args.dry_run,
             "config_path": config["config_path"],
         },

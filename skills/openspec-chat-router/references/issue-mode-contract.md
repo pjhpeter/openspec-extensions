@@ -3,6 +3,8 @@
 Use this contract whenever a change is executed by coordinator + worker contexts.
 The worker may be a spawned subagent or an external worker session.
 
+Read `issue-mode-rra.md` as the change-level control-plane reference.
+
 ## Repo Defaults
 
 Projects may define reusable defaults in:
@@ -29,6 +31,7 @@ Helper scripts may fall back to the repo config when those fields are missing.
 
 - Coordinator owns:
   - `tasks.md`
+  - change-level backlog and round reports
   - change-level progress summaries
   - review of completed issues
   - merging accepted worker worktrees back to the coordinator branch
@@ -51,6 +54,9 @@ For change `<change-name>`:
 
 ```text
 openspec/changes/<change-name>/
+├── control/
+│   ├── BACKLOG.md
+│   └── ROUND-01.md
 ├── tasks.md
 ├── issues/
 │   ├── INDEX.md
@@ -74,6 +80,25 @@ Example:
 ```text
 /path/to/project/.worktree/add-canvas-node-tree-sidebar/ISSUE-001/
 ```
+
+## Change-Level Control Artifacts
+
+When the change is complex enough that one pass is not reliable, keep change-level control artifacts on disk:
+
+- `control/BACKLOG.md`
+- `control/ROUND-*.md`
+
+Use them to record:
+
+- round target
+- target mode
+- acceptance criteria
+- non-goals
+- normalized backlog
+- acceptance verdict
+- next action
+
+If these files exist, coordinator decisions about dispatch, review, verify, and archive should read them instead of relying on chat memory.
 
 ## `ISSUE-*.progress.json` Fields
 
@@ -141,14 +166,16 @@ Use one run artifact per worker context:
 ## Coordinator Reconcile Rules
 
 1. Read all `issues/*.progress.json` first.
-2. Read `issues/ISSUE-*.md` to discover pending issues that have not started yet.
-3. Use `runs/*.json` only as supporting evidence, not as the source of truth.
-4. Update `tasks.md` only after reconciling issue state from disk.
-5. Default decisions:
+2. Read `control/BACKLOG.md` and the latest `control/ROUND-*.md` when they exist.
+3. Read `issues/ISSUE-*.md` to discover pending issues that have not started yet.
+4. Use `runs/*.json` only as supporting evidence, not as the source of truth.
+5. Update `tasks.md` only after reconciling issue state from disk.
+6. Default decisions:
+   - unresolved `Must fix now` items in the active control backlog -> stop and resolve them before dispatch, verify, or archive
    - any `blocked` -> stop and resolve blocker
    - any `review_required` -> review that issue in its worker worktree first; if accepted, merge it back to the coordinator branch and create the commit before moving on
    - any issue doc without progress -> dispatch that next issue
-   - all issues `completed` -> move to `verify`
+   - all issues `completed` -> run a change-level acceptance round before moving to `verify`
    - if the latest verify artifact is current and passed -> move to `ready_for_archive`
    - if the latest verify artifact is current and failed -> stop and resolve verify failure
    - some issues still `pending` and none blocked -> dispatch next issue
@@ -182,5 +209,6 @@ If `worker_worktree` or `validation` is missing, helpers fall back to `openspec/
 ## Practical Rule
 
 Chat text is not the workflow state.
-Issue progress files are the workflow state.
+Issue progress files are the execution state.
+Control backlog and round reports are the acceptance state.
 In issue mode, accepted code lands through coordinator review plus coordinator-owned merge and commit, not through worker self-merge.

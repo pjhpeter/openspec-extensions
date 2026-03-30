@@ -8,6 +8,143 @@ from pathlib import Path
 from typing import Any
 
 CONFIG_RELATIVE_PATH = Path("openspec") / "issue-mode.json"
+CONTROL_DIR_NAME = "control"
+ROUND_FILE_PATTERN = "ROUND-*.md"
+ISSUE_ID_PATTERN = re.compile(r"\bISSUE-\d+\b", re.IGNORECASE)
+HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*$")
+NUMBERED_TITLE_RE = re.compile(r"^\s*\d+\.\s+(.+?)\s*$")
+BOLD_TITLE_RE = re.compile(r"^\s*\*\*(.+?)\*\*\s*$")
+CHECKBOX_ITEM_RE = re.compile(r"^\s*(?:[-*+]|\d+\.)\s+\[(?P<state>[ xX])\]\s+(?P<text>.+?)\s*$")
+LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]|\d+\.)\s+(?P<text>.+?)\s*$")
+BACKLOG_SECTION_ALIASES = {
+    "must_fix_now": (
+        "must fix now",
+        "must-fix-now",
+        "mustfixnow",
+        "must fix",
+        "必须立即修复",
+        "必须修复",
+        "立即修复",
+    ),
+    "should_fix_if_cheap": (
+        "should fix if cheap",
+        "should-fix-if-cheap",
+        "shouldfixifcheap",
+        "应该修复",
+        "低成本修复",
+    ),
+    "defer": (
+        "defer",
+        "deferred",
+        "延后",
+        "延期",
+        "暂缓",
+    ),
+}
+ROUND_SECTION_ALIASES = {
+    "round_target": (
+        "round target",
+        "目标",
+        "本轮目标",
+        "轮次目标",
+    ),
+    "target_mode": (
+        "target mode",
+        "目标模式",
+        "模式",
+    ),
+    "acceptance_criteria": (
+        "acceptance criteria",
+        "验收标准",
+        "验收条件",
+    ),
+    "non_goals": (
+        "non-goals",
+        "non goals",
+        "非目标",
+    ),
+    "scope_in_round": (
+        "scope in round",
+        "round scope",
+        "scope",
+        "本轮范围",
+        "范围",
+    ),
+    "normalized_backlog": (
+        "normalized backlog",
+        "backlog",
+        "规范化 backlog",
+        "待办",
+    ),
+    "fixes_completed": (
+        "fixes or revisions completed",
+        "fixes completed",
+        "修复完成",
+        "修订完成",
+    ),
+    "re_review_result": (
+        "re-review result",
+        "re review result",
+        "review result",
+        "复审结果",
+        "复核结果",
+    ),
+    "acceptance_verdict": (
+        "acceptance verdict",
+        "verdict",
+        "验收结论",
+        "验收结果",
+        "结论",
+    ),
+    "next_action": (
+        "next action",
+        "next step",
+        "下一步",
+        "后续动作",
+        "后续步骤",
+    ),
+}
+ROUND_ACCEPT_KEYWORDS = (
+    "accepted",
+    "approve",
+    "approved",
+    "pass",
+    "passed",
+    "through",
+    "通过",
+    "已通过",
+    "接受",
+    "已接受",
+    "已验收",
+    "可继续",
+)
+ROUND_REJECT_KEYWORDS = (
+    "reject",
+    "rejected",
+    "fail",
+    "failed",
+    "blocked",
+    "repair",
+    "revise",
+    "rework",
+    "不通过",
+    "驳回",
+    "阻塞",
+    "返工",
+    "修复",
+)
+VERIFY_ACTION_KEYWORDS = (
+    "verify",
+    "archive",
+    "closeout",
+    "ready for verify",
+    "run verify",
+    "归档",
+    "验收",
+    "验证",
+    "收尾",
+    "关闭",
+)
 DEFAULT_CONFIG: dict[str, Any] = {
     "worktree_root": ".worktree",
     "validation_commands": [
@@ -32,6 +169,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "auto_accept_review": False,
         "auto_verify_change": False,
     },
+    "rra": {
+        "gate_mode": "advisory",
+    },
     "worker_launcher": {
         "session_prefix": "opsx-worker",
         "start_grace_seconds": 120,
@@ -54,6 +194,141 @@ def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]
             continue
         result[key] = value
     return result
+
+
+def normalize_markdown_label(value: str) -> str:
+    normalized = re.sub(r"[`*_#]+", "", value).strip()
+    normalized = normalized.strip(":：-–—|")
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized.casefold()
+
+
+NORMALIZED_BACKLOG_SECTION_ALIASES = {
+    key: {normalize_markdown_label(alias) for alias in aliases}
+    for key, aliases in BACKLOG_SECTION_ALIASES.items()
+}
+NORMALIZED_ROUND_SECTION_ALIASES = {
+    key: {normalize_markdown_label(alias) for alias in aliases}
+    for key, aliases in ROUND_SECTION_ALIASES.items()
+}
+
+
+def line_title_candidate(line: str) -> str | None:
+    for pattern in (HEADING_RE, NUMBERED_TITLE_RE, BOLD_TITLE_RE):
+        match = pattern.match(line)
+        if match:
+            return match.group(1).strip()
+    return None
+
+
+def match_markdown_section(
+    line: str,
+    alias_map: dict[str, set[str]],
+) -> tuple[str, str] | None:
+    raw_title = line_title_candidate(line)
+    if raw_title is None:
+        return None
+
+    candidates = [(raw_title, "")]
+    for separator in (":", "：", " - ", " – ", " — ", " | "):
+        if separator not in raw_title:
+            continue
+        left, right = raw_title.split(separator, 1)
+        candidates.append((left.strip(), right.strip()))
+
+    for title, inline_body in candidates:
+        normalized = normalize_markdown_label(title)
+        for canonical, aliases in alias_map.items():
+            if normalized in aliases:
+                return canonical, inline_body
+    return None
+
+
+def extract_markdown_sections(
+    text: str,
+    alias_map: dict[str, set[str]],
+) -> dict[str, list[str]]:
+    sections: dict[str, list[str]] = {}
+    current_section: str | None = None
+
+    for raw_line in text.splitlines():
+        matched = match_markdown_section(raw_line, alias_map)
+        if matched is not None:
+            current_section, inline_body = matched
+            if current_section not in sections:
+                sections[current_section] = []
+            if inline_body:
+                sections[current_section].append(inline_body)
+            continue
+
+        if current_section is not None and HEADING_RE.match(raw_line):
+            current_section = None
+            continue
+
+        if current_section is not None:
+            sections.setdefault(current_section, []).append(raw_line.rstrip())
+
+    return sections
+
+
+def dedupe_strings(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        text = value.strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
+
+
+def extract_open_work_items(lines: list[str]) -> list[str]:
+    items: list[str] = []
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("<!--"):
+            continue
+        checkbox_match = CHECKBOX_ITEM_RE.match(line)
+        if checkbox_match:
+            if checkbox_match.group("state").strip().casefold() == "x":
+                continue
+            items.append(checkbox_match.group("text").strip())
+            continue
+        list_match = LIST_ITEM_RE.match(line)
+        if list_match:
+            items.append(list_match.group("text").strip())
+    return dedupe_strings(items)
+
+
+def collapse_section_lines(lines: list[str]) -> str:
+    parts = [line.strip() for line in lines if line.strip()]
+    return " ".join(parts).strip()
+
+
+def text_contains_keyword(text: str, keywords: tuple[str, ...]) -> bool:
+    haystack = text.casefold()
+    return any(keyword.casefold() in haystack for keyword in keywords)
+
+
+def round_acceptance_status(text: str) -> str:
+    if not text.strip():
+        return "missing"
+    if text_contains_keyword(text, ROUND_REJECT_KEYWORDS):
+        return "rejected"
+    if text_contains_keyword(text, ROUND_ACCEPT_KEYWORDS):
+        return "accepted"
+    return "unknown"
+
+
+def round_allows_verify(acceptance_text: str, next_action_text: str) -> bool:
+    if round_acceptance_status(acceptance_text) != "accepted":
+        return False
+    return text_contains_keyword(next_action_text or acceptance_text, VERIFY_ACTION_KEYWORDS)
+
+
+def extract_issue_ids_from_text(text: str) -> list[str]:
+    return dedupe_strings([match.group(0).upper() for match in ISSUE_ID_PATTERN.finditer(text)])
 
 
 def parse_frontmatter(text: str) -> dict[str, object]:
@@ -198,6 +473,13 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
         else normalize_bool(raw_auto_verify_change, auto_accept_review)
     )
 
+    rra = config.get("rra", {})
+    if not isinstance(rra, dict):
+        rra = {}
+    gate_mode = str(rra.get("gate_mode", DEFAULT_CONFIG["rra"]["gate_mode"])).strip() or "advisory"
+    if gate_mode not in {"advisory", "enforce"}:
+        raise SystemExit(f"{CONFIG_RELATIVE_PATH} field `rra.gate_mode` must be `advisory` or `enforce`.")
+
     worker_launcher = config.get("worker_launcher", {})
     if not isinstance(worker_launcher, dict):
         worker_launcher = {}
@@ -261,6 +543,9 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
             "auto_launch_next": auto_launch_next,
             "auto_accept_review": auto_accept_review,
             "auto_verify_change": auto_verify_change,
+        },
+        "rra": {
+            "gate_mode": gate_mode,
         },
         "worker_launcher": {
             "session_prefix": session_prefix,
@@ -382,6 +667,145 @@ def default_worker_run_id(issue_id: str) -> str:
 
 def change_dir(repo_root: Path, change: str) -> Path:
     return repo_root / "openspec" / "changes" / change
+
+
+def change_control_dir(repo_root: Path, change: str) -> Path:
+    return change_dir(repo_root, change) / CONTROL_DIR_NAME
+
+
+def backlog_artifact_path(repo_root: Path, change: str) -> Path:
+    return change_control_dir(repo_root, change) / "BACKLOG.md"
+
+
+def latest_round_artifact_path(repo_root: Path, change: str) -> Path | None:
+    control_dir = change_control_dir(repo_root, change)
+    if not control_dir.exists():
+        return None
+    matches = sorted(control_dir.glob(ROUND_FILE_PATTERN))
+    if not matches:
+        return None
+    return matches[-1]
+
+
+def read_change_control_state(repo_root: Path, change: str) -> dict[str, Any]:
+    backlog_path = backlog_artifact_path(repo_root, change)
+    latest_round_path = latest_round_artifact_path(repo_root, change)
+
+    backlog_sections = extract_markdown_sections(
+        backlog_path.read_text() if backlog_path.exists() else "",
+        NORMALIZED_BACKLOG_SECTION_ALIASES,
+    )
+    must_fix_now_items = extract_open_work_items(backlog_sections.get("must_fix_now", []))
+
+    round_sections = extract_markdown_sections(
+        latest_round_path.read_text() if latest_round_path else "",
+        NORMALIZED_ROUND_SECTION_ALIASES,
+    )
+    acceptance_lines = round_sections.get("acceptance_verdict") or round_sections.get("re_review_result", [])
+    acceptance_text = collapse_section_lines(acceptance_lines)
+    next_action_text = collapse_section_lines(round_sections.get("next_action", []))
+    scope_text = collapse_section_lines(round_sections.get("scope_in_round", []))
+    referenced_issue_ids = extract_issue_ids_from_text(" ".join([scope_text, next_action_text]))
+    acceptance_status = round_acceptance_status(acceptance_text)
+
+    return {
+        "enabled": backlog_path.exists() or latest_round_path is not None,
+        "backlog_path": display_path(repo_root, backlog_path) if backlog_path.exists() else "",
+        "latest_round_path": display_path(repo_root, latest_round_path) if latest_round_path else "",
+        "must_fix_now": {
+            "open_count": len(must_fix_now_items),
+            "open_items": must_fix_now_items,
+        },
+        "latest_round": {
+            "acceptance_text": acceptance_text,
+            "acceptance_status": acceptance_status,
+            "next_action_text": next_action_text,
+            "allows_verify": round_allows_verify(acceptance_text, next_action_text),
+            "dispatch_gate_active": bool(latest_round_path and referenced_issue_ids),
+            "referenced_issue_ids": referenced_issue_ids,
+        },
+    }
+
+
+def evaluate_issue_dispatch_gate(
+    config: dict[str, Any],
+    control_state: dict[str, Any],
+    issue_id: str,
+) -> dict[str, Any]:
+    gate_mode = str(config.get("rra", {}).get("gate_mode", "advisory")).strip() or "advisory"
+    normalized_issue_id = issue_id.strip()
+    gate: dict[str, Any] = {
+        "mode": gate_mode,
+        "issue_id": normalized_issue_id,
+        "active": False,
+        "blocking": False,
+        "enforced": False,
+        "allowed": True,
+        "status": "not_applicable",
+        "action": "",
+        "reason": "",
+    }
+
+    if not control_state.get("enabled"):
+        return gate
+
+    must_fix_now_open = int(control_state.get("must_fix_now", {}).get("open_count", 0) or 0)
+    if must_fix_now_open > 0:
+        gate.update(
+            {
+                "active": True,
+                "blocking": True,
+                "allowed": False,
+                "status": "blocked_by_backlog",
+                "action": "resolve_round_backlog",
+                "reason": f"当前 RRA backlog 仍有 {must_fix_now_open} 个 Must fix now 未处理。",
+            }
+        )
+        gate["enforced"] = gate["blocking"] and gate_mode == "enforce"
+        return gate
+
+    latest_round = control_state.get("latest_round", {})
+    dispatchable_issue_ids = {
+        str(candidate).strip()
+        for candidate in latest_round.get("referenced_issue_ids", [])
+        if str(candidate).strip()
+    }
+    if latest_round.get("dispatch_gate_active") and dispatchable_issue_ids:
+        if normalized_issue_id in dispatchable_issue_ids:
+            gate.update(
+                {
+                    "active": True,
+                    "allowed": True,
+                    "status": "approved_for_dispatch",
+                    "action": "dispatch_next_issue",
+                    "reason": "当前 round 已批准该 issue 派发。",
+                }
+            )
+        else:
+            gate.update(
+                {
+                    "active": True,
+                    "blocking": True,
+                    "allowed": False,
+                    "status": "blocked_by_round_scope",
+                    "action": "update_round_scope",
+                    "reason": "当前 round 未批准该 issue 派发，请更新 round scope。",
+                }
+            )
+
+    gate["enforced"] = gate["blocking"] and gate_mode == "enforce"
+    return gate
+
+
+def ensure_issue_dispatch_allowed(
+    config: dict[str, Any],
+    control_state: dict[str, Any],
+    issue_id: str,
+) -> dict[str, Any]:
+    gate = evaluate_issue_dispatch_gate(config, control_state, issue_id)
+    if gate.get("enforced"):
+        raise SystemExit(f"Dispatch blocked by RRA gate: {gate.get('reason', 'unknown reason')}")
+    return gate
 
 
 def change_runs_dir(repo_root: Path, change: str) -> Path:
