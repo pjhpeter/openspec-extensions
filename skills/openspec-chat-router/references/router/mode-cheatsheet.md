@@ -2,6 +2,15 @@
 
 已进入 OpenSpec 模式。
 
+注意：
+
+- issue-mode 的默认 coordinator 入口是 `subagent-team`
+- 但某些 runtime 对真实拉起 subagent / delegation 仍要求你在当前会话里显式授权
+- 如果你希望当前会话一定走多 agent 编排，直接说：
+  - `按 issue 模式继续，并启用 subagent-team`
+  - `这个 change 用 subagent team 推进`
+  - `启用多 agent 编排推进当前 change`
+
 你可以直接这样说：
 
 - 帮我起一个变更，把文档一次性补齐

@@ -57,6 +57,20 @@
 9. 主会话 review、merge、commit。
 10. 所有必要 issue 都 accept 后，再做 change 级 acceptance，然后进入 `verify` / `archive`。
 
+## 运行时注意点
+
+- skill 契约层面，issue-mode 的默认 coordinator 入口是 `openspec-subagent-team`
+- 但某些 Codex / agent runtime 会把“真实拉起 subagent / delegation”视为更高优先级的权限动作
+- 这类 runtime 可能仍要求用户在当前会话里显式表达“启用 subagent / subagent-team / 多 agent 编排”
+- 所以你可能会看到两层语义同时存在：
+  - skill 认为默认入口应该是 `subagent-team`
+  - runtime 仍因为缺少显式授权而退回本地 coordinator 执行路径
+- 这不是 `subagent_team.*` 配置开关失效；而是运行时权限策略高于 repo skill 契约
+- 如果当前 runtime 仍有这类限制，最稳的用户话术是：
+  - `按 issue 模式继续，并启用 subagent-team`
+  - `这个 change 用 subagent team 推进`
+  - `启用多 agent 编排推进当前 change`
+
 ## 配置契约
 
 当前支持的 `openspec/issue-mode.json` 字段如下：
@@ -110,6 +124,7 @@
 - `subagent_team.*` 不负责决定默认入口拓扑：
   - issue-mode 下，coordinator 默认入口就是 `openspec-subagent-team`
   - 单 worker issue path 只在显式收窄到一个 issue worker 时使用
+- 但在部分 runtime 里，是否真的拉起 subagent / delegation 仍可能额外要求用户显式授权
 - runtime 会基于这些值派生一个 automation profile：
   - `semi_auto`：`rra.gate_mode=advisory` 且五个 `subagent_team` 开关全为 `false`
   - `full_auto`：`rra.gate_mode=enforce` 且五个 `subagent_team` 开关全为 `true`
