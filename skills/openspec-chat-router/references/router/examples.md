@@ -13,8 +13,6 @@ Use these examples when you need quick intent-to-route references without re-rea
 - “给 ISSUE-001 创建 worker worktree。” -> `dispatch-issue`
 - “给 ISSUE-001 准备 dispatch 并直接开一个 subagent。” -> `dispatch-issue`, then one delegated issue worker
 - “这个 worker 会话只做 ISSUE-002。” -> `execute-issue`
-- “看看 worker1 现在跑到哪一步了。” -> `monitor-worker`
-- “这个 worker 还活着吗？” -> `monitor-worker`
 - “同步一下当前 change 的 worker 进度。” -> `reconcile`
 - “根据 worker 结果继续推进这个 change。” -> `reconcile`
 - “对这个 change 做 change-level acceptance review，再决定要不要 verify。” -> `reconcile`, then change-level acceptance decision

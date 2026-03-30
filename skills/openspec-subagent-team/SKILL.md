@@ -1,6 +1,6 @@
 ---
 name: openspec-subagent-team
-description: Coordinate an OpenSpec change or issue through a subagent team development -> check -> repair -> review loop. Use when the user explicitly asks for subagent team collaboration, wants to avoid detached workers, or needs a bounded multi-round control plane for complex issue-mode work.
+description: Coordinate an OpenSpec change or issue through a subagent team development -> check -> repair -> review loop. Use when the user explicitly asks for subagent team collaboration or needs a bounded multi-round control plane for complex issue-mode work.
 ---
 
 # OpenSpec Subagent Team
@@ -18,9 +18,7 @@ Read these first:
 
 - make subagent team orchestration the primary path for complex issue-mode work
 - keep round scope, backlog, and review decisions on disk
-- avoid relying on detached worker liveness as the main scheduler
-
-Detached worker launch, monitor, and heartbeat remain fallback tools only.
+- avoid relying on detached worker fallback infrastructure
 
 ## Workflow
 
@@ -77,5 +75,4 @@ Keep coordinator output short:
 - Team Dispatch: openspec/changes/<change>/issues/ISSUE-001.team.dispatch.md
 - Round Target: <summary>
 - Next Step: development / check / review
-- Fallback: detached worker 不启用，除非你明确要求
 ```

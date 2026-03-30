@@ -11,7 +11,7 @@ SCRIPT_DIR = Path(__file__).resolve().parents[1]
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from issue_mode_common import extract_open_work_items, read_change_control_state  # noqa: E402
+from issue_mode_common import extract_open_work_items, load_issue_mode_config, read_change_control_state  # noqa: E402
 
 
 class ExtractOpenWorkItemsTest(unittest.TestCase):
@@ -121,6 +121,57 @@ class ReadChangeControlStateTest(unittest.TestCase):
         self.assertEqual(state["latest_round"]["acceptance_status"], "accepted")
         self.assertTrue(state["latest_round"]["allows_verify"])
         self.assertEqual(state["latest_round"]["referenced_issue_ids"], ["ISSUE-001"])
+
+
+class LoadIssueModeConfigTest(unittest.TestCase):
+    def test_ignores_legacy_detached_worker_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            openspec_dir = repo_root / "openspec"
+            openspec_dir.mkdir(parents=True)
+            (openspec_dir / "issue-mode.json").write_text(textwrap.dedent(
+                """\
+                {
+                  "worktree_root": ".worktree",
+                  "validation_commands": ["pnpm lint"],
+                  "worker_worktree": {
+                    "mode": "branch",
+                    "base_ref": "main",
+                    "branch_prefix": "demo"
+                  },
+                  "rra": {
+                    "gate_mode": "enforce"
+                  },
+                  "subagent_team": {
+                    "auto_advance_after_design_review": true
+                  },
+                  "codex_home": "~/.codex",
+                  "persistent_host": {
+                    "kind": "screen"
+                  },
+                  "coordinator_heartbeat": {
+                    "auto_launch_next": true
+                  },
+                  "worker_launcher": {
+                    "session_prefix": "legacy"
+                  }
+                }
+                """
+            ))
+
+            config = load_issue_mode_config(repo_root)
+
+        self.assertEqual(config["worktree_root"], ".worktree")
+        self.assertEqual(config["validation_commands"], ["pnpm lint"])
+        self.assertEqual(config["worker_worktree"]["mode"], "branch")
+        self.assertEqual(config["worker_worktree"]["base_ref"], "main")
+        self.assertEqual(config["worker_worktree"]["branch_prefix"], "demo")
+        self.assertEqual(config["rra"]["gate_mode"], "enforce")
+        self.assertTrue(config["subagent_team"]["auto_advance_after_design_review"])
+        self.assertNotIn("codex_home", config)
+        self.assertNotIn("persistent_host", config)
+        self.assertNotIn("coordinator_heartbeat", config)
+        self.assertNotIn("worker_launcher", config)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 ---
 name: openspec-dispatch-issue
-description: Generate a worker dispatch prompt, prepare a subagent handoff, or create/reuse the worker git worktree for one OpenSpec issue. Use when the coordinator asks for “ISSUE-001 的 worker 模板”, “派发下一个 issue”, “创建 ISSUE-001 的 worker worktree”, “准备 worker 目录”, “生成新的 worker prompt”, “直接开 subagent 做 ISSUE-001”, or similar requests after issue docs already exist.
+description: Generate an issue dispatch prompt, prepare a subagent handoff, or create/reuse the worker git worktree for one OpenSpec issue. Use when the coordinator asks for “ISSUE-001 的 worker 模板”, “派发下一个 issue”, “创建 ISSUE-001 的 worker worktree”, “准备 worker 目录”, “生成新的 worker prompt”, “直接开 subagent 做 ISSUE-001”, or similar requests after issue docs already exist.
 ---
 
 # OpenSpec Dispatch Issue
@@ -49,10 +49,9 @@ Read `issue-mode-contract.md`, `issue-mode-config.md`, `issue-mode-rra.md`, and 
 - Do not improvise scope boundaries from memory when an issue doc exists.
 - If the issue doc is missing required frontmatter fields, fix the issue doc first.
 - If the active change-level round still has unresolved `Must fix now` items that block dispatch, do not launch the worker yet.
-- If the user explicitly wants subagent team collaboration, prefer rendering `ISSUE-*.team.dispatch.md` over detached worker launch.
+- If the user explicitly wants subagent team collaboration, prefer rendering `ISSUE-*.team.dispatch.md`.
 - The coordinator owns handoff, review, merge, and final commit for the issue.
-- Spawned subagents and detached workers follow the same issue boundary contract.
-- Do not default to suggesting a separate worker chat or heartbeat; mention detached/background paths only when the user explicitly wants them.
+- Dispatch artifacts are for coordinator-owned subagents, not detached/background workers.
 
 ## Output
 

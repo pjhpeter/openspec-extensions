@@ -152,39 +152,16 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "pnpm lint",
         "pnpm type-check",
     ],
-    "codex_home": "~/.codex",
-    "persistent_host": {
-        "kind": "screen",
-    },
     "worker_worktree": {
         "mode": "detach",
         "base_ref": "HEAD",
         "branch_prefix": "opsx",
-    },
-    "coordinator_heartbeat": {
-        "interval_seconds": 60,
-        "stale_seconds": 900,
-        "notify_topic": "",
-        "auto_dispatch_next": False,
-        "auto_launch_next": False,
-        "auto_accept_review": False,
-        "auto_verify_change": False,
     },
     "rra": {
         "gate_mode": "advisory",
     },
     "subagent_team": {
         "auto_advance_after_design_review": False,
-    },
-    "worker_launcher": {
-        "session_prefix": "opsx-worker",
-        "start_grace_seconds": 120,
-        "launch_cooldown_seconds": 30,
-        "max_launch_retries": 1,
-        "codex_bin": "codex",
-        "sandbox_mode": "danger-full-access",
-        "bypass_approvals": True,
-        "json_output": True,
     },
 }
 
@@ -468,15 +445,6 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
     if not validation_commands:
         validation_commands = list(DEFAULT_CONFIG["validation_commands"])
 
-    codex_home = str(config.get("codex_home", DEFAULT_CONFIG["codex_home"])).strip() or str(DEFAULT_CONFIG["codex_home"])
-
-    persistent_host = config.get("persistent_host", {})
-    if not isinstance(persistent_host, dict):
-        persistent_host = {}
-    host_kind = str(persistent_host.get("kind", DEFAULT_CONFIG["persistent_host"]["kind"])).strip() or "screen"
-    if host_kind not in {"screen", "tmux", "none"}:
-        raise SystemExit(f"{CONFIG_RELATIVE_PATH} field `persistent_host.kind` must be `screen`, `tmux`, or `none`.")
-
     worker_worktree = config.get("worker_worktree", {})
     if not isinstance(worker_worktree, dict):
         worker_worktree = {}
@@ -486,45 +454,6 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
 
     base_ref = str(worker_worktree.get("base_ref", DEFAULT_CONFIG["worker_worktree"]["base_ref"])).strip() or "HEAD"
     branch_prefix = str(worker_worktree.get("branch_prefix", DEFAULT_CONFIG["worker_worktree"]["branch_prefix"])).strip() or "opsx"
-
-    coordinator_heartbeat = config.get("coordinator_heartbeat", {})
-    if not isinstance(coordinator_heartbeat, dict):
-        coordinator_heartbeat = {}
-    interval_seconds = int(
-        coordinator_heartbeat.get("interval_seconds", DEFAULT_CONFIG["coordinator_heartbeat"]["interval_seconds"])
-    )
-    stale_seconds = int(
-        coordinator_heartbeat.get("stale_seconds", DEFAULT_CONFIG["coordinator_heartbeat"]["stale_seconds"])
-    )
-    if interval_seconds <= 0:
-        raise SystemExit(f"{CONFIG_RELATIVE_PATH} field `coordinator_heartbeat.interval_seconds` must be > 0.")
-    if stale_seconds <= 0:
-        raise SystemExit(f"{CONFIG_RELATIVE_PATH} field `coordinator_heartbeat.stale_seconds` must be > 0.")
-    notify_topic = str(
-        coordinator_heartbeat.get("notify_topic", DEFAULT_CONFIG["coordinator_heartbeat"]["notify_topic"])
-    ).strip()
-    auto_dispatch_next = normalize_bool(
-        coordinator_heartbeat.get(
-            "auto_dispatch_next", DEFAULT_CONFIG["coordinator_heartbeat"]["auto_dispatch_next"]
-        ),
-        bool(DEFAULT_CONFIG["coordinator_heartbeat"]["auto_dispatch_next"]),
-    )
-    auto_launch_next = normalize_bool(
-        coordinator_heartbeat.get("auto_launch_next", DEFAULT_CONFIG["coordinator_heartbeat"]["auto_launch_next"]),
-        bool(DEFAULT_CONFIG["coordinator_heartbeat"]["auto_launch_next"]),
-    )
-    raw_auto_accept_review = coordinator_heartbeat.get("auto_accept_review")
-    auto_accept_review = (
-        auto_launch_next
-        if raw_auto_accept_review is None
-        else normalize_bool(raw_auto_accept_review, auto_launch_next)
-    )
-    raw_auto_verify_change = coordinator_heartbeat.get("auto_verify_change")
-    auto_verify_change = (
-        auto_accept_review
-        if raw_auto_verify_change is None
-        else normalize_bool(raw_auto_verify_change, auto_accept_review)
-    )
 
     rra = config.get("rra", {})
     if not isinstance(rra, dict):
@@ -544,85 +473,19 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
         bool(DEFAULT_CONFIG["subagent_team"]["auto_advance_after_design_review"]),
     )
 
-    worker_launcher = config.get("worker_launcher", {})
-    if not isinstance(worker_launcher, dict):
-        worker_launcher = {}
-    session_prefix = (
-        str(worker_launcher.get("session_prefix", DEFAULT_CONFIG["worker_launcher"]["session_prefix"])).strip()
-        or "opsx-worker"
-    )
-    start_grace_seconds = int(
-        worker_launcher.get("start_grace_seconds", DEFAULT_CONFIG["worker_launcher"]["start_grace_seconds"])
-    )
-    launch_cooldown_seconds = int(
-        worker_launcher.get(
-            "launch_cooldown_seconds", DEFAULT_CONFIG["worker_launcher"]["launch_cooldown_seconds"]
-        )
-    )
-    max_launch_retries = int(
-        worker_launcher.get("max_launch_retries", DEFAULT_CONFIG["worker_launcher"]["max_launch_retries"])
-    )
-    if start_grace_seconds <= 0:
-        raise SystemExit(f"{CONFIG_RELATIVE_PATH} field `worker_launcher.start_grace_seconds` must be > 0.")
-    if launch_cooldown_seconds < 0:
-        raise SystemExit(f"{CONFIG_RELATIVE_PATH} field `worker_launcher.launch_cooldown_seconds` must be >= 0.")
-    if max_launch_retries < 0:
-        raise SystemExit(f"{CONFIG_RELATIVE_PATH} field `worker_launcher.max_launch_retries` must be >= 0.")
-    codex_bin = str(worker_launcher.get("codex_bin", DEFAULT_CONFIG["worker_launcher"]["codex_bin"])).strip() or "codex"
-    sandbox_mode = (
-        str(worker_launcher.get("sandbox_mode", DEFAULT_CONFIG["worker_launcher"]["sandbox_mode"])).strip()
-        or "danger-full-access"
-    )
-    if sandbox_mode not in {"read-only", "workspace-write", "danger-full-access"}:
-        raise SystemExit(
-            f"{CONFIG_RELATIVE_PATH} field `worker_launcher.sandbox_mode` must be "
-            "`read-only`, `workspace-write`, or `danger-full-access`."
-        )
-    bypass_approvals = normalize_bool(
-        worker_launcher.get("bypass_approvals", DEFAULT_CONFIG["worker_launcher"]["bypass_approvals"]),
-        bool(DEFAULT_CONFIG["worker_launcher"]["bypass_approvals"]),
-    )
-    json_output = normalize_bool(
-        worker_launcher.get("json_output", DEFAULT_CONFIG["worker_launcher"]["json_output"]),
-        bool(DEFAULT_CONFIG["worker_launcher"]["json_output"]),
-    )
-
     return {
         "worktree_root": worktree_root,
         "validation_commands": validation_commands,
-        "codex_home": codex_home,
-        "persistent_host": {
-            "kind": host_kind,
-        },
         "worker_worktree": {
             "mode": worktree_mode,
             "base_ref": base_ref,
             "branch_prefix": branch_prefix,
-        },
-        "coordinator_heartbeat": {
-            "interval_seconds": interval_seconds,
-            "stale_seconds": stale_seconds,
-            "notify_topic": notify_topic,
-            "auto_dispatch_next": auto_dispatch_next,
-            "auto_launch_next": auto_launch_next,
-            "auto_accept_review": auto_accept_review,
-            "auto_verify_change": auto_verify_change,
         },
         "rra": {
             "gate_mode": gate_mode,
         },
         "subagent_team": {
             "auto_advance_after_design_review": auto_advance_after_design_review,
-        },
-        "worker_launcher": {
-            "session_prefix": session_prefix,
-            "start_grace_seconds": start_grace_seconds,
-            "launch_cooldown_seconds": launch_cooldown_seconds,
-            "max_launch_retries": max_launch_retries,
-            "codex_bin": codex_bin,
-            "sandbox_mode": sandbox_mode,
-            "bypass_approvals": bypass_approvals,
-            "json_output": json_output,
         },
         "config_path": str(CONFIG_RELATIVE_PATH),
         "config_exists": config_path.exists(),
@@ -725,11 +588,6 @@ def worker_branch_name(config: dict[str, Any], change: str, issue_id: str) -> st
 
 def now_iso() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
-
-
-def default_worker_run_id(issue_id: str) -> str:
-    stamp = datetime.now().astimezone().strftime("%Y%m%dT%H%M%S")
-    return f"RUN-{stamp}-{issue_id}"
 
 
 def change_dir(repo_root: Path, change: str) -> Path:
@@ -921,24 +779,3 @@ def issue_progress_path(repo_root: Path, change: str, issue_id: str) -> Path:
 
 def run_artifact_path(repo_root: Path, change: str, run_id: str) -> Path:
     return change_runs_dir(repo_root, change) / f"{run_id}.json"
-
-
-def worker_session_state_path(repo_root: Path, change: str, issue_id: str) -> Path:
-    return change_runs_dir(repo_root, change) / f"{issue_id}.worker-session.json"
-
-
-def worker_exec_log_path(repo_root: Path, change: str, run_id: str) -> Path:
-    return change_runs_dir(repo_root, change) / f"{run_id}.worker.exec.log"
-
-
-def worker_last_message_path(repo_root: Path, change: str, run_id: str) -> Path:
-    return change_runs_dir(repo_root, change) / f"{run_id}.worker.last-message.txt"
-
-
-def worker_session_name(config: dict[str, Any], change: str, issue_id: str) -> str:
-    prefix = slugify_branch_fragment(config["worker_launcher"]["session_prefix"]).replace("/", "-").strip("-")
-    change_slug = slugify_branch_fragment(change).replace("/", "-")
-    issue_slug = slugify_branch_fragment(issue_id).replace("/", "-")
-    if prefix:
-        return f"{prefix}-{change_slug}-{issue_slug}"
-    return f"{change_slug}-{issue_slug}"

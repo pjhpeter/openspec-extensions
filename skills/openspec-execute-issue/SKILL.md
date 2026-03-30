@@ -1,11 +1,11 @@
 ---
 name: openspec-execute-issue
-description: 'Execute exactly one issue in an OpenSpec multi-session change. Use when a worker subagent or external worker session is told to handle one issue only, with boundaries such as "Issue: ISSUE-001", "Allowed scope", "Out of scope", "Done when", or similar issue-scoped implementation instructions.'
+description: 'Execute exactly one issue in an OpenSpec multi-session change. Use when a worker subagent is told to handle one issue only, with boundaries such as "Issue: ISSUE-001", "Allowed scope", "Out of scope", "Done when", or similar issue-scoped implementation instructions.'
 ---
 
 # OpenSpec Execute Issue
 
-Use this skill in one worker context only, whether that worker is a spawned subagent or an external worker session.
+Use this skill in one worker subagent context only.
 
 Read `../openspec-chat-router/references/issue-mode-contract.md`, `../openspec-chat-router/references/issue-mode-config.md`, and `../openspec-chat-router/references/issue-mode-rra.md` first.
 

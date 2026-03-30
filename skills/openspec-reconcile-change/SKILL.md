@@ -9,7 +9,6 @@ Use this skill in the coordinator session.
 
 Read `issue-mode-contract.md` and `issue-mode-rra.md` first.
 Use `router/coordinator-playbook.md` for the default coordinator flow.
-When artifact state looks stale or suspicious, use `../openspec-monitor-worker/SKILL.md` as fallback observability instead of guessing.
 
 ## Workflow
 
@@ -46,11 +45,10 @@ When artifact state looks stale or suspicious, use `../openspec-monitor-worker/S
 - Do not let workers update `tasks.md`, self-merge, or create the final git commit for an issue.
 - Use issue docs to discover pending work that has not started yet.
 - `coordinator_merge_issue.py` expects the coordinator worktree to start clean before it imports the worker diff and creates the acceptance commit.
-- If a worker may be stuck or dead and artifacts are stale, inspect it with `openspec-monitor-worker` before redispatching.
-- In subagent-first flows, prefer artifact-based reconcile and coordinator review; detached monitoring and heartbeat are fallback paths only.
+- If artifacts are stale or suspicious, inspect the issue worktree and run artifacts directly before redispatching.
+- In subagent-first flows, prefer artifact-based reconcile and coordinator review over any process-liveness heuristics.
 - For complex changes, keep the active normalized backlog and round verdict on disk instead of in chat only.
 - Do not dispatch, verify, or archive while unresolved `Must fix now` items remain in the active change-level backlog.
-- If the user explicitly wants periodic polling or proactive notifications instead of one-shot reconcile, run `.codex/skills/openspec-shared/scripts/coordinator_heartbeat.py`.
 - If the helper finds no issue artifacts, fall back to normal OpenSpec routing.
 - If coordinator review accepts an issue, merge and commit it before dispatching the next dependent issue or moving to `verify`.
 

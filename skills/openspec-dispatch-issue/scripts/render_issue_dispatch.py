@@ -26,7 +26,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--change", required=True)
     parser.add_argument("--issue-id", required=True)
     parser.add_argument("--run-id", default="")
-    parser.add_argument("--session-name", default="")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -52,7 +51,6 @@ def render_dispatch(
     validation: list[str],
     repo_root: Path,
     run_id: str,
-    session_name: str,
     dispatch_gate: dict[str, object],
 ) -> str:
     issue_id = require_str(frontmatter, "issue_id")
@@ -65,15 +63,13 @@ def render_dispatch(
     def bullet_list(items: list[str]) -> str:
         return "\n".join(f"  - `{item}`" for item in items)
 
-    session_label = session_name.strip() or "<optional-for-detached-launch>"
     gate_status = str(dispatch_gate.get("status", "not_applicable")).strip() or "not_applicable"
     gate_mode = str(dispatch_gate.get("mode", "advisory")).strip() or "advisory"
     gate_reason = str(dispatch_gate.get("reason", "")).strip() or "none"
 
     return f"""继续 OpenSpec change `{change}`，执行单个 issue。
 
-如果你已经是被启动的 detached/background worker，会话内直接执行这个 issue，不要再派生 subagent、worker 或新的 detached 会话。
-只有 coordinator 主会话在人工派发时，才会把这个 dispatch 交给一个新的 subagent 或外部 worker。
+这是给单个 issue subagent 使用的 dispatch。保持当前 issue 边界，不要再派生新的 worker、team，或扩大 scope。
 
 - Issue: `{issue_id}` - {title}
 - Worker worktree:
@@ -82,8 +78,6 @@ def render_dispatch(
   - `{repo_root}`
 - Run ID:
   - `{effective_run_id}`
-- Detached worker session label:
-  - `{session_label}`
 - RRA dispatch gate:
   - mode=`{gate_mode}`
   - status=`{gate_status}`
@@ -155,7 +149,6 @@ def main() -> None:
         validation,
         repo_root,
         args.run_id,
-        args.session_name,
         dispatch_gate,
     )
     if not args.dry_run:
@@ -168,7 +161,6 @@ def main() -> None:
         "worker_worktree_source": worktree_source,
         "artifact_repo_root": str(repo_root),
         "run_id": args.run_id,
-        "session_name": args.session_name,
         "control_gate": dispatch_gate,
         "validation": validation,
         "validation_source": validation_source,

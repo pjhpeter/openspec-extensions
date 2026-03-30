@@ -1,7 +1,7 @@
 # OpenSpec Issue Mode Contract
 
-Use this contract whenever a change is executed by coordinator + worker contexts.
-The worker may be a spawned subagent or an external worker session.
+Use this contract whenever a change is executed by a coordinator plus issue-scoped worker contexts.
+In the default path, workers are spawned subagents bounded to one issue and one issue worktree.
 
 Read `issue-mode-rra.md` as the change-level control-plane reference.
 
@@ -17,12 +17,9 @@ Use it for:
 
 - worker worktree root
 - default validation commands
-- Codex session root for monitoring
-- persistent host kind
 - worker git worktree creation mode
-
-`persistent_host`, `coordinator_heartbeat`, and `worker_launcher` matter mainly for detached/background worker execution.
-They are fallback infrastructure, not the default subagent-first path.
+- change-level RRA gate mode
+- subagent-team auto-advance switches
 
 Issue docs should still materialize `worker_worktree` and `validation` when possible.
 Helper scripts may fall back to the repo config when those fields are missing.
@@ -46,7 +43,6 @@ Helper scripts may fall back to the repo config when those fields are missing.
 
 Workers must not directly update `tasks.md`.
 Workers must not merge their worktree back or create the final git commit for the issue.
-When subagents are available, prefer them as the default worker form factor.
 
 ## Directory Layout
 
@@ -76,113 +72,6 @@ Worker worktrees should normally live under the project root:
 <repo-root>/.worktree/<change-name>/<issue-id>/
 ```
 
-Example:
-
-```text
-/path/to/project/.worktree/add-canvas-node-tree-sidebar/ISSUE-001/
-```
-
-## Change-Level Control Artifacts
-
-When the change is complex enough that one pass is not reliable, keep change-level control artifacts on disk:
-
-- `control/BACKLOG.md`
-- `control/ROUND-*.md`
-
-Use them to record:
-
-- round target
-- target mode
-- acceptance criteria
-- non-goals
-- normalized backlog
-- acceptance verdict
-- next action
-
-If these files exist, coordinator decisions about dispatch, review, verify, and archive should read them instead of relying on chat memory.
-
-## `ISSUE-*.progress.json` Fields
-
-Keep these fields stable:
-
-```json
-{
-  "change": "add-something",
-  "issue_id": "ISSUE-001",
-  "status": "in_progress",
-  "boundary_status": "working",
-  "next_action": "continue_issue",
-  "summary": "已完成 issue 的第一个实现切片。",
-  "blocker": "",
-  "validation": {
-    "lint": "pending",
-    "typecheck": "pending"
-  },
-  "changed_files": [
-    "src/example.ts"
-  ],
-  "updated_at": "2026-03-25T10:30:00+08:00"
-}
-```
-
-Recommended enums:
-
-- `status`: `pending` | `in_progress` | `completed` | `blocked`
-- `boundary_status`: `working` | `review_required` | `done` | `blocked`
-- `next_action`: `continue_issue` | `coordinator_review` | `dispatch_next_issue` | `verify_change` | `ready_for_archive` | `resolve_blocker` | `resolve_verify_failure`
-
-## `RUN-*.json` Fields
-
-Use one run artifact per worker context:
-
-```json
-{
-  "run_id": "RUN-20260325T103000-ISSUE-001",
-  "change": "add-something",
-  "issue_id": "ISSUE-001",
-  "status": "completed",
-  "boundary_status": "review_required",
-  "summary": "本次 worker 会话完成 issue 边界内实现并通过校验。",
-  "validation": {
-    "lint": "passed",
-    "typecheck": "passed"
-  },
-  "changed_files": [
-    "src/example.ts"
-  ],
-  "updated_at": "2026-03-25T11:00:00+08:00"
-}
-```
-
-## Worker Rules
-
-1. Read change artifacts and the assigned issue boundary.
-2. Write or refresh the issue progress artifact at task start.
-3. Implement only the assigned issue inside the assigned worker worktree.
-4. Run required validation.
-5. Update the issue progress artifact and run artifact before stopping.
-6. Do not merge the worktree or create the final git commit.
-7. Report the artifact paths back to the coordinator.
-
-## Team Dispatch Artifact
-
-When the coordinator uses explicit subagent-team orchestration, it may also render:
-
-```text
-openspec/changes/<change-name>/issues/ISSUE-001.team.dispatch.md
-```
-
-Use it as the coordinator-owned control packet for:
-
-- round target
-- target mode
-- acceptance criteria
-- normalized backlog handoff rules
-- review / development / acceptance team topology
-
-This artifact does not replace `ISSUE-*.progress.json`.
-Execution state still comes from progress/run artifacts on disk.
-
 ## Coordinator Reconcile Rules
 
 1. Read all `issues/*.progress.json` first.
@@ -198,7 +87,16 @@ Execution state still comes from progress/run artifacts on disk.
    - all issues `completed` -> run a change-level acceptance round before moving to `verify`
    - if the latest verify artifact is current and passed -> move to `ready_for_archive`
    - if the latest verify artifact is current and failed -> stop and resolve verify failure
-   - some issues still `pending` and none blocked -> dispatch next issue
+
+## Worker Rules
+
+1. Read change artifacts and the assigned issue boundary.
+2. Write or refresh the issue progress artifact at task start.
+3. Implement only the assigned issue inside the assigned worker worktree.
+4. Run required validation.
+5. Update the issue progress artifact and run artifact before stopping.
+6. Do not merge the worktree or create the final git commit.
+7. Report the artifact paths back to the coordinator.
 
 ## `ISSUE-*.md` Frontmatter
 

@@ -105,7 +105,7 @@ def render_dispatch(
 
     return f"""继续 OpenSpec change `{change}`，以 subagent team 主链推进单个 issue。
 
-这是 coordinator 主会话使用的 team dispatch packet。默认优先 subagent team，不要改成 detached worker / heartbeat，除非用户明确要求后台脱机继续执行。
+这是 coordinator 主会话使用的 team dispatch packet。保持 subagent-team 主链，不要切回旧的 detached worker 运行方式。
 
 ## Round Contract
 

@@ -15,28 +15,13 @@ SKILL_NAMES = [
     "openspec-plan-issues",
     "openspec-dispatch-issue",
     "openspec-execute-issue",
-    "openspec-monitor-worker",
     "openspec-reconcile-change",
     "openspec-subagent-team",
     "openspec-shared",
 ]
-RUNTIME_SCRIPTS = [
-    Path("scripts/openspec_coordinator_heartbeat.py"),
-    Path("scripts/openspec_coordinator_heartbeat_start.py"),
-    Path("scripts/openspec_coordinator_heartbeat_status.py"),
-    Path("scripts/openspec_coordinator_heartbeat_stop.py"),
-    Path("scripts/openspec_coordinator_tick.py"),
-    Path("scripts/openspec_worker_launch.py"),
-    Path("scripts/openspec_worker_status.py"),
-]
 GITIGNORE_ENTRIES = [
     ".worktree/",
-    "openspec/changes/*/runs/COORDINATOR-HEARTBEAT.state.json",
-    "openspec/changes/*/runs/COORDINATOR-HEARTBEAT.exec.log",
     "openspec/changes/*/runs/CHANGE-VERIFY.json",
-    "openspec/changes/*/runs/ISSUE-*.worker-session.json",
-    "openspec/changes/*/runs/RUN-*.worker.exec.log",
-    "openspec/changes/*/runs/RUN-*.worker.last-message.txt",
 ]
 
 
@@ -55,28 +40,6 @@ def parse_args() -> argparse.Namespace:
         help="Overwrite an existing openspec/issue-mode.json in the target project.",
     )
     parser.add_argument("--skip-gitignore", action="store_true", help="Do not modify the target project's .gitignore.")
-    parser.add_argument(
-        "--skip-heartbeat-wrapper",
-        action="store_true",
-        help="Do not install the target-side coordinator/worker runtime wrapper scripts.",
-    )
-    parser.add_argument(
-        "--notify-topic",
-        default="",
-        help="Optional default ntfy topic written into openspec/issue-mode.json coordinator_heartbeat.notify_topic.",
-    )
-    parser.add_argument(
-        "--heartbeat-interval-seconds",
-        type=int,
-        default=None,
-        help="Default polling interval written into openspec/issue-mode.json.",
-    )
-    parser.add_argument(
-        "--heartbeat-stale-seconds",
-        type=int,
-        default=None,
-        help="Default stale threshold written into openspec/issue-mode.json.",
-    )
     parser.add_argument("--dry-run", action="store_true", help="Preview actions without writing files.")
     return parser.parse_args()
 
@@ -107,30 +70,14 @@ def deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
-def config_overrides_from_args(args: argparse.Namespace) -> dict:
-    heartbeat_overrides: dict[str, object] = {}
-    if args.heartbeat_interval_seconds is not None:
-        heartbeat_overrides["interval_seconds"] = args.heartbeat_interval_seconds
-    if args.heartbeat_stale_seconds is not None:
-        heartbeat_overrides["stale_seconds"] = args.heartbeat_stale_seconds
-    if args.notify_topic.strip():
-        heartbeat_overrides["notify_topic"] = args.notify_topic.strip()
-    if not heartbeat_overrides:
-        return {}
-    return {"coordinator_heartbeat": heartbeat_overrides}
-
-
 def validate_source_layout(source_repo: Path) -> None:
     ensure_directory(source_repo, "Source repo")
     ensure_directory(source_repo / SOURCE_SKILLS_ROOT, "Source skills root")
     missing = [name for name in SKILL_NAMES if not (source_repo / SOURCE_SKILLS_ROOT / name).exists()]
-    missing_runtime = [str(path) for path in RUNTIME_SCRIPTS if not (source_repo / path).exists()]
     if missing:
         raise SystemExit(f"Source repo is missing required skills: {', '.join(missing)}")
     if not (source_repo / CONFIG_TEMPLATE_PATH).exists():
         raise SystemExit(f"Source repo is missing config template: {CONFIG_TEMPLATE_PATH}")
-    if missing_runtime:
-        raise SystemExit(f"Source repo is missing required runtime scripts: {', '.join(missing_runtime)}")
 
 
 def ensure_target_repo(target_repo: Path) -> None:
@@ -208,35 +155,6 @@ def update_gitignore(target_repo: Path, dry_run: bool) -> tuple[str, list[str]]:
     return ".gitignore", missing_entries
 
 
-def install_runtime_scripts(
-    source_repo: Path,
-    target_repo: Path,
-    force: bool,
-    dry_run: bool,
-) -> tuple[list[str], list[str], list[str]]:
-    installed: list[str] = []
-    overwritten: list[str] = []
-    preserved: list[str] = []
-
-    for relative_path in RUNTIME_SCRIPTS:
-        source_path = source_repo / relative_path
-        target_path = target_repo / relative_path
-        display_path = relative_str(relative_path)
-
-        if target_path.exists():
-            if not force:
-                preserved.append(display_path)
-                continue
-            overwritten.append(display_path)
-
-        if not dry_run:
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source_path, target_path)
-        installed.append(display_path)
-
-    return installed, overwritten, preserved
-
-
 def main() -> None:
     args = parse_args()
     source_repo = Path(args.source_repo).resolve() if args.source_repo else installer_repo_root()
@@ -258,20 +176,9 @@ def main() -> None:
         source_repo=source_repo,
         target_repo=target_repo,
         force_config=args.force_config,
-        overrides=config_overrides_from_args(args),
+        overrides={},
         dry_run=args.dry_run,
     )
-
-    runtime_installed: list[str] = []
-    runtime_overwritten: list[str] = []
-    runtime_preserved: list[str] = []
-    if not args.skip_heartbeat_wrapper:
-        runtime_installed, runtime_overwritten, runtime_preserved = install_runtime_scripts(
-            source_repo=source_repo,
-            target_repo=target_repo,
-            force=args.force,
-            dry_run=args.dry_run,
-        )
 
     gitignore_path = ""
     gitignore_added_entries: list[str] = []
@@ -290,13 +197,7 @@ def main() -> None:
         "config": {
             "path": config_path,
             "status": config_status,
-            "overrides": config_overrides_from_args(args),
-        },
-        "runtime_scripts": {
-            "installed": runtime_installed,
-            "overwritten": runtime_overwritten,
-            "preserved": runtime_preserved,
-            "skipped": args.skip_heartbeat_wrapper,
+            "overrides": {},
         },
         "gitignore": {
             "path": gitignore_path,

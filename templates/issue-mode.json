@@ -4,38 +4,15 @@
     "pnpm lint",
     "pnpm type-check"
   ],
-  "codex_home": "~/.codex",
-  "persistent_host": {
-    "kind": "screen"
-  },
   "worker_worktree": {
     "mode": "detach",
     "base_ref": "HEAD",
     "branch_prefix": "opsx"
-  },
-  "coordinator_heartbeat": {
-    "interval_seconds": 60,
-    "stale_seconds": 900,
-    "notify_topic": "",
-    "auto_dispatch_next": false,
-    "auto_launch_next": false,
-    "auto_accept_review": false,
-    "auto_verify_change": false
   },
   "rra": {
     "gate_mode": "advisory"
   },
   "subagent_team": {
     "auto_advance_after_design_review": false
-  },
-  "worker_launcher": {
-    "session_prefix": "opsx-worker",
-    "start_grace_seconds": 120,
-    "launch_cooldown_seconds": 30,
-    "max_launch_retries": 1,
-    "codex_bin": "codex",
-    "sandbox_mode": "danger-full-access",
-    "bypass_approvals": true,
-    "json_output": true
   }
 }
