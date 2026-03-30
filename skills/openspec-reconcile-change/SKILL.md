@@ -19,7 +19,7 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
      --repo-root . \
      --change "<change-name>"
    ```
-3. If the result is `coordinator_review` and you are accepting the issue, run the coordinator merge helper:
+3. If the result is `coordinator_review` and you are accepting the issue, or the result is `auto_accept_issue`, run the coordinator merge helper immediately:
    ```bash
    python3 .codex/skills/openspec-reconcile-change/scripts/coordinator_merge_issue.py \
      --repo-root . \
@@ -33,6 +33,7 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
 7. Follow the helper result:
    - `resolve_blocker` -> stop and surface blocker
    - `resolve_verify_failure` -> inspect the verify artifact and fix the failing validation or unchecked tasks
+   - `auto_accept_issue` -> run `coordinator_merge_issue.py` immediately, then rerun reconcile and keep advancing without waiting for user confirmation
    - `coordinator_review` -> review the issue, then either accept it with `coordinator_merge_issue.py` or create `Must fix now` backlog items and send it back to repair
    - `await_issue_dispatch_confirmation` -> semi-auto pause before the first issue dispatch after issue planning
    - `dispatch_next_issue` -> prepare the next worker issue
@@ -54,6 +55,7 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
 - For complex changes, keep the active normalized backlog and round verdict on disk instead of in chat only.
 - Do not dispatch, verify, or archive while unresolved `Must fix now` items remain in the active change-level backlog.
 - If the helper finds no issue artifacts, fall back to normal OpenSpec routing.
+- If `auto_accept_issue_review=true` and the helper emits `auto_accept_issue`, do not stop to ask the user; merge/commit the issue immediately and continue.
 - If coordinator review accepts an issue, merge and commit it before dispatching the next dependent issue or moving to `verify`.
 - Read `automation_profile` and `automation` from the helper output before deciding whether a pause is intentional or indicates a stuck flow.
 

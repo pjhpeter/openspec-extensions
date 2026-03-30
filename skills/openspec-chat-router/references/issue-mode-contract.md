@@ -19,7 +19,7 @@ Use it for:
 - default validation commands
 - worker git worktree creation mode
 - change-level RRA gate mode
-- subagent-team auto-advance switches
+- subagent-team auto-accept switches
 
 Issue docs should still materialize `worker_worktree` and `validation` when possible.
 Helper scripts may fall back to the repo config when those fields are missing.
@@ -82,7 +82,7 @@ Worker worktrees should normally live under the project root:
 6. Default decisions:
    - unresolved `Must fix now` items in the active control backlog -> stop and resolve them before dispatch, verify, or archive
    - any `blocked` -> stop and resolve blocker
-   - any `review_required` -> review that issue in its worker worktree first; if accepted, merge it back to the coordinator branch and create the commit before moving on
+   - any `review_required` -> if `subagent_team.auto_accept_issue_review=true` and issue-local validation passed, accept/merge/commit it automatically; otherwise review it in the coordinator session first
    - any issue doc without progress -> dispatch that next issue
    - all issues `completed` -> run a change-level acceptance round before moving to `verify`
    - if the latest verify artifact is current and passed -> move to `ready_for_archive`
@@ -131,3 +131,4 @@ Issue progress files are the execution state.
 Control backlog and round reports are the acceptance state.
 Team dispatch artifacts are the coordinator handoff state for the default subagent-team rounds in issue mode.
 In issue mode, accepted code lands through coordinator review plus coordinator-owned merge and commit, not through worker self-merge.
+When `subagent_team.auto_accept_*` is enabled, the gate is still coordinator-owned; it simply no longer waits for human chat confirmation before the coordinator accepts it.

@@ -41,6 +41,9 @@ def write_issue_progress(
     *,
     issue_id: str = "ISSUE-001",
     status: str,
+    boundary_status: str | None = None,
+    next_action: str = "",
+    validation: dict[str, str] | None = None,
     updated_at: str = "2026-03-30T10:00:00+08:00",
 ) -> Path:
     progress_path = repo_root / "openspec" / "changes" / change / "issues" / f"{issue_id}.progress.json"
@@ -49,8 +52,9 @@ def write_issue_progress(
         {
             "issue_id": issue_id,
             "status": status,
-            "boundary_status": "accepted" if status == "completed" else "",
-            "next_action": "",
+            "boundary_status": boundary_status if boundary_status is not None else ("accepted" if status == "completed" else ""),
+            "next_action": next_action,
+            "validation": validation or {},
             "updated_at": updated_at,
         },
         ensure_ascii=False,
@@ -101,7 +105,7 @@ class ReconcileIssueProgressTest(unittest.TestCase):
                 repo_root,
                 {
                     "subagent_team": {
-                        "auto_advance_after_issue_planning_review": True,
+                        "auto_accept_issue_planning": True,
                     }
                 },
             )
@@ -110,7 +114,37 @@ class ReconcileIssueProgressTest(unittest.TestCase):
 
         self.assertEqual(payload["next_action"], "dispatch_next_issue")
         self.assertEqual(payload["recommended_issue_id"], "ISSUE-001")
-        self.assertTrue(payload["automation"]["after_issue_planning_review"])
+        self.assertTrue(payload["automation"]["accept_issue_planning"])
+
+    def test_auto_issue_review_can_auto_accept_when_validation_passed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            change = "demo-change"
+            write_issue_doc(repo_root, change, issue_id="ISSUE-001")
+            write_issue_doc(repo_root, change, issue_id="ISSUE-002")
+            write_issue_progress(
+                repo_root,
+                change,
+                issue_id="ISSUE-001",
+                status="completed",
+                boundary_status="review_required",
+                next_action="coordinator_review",
+                validation={"pnpm lint": "passed", "pnpm type-check": "passed"},
+            )
+            write_issue_mode_config(
+                repo_root,
+                {
+                    "subagent_team": {
+                        "auto_accept_issue_review": True,
+                    }
+                },
+            )
+
+            payload = self.run_script(repo_root, change=change)
+
+        self.assertEqual(payload["next_action"], "auto_accept_issue")
+        self.assertEqual(payload["recommended_issue_id"], "ISSUE-001")
+        self.assertTrue(payload["automation"]["accept_issue_review"])
 
     def test_verify_step_can_pause_or_auto_run_based_on_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -124,7 +158,7 @@ class ReconcileIssueProgressTest(unittest.TestCase):
                 repo_root,
                 {
                     "subagent_team": {
-                        "auto_run_change_verify": True,
+                        "auto_accept_change_acceptance": True,
                     }
                 },
             )
@@ -132,7 +166,7 @@ class ReconcileIssueProgressTest(unittest.TestCase):
 
         self.assertEqual(manual_payload["next_action"], "await_verify_confirmation")
         self.assertEqual(auto_payload["next_action"], "verify_change")
-        self.assertTrue(auto_payload["automation"]["run_change_verify"])
+        self.assertTrue(auto_payload["automation"]["accept_change_acceptance"])
 
     def test_verify_pass_can_auto_archive_when_enabled(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

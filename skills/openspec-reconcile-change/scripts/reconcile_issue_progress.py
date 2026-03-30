@@ -14,6 +14,18 @@ if str(SHARED_SCRIPTS) not in sys.path:
 from coordinator_change_common import read_json, verification_artifact_is_current, verify_artifact_path  # noqa: E402
 from issue_mode_common import automation_profile, load_issue_mode_config, read_change_control_state  # noqa: E402
 
+PASSING_VALIDATION_STATUSES = {
+    "passed",
+    "pass",
+    "ok",
+    "success",
+    "succeeded",
+    "skipped",
+    "not_applicable",
+    "not-applicable",
+    "n/a",
+}
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
@@ -76,6 +88,17 @@ def count_statuses(issues: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
+def issue_validation_passed(issue: dict[str, Any]) -> bool:
+    validation = issue.get("validation")
+    if not isinstance(validation, dict) or not validation:
+        return False
+    for value in validation.values():
+        normalized = str(value).strip().lower()
+        if normalized not in PASSING_VALIDATION_STATUSES:
+            return False
+    return True
+
+
 def determine_base_next_action(
     repo_root: Path,
     change: str,
@@ -83,13 +106,9 @@ def determine_base_next_action(
     config: dict[str, Any],
 ) -> tuple[str, str, str]:
     subagent_team = config.get("subagent_team", {})
-    auto_advance_after_issue_planning_review = bool(
-        subagent_team.get("auto_advance_after_issue_planning_review", False)
-    )
-    auto_advance_to_next_issue_after_issue_pass = bool(
-        subagent_team.get("auto_advance_to_next_issue_after_issue_pass", False)
-    )
-    auto_run_change_verify = bool(subagent_team.get("auto_run_change_verify", False))
+    auto_accept_issue_planning = bool(subagent_team.get("auto_accept_issue_planning", False))
+    auto_accept_issue_review = bool(subagent_team.get("auto_accept_issue_review", False))
+    auto_accept_change_acceptance = bool(subagent_team.get("auto_accept_change_acceptance", False))
     auto_archive_after_verify = bool(subagent_team.get("auto_archive_after_verify", False))
 
     if not issues:
@@ -106,7 +125,20 @@ def determine_base_next_action(
         or issue.get("next_action") == "coordinator_review"
     ]
     if review_required:
-        return "coordinator_review", review_required[0]["issue_id"], f"{len(review_required)} 个 issue 等待 coordinator 收敛。"
+        candidate = review_required[0]
+        if auto_accept_issue_review and issue_validation_passed(candidate):
+            return (
+                "auto_accept_issue",
+                candidate["issue_id"],
+                "当前 issue 已完成且 issue-local validation 全部通过，配置允许 coordinator 自动接受并继续推进。",
+            )
+        if auto_accept_issue_review:
+            return (
+                "coordinator_review",
+                candidate["issue_id"],
+                "当前 issue 等待 coordinator 收敛，但 issue-local validation 未全部通过，暂不自动接受。",
+            )
+        return "coordinator_review", candidate["issue_id"], f"{len(review_required)} 个 issue 等待 coordinator 收敛。"
 
     in_progress = [issue for issue in issues if issue.get("status") == "in_progress"]
     if in_progress:
@@ -116,10 +148,10 @@ def determine_base_next_action(
     if pending:
         completed = [issue for issue in issues if issue.get("status") == "completed"]
         if completed:
-            if auto_advance_to_next_issue_after_issue_pass:
+            if auto_accept_issue_review:
                 return "dispatch_next_issue", pending[0]["issue_id"], f"{len(pending)} 个 issue 尚未开始，配置允许自动进入下一 issue。"
             return "await_next_issue_confirmation", pending[0]["issue_id"], f"{len(pending)} 个 issue 尚未开始，等待人工确认是否继续派发。"
-        if auto_advance_after_issue_planning_review:
+        if auto_accept_issue_planning:
             return "dispatch_next_issue", pending[0]["issue_id"], f"{len(pending)} 个 issue 尚未开始，配置允许 issue planning 通过后自动派发。"
         return "await_issue_dispatch_confirmation", pending[0]["issue_id"], f"{len(pending)} 个 issue 尚未开始，等待人工确认是否开始 issue execution。"
 
@@ -132,7 +164,7 @@ def determine_base_next_action(
                     return "archive_change", "", "全部 issue 已完成且 change 已通过 verify，配置允许自动 archive。"
                 return "ready_for_archive", "", "全部 issue 已完成且 change 已通过 verify。"
             return "resolve_verify_failure", "", "全部 issue 已完成，但最近一次 verify 未通过。"
-        if auto_run_change_verify:
+        if auto_accept_change_acceptance:
             return "verify_change", completed[0]["issue_id"], "全部 issue 已完成，配置允许自动进入 verify。"
         return "await_verify_confirmation", completed[0]["issue_id"], "全部 issue 已完成，等待人工确认后再运行 verify。"
 
@@ -225,14 +257,12 @@ def main() -> None:
         },
         "automation_profile": automation_profile(config),
         "automation": {
-            "after_design_review": bool(config.get("subagent_team", {}).get("auto_advance_after_design_review", False)),
-            "after_issue_planning_review": bool(
-                config.get("subagent_team", {}).get("auto_advance_after_issue_planning_review", False)
+            "accept_spec_readiness": bool(config.get("subagent_team", {}).get("auto_accept_spec_readiness", False)),
+            "accept_issue_planning": bool(config.get("subagent_team", {}).get("auto_accept_issue_planning", False)),
+            "accept_issue_review": bool(config.get("subagent_team", {}).get("auto_accept_issue_review", False)),
+            "accept_change_acceptance": bool(
+                config.get("subagent_team", {}).get("auto_accept_change_acceptance", False)
             ),
-            "to_next_issue_after_issue_pass": bool(
-                config.get("subagent_team", {}).get("auto_advance_to_next_issue_after_issue_pass", False)
-            ),
-            "run_change_verify": bool(config.get("subagent_team", {}).get("auto_run_change_verify", False)),
             "archive_after_verify": bool(config.get("subagent_team", {}).get("auto_archive_after_verify", False)),
         },
         "issues": issues,

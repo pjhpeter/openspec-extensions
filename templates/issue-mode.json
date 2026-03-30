@@ -13,10 +13,10 @@
     "gate_mode": "advisory"
   },
   "subagent_team": {
-    "auto_advance_after_design_review": false,
-    "auto_advance_after_issue_planning_review": false,
-    "auto_advance_to_next_issue_after_issue_pass": false,
-    "auto_run_change_verify": false,
+    "auto_accept_spec_readiness": false,
+    "auto_accept_issue_planning": false,
+    "auto_accept_issue_review": false,
+    "auto_accept_change_acceptance": false,
     "auto_archive_after_verify": false
   }
 }

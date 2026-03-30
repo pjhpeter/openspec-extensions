@@ -19,7 +19,7 @@ Read these first:
 - make subagent team orchestration the primary path for complex issue-mode work
 - keep round scope, backlog, and review decisions on disk
 - avoid relying on detached worker fallback infrastructure
-- let `subagent_team.*` govern the whole lifecycle from spec-readiness through archive
+- let `subagent_team.*` govern the whole lifecycle from spec-readiness through archive, including whether coordinator-owned review gates are auto-accepted
 
 ## Workflow
 
@@ -50,6 +50,7 @@ Read these first:
    - define or confirm the round target
    - dedupe findings into one normalized backlog
    - decide stop / continue
+   - when an enabled `auto_accept_*` gate becomes eligible, continue immediately instead of asking the user to review first
 7. Use a fixed topology by default:
    - development group: 3 subagents
    - check group: 3 subagents
@@ -67,8 +68,12 @@ Read these first:
 
 - This is the default entry path for complex issue-mode execution.
 - Use the single-worker issue path only when the user explicitly narrows execution to one bounded issue worker, or the current step clearly only needs one issue-local implementation context.
-- `subagent_team.*` now controls full-process auto-advance, not just the design-review checkpoint.
+- `subagent_team.*` now controls full-process auto-accept and continuation, not just the design-review checkpoint.
 - `semi_auto` means the lifecycle pauses after each review gate; `full_auto` means the lifecycle auto-continues across `spec_readiness -> issue_planning -> issue_execution -> change_acceptance -> change_verify -> archive` while still respecting RRA gates.
+- `auto_accept_spec_readiness=true` means spec-readiness does not wait for human sign-off once the change is implementation-ready.
+- `auto_accept_issue_planning=true` means issue planning does not wait for human sign-off once INDEX/ISSUE docs are dispatch-ready.
+- `auto_accept_issue_review=true` means eligible `review_required` issues are coordinator-accepted, merged, and committed automatically once issue-local validation passes.
+- `auto_accept_change_acceptance=true` means change acceptance does not wait for human sign-off once verify is allowed.
 - One issue stays one bounded execution unit even when multiple subagents participate in the round.
 - Do not pass raw checker notes directly to developers; normalize first.
 - Reject style-only churn unless it affects correctness, delivery risk, or acceptance.

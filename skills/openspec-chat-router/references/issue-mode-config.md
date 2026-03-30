@@ -21,10 +21,10 @@ If this file is missing, the helpers fall back to these defaults:
     "gate_mode": "advisory"
   },
   "subagent_team": {
-    "auto_advance_after_design_review": false,
-    "auto_advance_after_issue_planning_review": false,
-    "auto_advance_to_next_issue_after_issue_pass": false,
-    "auto_run_change_verify": false,
+    "auto_accept_spec_readiness": false,
+    "auto_accept_issue_planning": false,
+    "auto_accept_issue_review": false,
+    "auto_accept_change_acceptance": false,
     "auto_archive_after_verify": false
   }
 }
@@ -38,10 +38,10 @@ If this file is missing, the helpers fall back to these defaults:
 - `worker_worktree.base_ref`: base ref passed to `git worktree add`.
 - `worker_worktree.branch_prefix`: prefix used when `mode=branch`.
 - `rra.gate_mode`: `advisory` or `enforce`.
-- `subagent_team.auto_advance_after_design_review`: continue from spec-readiness into issue planning automatically after proposal/design/tasks review passes.
-- `subagent_team.auto_advance_after_issue_planning_review`: dispatch the first approved issue automatically after issue planning review passes.
-- `subagent_team.auto_advance_to_next_issue_after_issue_pass`: dispatch the next pending issue automatically after the current issue passes review.
-- `subagent_team.auto_run_change_verify`: continue from change acceptance into change-level verify automatically.
+- `subagent_team.auto_accept_spec_readiness`: automatically accept the spec-readiness gate once proposal/design/tasks are implementation-ready, then continue into issue planning without waiting for human sign-off.
+- `subagent_team.auto_accept_issue_planning`: automatically accept the issue-planning gate once INDEX/ISSUE docs are dispatch-ready, then dispatch the approved issue set without waiting for human sign-off.
+- `subagent_team.auto_accept_issue_review`: automatically accept an eligible `review_required` issue after its issue-local validation passes, then merge/commit it and continue to the next issue or change acceptance.
+- `subagent_team.auto_accept_change_acceptance`: automatically accept the change-acceptance gate and continue into change-level verify.
 - `subagent_team.auto_archive_after_verify`: continue from a passed verify result into archive automatically.
 
 ## Current Contract
@@ -78,7 +78,7 @@ The runtime derives a profile from `rra.gate_mode` plus the five `subagent_team.
 
 ### Semi-Automatic
 
-Use this when a human should still inspect design review, issue planning, verify, and archive checkpoints.
+Use this when a human should still inspect design readiness, issue planning, issue acceptance, verify, and archive checkpoints.
 
 ```json
 {
@@ -93,10 +93,10 @@ Use this when a human should still inspect design review, issue planning, verify
     "gate_mode": "advisory"
   },
   "subagent_team": {
-    "auto_advance_after_design_review": false,
-    "auto_advance_after_issue_planning_review": false,
-    "auto_advance_to_next_issue_after_issue_pass": false,
-    "auto_run_change_verify": false,
+    "auto_accept_spec_readiness": false,
+    "auto_accept_issue_planning": false,
+    "auto_accept_issue_review": false,
+    "auto_accept_change_acceptance": false,
     "auto_archive_after_verify": false
   }
 }
@@ -104,10 +104,10 @@ Use this when a human should still inspect design review, issue planning, verify
 
 Behavior:
 
-- design review pass pauses before issue planning
-- issue-planning review pass pauses before first dispatch
-- issue pass pauses before dispatching the next issue
-- change acceptance pauses before verify
+- spec-readiness waits for human acceptance before issue planning
+- issue planning waits for human acceptance before first dispatch
+- issue review waits for human acceptance before dispatching the next issue
+- change acceptance waits for human acceptance before verify
 - verify pass pauses before archive
 - RRA keeps emitting guidance, but does not hard-block progression
 
@@ -128,10 +128,10 @@ Use this when subagent-team should own the full lifecycle, not just issue execut
     "gate_mode": "enforce"
   },
   "subagent_team": {
-    "auto_advance_after_design_review": true,
-    "auto_advance_after_issue_planning_review": true,
-    "auto_advance_to_next_issue_after_issue_pass": true,
-    "auto_run_change_verify": true,
+    "auto_accept_spec_readiness": true,
+    "auto_accept_issue_planning": true,
+    "auto_accept_issue_review": true,
+    "auto_accept_change_acceptance": true,
     "auto_archive_after_verify": true
   }
 }
@@ -139,16 +139,16 @@ Use this when subagent-team should own the full lifecycle, not just issue execut
 
 Behavior:
 
-- design review pass automatically enters issue planning
-- issue planning pass automatically dispatches approved issues
-- issue pass automatically advances to the next issue or change acceptance
-- change acceptance automatically enters verify
+- spec-readiness is auto-accepted and immediately enters issue planning
+- issue planning is auto-accepted and immediately dispatches approved issues
+- eligible issue review is auto-accepted and immediately merges/continues
+- change acceptance is auto-accepted and immediately enters verify
 - verify pass automatically advances into archive
 
 ## Lifecycle Switch Map
 
-- `spec_readiness -> issue_planning`: `subagent_team.auto_advance_after_design_review`
-- `issue_planning -> issue_execution`: `subagent_team.auto_advance_after_issue_planning_review`
-- `issue_execution -> next_issue_or_change_acceptance`: `subagent_team.auto_advance_to_next_issue_after_issue_pass`
-- `change_acceptance -> verify`: `subagent_team.auto_run_change_verify`
+- `spec_readiness -> issue_planning`: `subagent_team.auto_accept_spec_readiness`
+- `issue_planning -> issue_execution`: `subagent_team.auto_accept_issue_planning`
+- `issue_execution -> next_issue_or_change_acceptance`: `subagent_team.auto_accept_issue_review`
+- `change_acceptance -> verify`: `subagent_team.auto_accept_change_acceptance`
 - `verify -> archive`: `subagent_team.auto_archive_after_verify`

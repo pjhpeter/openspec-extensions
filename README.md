@@ -62,6 +62,7 @@
 - skill 契约层面，issue-mode 的默认 coordinator 入口是 `openspec-subagent-team`
 - 但某些 Codex / agent runtime 会把“真实拉起 subagent / delegation”视为更高优先级的权限动作
 - 这类 runtime 可能仍要求用户在当前会话里显式表达“启用 subagent / subagent-team / 多 agent 编排”
+- 对长时间运行的 subagent 任务，如果当前 runtime / session 没有默认长等待策略，还需要显式要求 coordinator 对 subagent 使用长阻塞等待，否则可能在 subagent 完成前就提前返回
 - 所以你可能会看到两层语义同时存在：
   - skill 认为默认入口应该是 `subagent-team`
   - runtime 仍因为缺少显式授权而退回本地 coordinator 执行路径
@@ -70,6 +71,9 @@
   - `按 issue 模式继续，并启用 subagent-team`
   - `这个 change 用 subagent team 推进`
   - `启用多 agent 编排推进当前 change`
+- 如果当前 change 会跑很久，最稳的用户话术再加一句：
+  - `长时间等待 subagent 完成，使用 1 小时阻塞等待，不要 30 秒短轮询`
+  - `对当前 subagent team 使用长等待，直到 subagent 完成再返回`
 
 ## 配置契约
 
@@ -88,10 +92,10 @@
     "gate_mode": "advisory"
   },
   "subagent_team": {
-    "auto_advance_after_design_review": false,
-    "auto_advance_after_issue_planning_review": false,
-    "auto_advance_to_next_issue_after_issue_pass": false,
-    "auto_run_change_verify": false,
+    "auto_accept_spec_readiness": false,
+    "auto_accept_issue_planning": false,
+    "auto_accept_issue_review": false,
+    "auto_accept_change_acceptance": false,
     "auto_archive_after_verify": false
   }
 }
@@ -115,11 +119,11 @@
   - 可以把它理解成：
     - `advisory` = 红灯会提示，但不会强制拦车
     - `enforce` = 红灯就是红灯，不满足条件就不能继续
-- `subagent_team.*` 控制 subagent team 是否自动跨 phase 推进：
-  - `auto_advance_after_design_review`：spec-readiness 通过后自动进入 issue planning
-  - `auto_advance_after_issue_planning_review`：issue planning 通过后自动派发当前 round 的 issue
-  - `auto_advance_to_next_issue_after_issue_pass`：单个 issue 审查通过后自动进入下一个 issue 或 change acceptance
-  - `auto_run_change_verify`：change acceptance 通过后自动进入 verify
+- `subagent_team.*` 控制 subagent team 是否自动接受当前 gate 并跨 phase 推进：
+  - `auto_accept_spec_readiness`：proposal / design / tasks 达到 implementation-ready 后，自动接受 spec-readiness，不再等待人工评审签字，直接进入 issue planning
+  - `auto_accept_issue_planning`：INDEX / ISSUE 文档达到可派发状态后，自动接受 issue planning，不再等待人工评审签字，直接派发当前 round 的 issue
+  - `auto_accept_issue_review`：issue 进入 `review_required` 且 issue-local validation 全部通过后，coordinator 自动接受并 merge/commit，然后进入下一个 issue 或 change acceptance
+  - `auto_accept_change_acceptance`：change acceptance 满足放行条件后，自动接受该 gate 并进入 verify
   - `auto_archive_after_verify`：verify 通过后自动进入 archive
 - `subagent_team.*` 不负责决定默认入口拓扑：
   - issue-mode 下，coordinator 默认入口就是 `openspec-subagent-team`
@@ -145,14 +149,14 @@
     "base_ref": "HEAD",
     "branch_prefix": "opsx"
   },
-  "rra": {
+ "rra": {
     "gate_mode": "advisory"
   },
   "subagent_team": {
-    "auto_advance_after_design_review": false,
-    "auto_advance_after_issue_planning_review": false,
-    "auto_advance_to_next_issue_after_issue_pass": false,
-    "auto_run_change_verify": false,
+    "auto_accept_spec_readiness": false,
+    "auto_accept_issue_planning": false,
+    "auto_accept_issue_review": false,
+    "auto_accept_change_acceptance": false,
     "auto_archive_after_verify": false
   }
 }
@@ -160,10 +164,10 @@
 
 说明：
 
-- spec-readiness review 通过后会暂停，等待 coordinator 人工确认，再进入 issue planning
-- issue-planning review 通过后会暂停，等待 coordinator 人工确认后再派发 issue
-- 单个 issue 审查通过后会暂停，等待 coordinator 决定是否派发下一 issue
-- change acceptance 通过后会暂停，等待 coordinator 决定是否运行 verify
+- spec-readiness 达标后仍会暂停，等待 coordinator 人工接受，再进入 issue planning
+- issue planning 达标后仍会暂停，等待 coordinator 人工接受后再派发 issue
+- 单个 issue 达到 review_required 后仍会暂停，等待 coordinator 人工接受并决定是否派发下一 issue
+- change acceptance 达标后仍会暂停，等待 coordinator 决定是否运行 verify
 - verify 通过后会暂停，等待 coordinator 决定是否 archive
 - RRA gate 会持续给出 round backlog / round scope / verify 放行建议，但不会硬性阻断流程
 - `worker_worktree` 继续保留，作为 issue 隔离边界和 coordinator merge 的收敛目录
@@ -185,10 +189,10 @@
     "gate_mode": "enforce"
   },
   "subagent_team": {
-    "auto_advance_after_design_review": true,
-    "auto_advance_after_issue_planning_review": true,
-    "auto_advance_to_next_issue_after_issue_pass": true,
-    "auto_run_change_verify": true,
+    "auto_accept_spec_readiness": true,
+    "auto_accept_issue_planning": true,
+    "auto_accept_issue_review": true,
+    "auto_accept_change_acceptance": true,
     "auto_archive_after_verify": true
   }
 }
@@ -198,12 +202,12 @@
 
 - `rra.gate_mode=enforce` 让全自动推进仍然服从 round contract，而不是无条件往下跑
 - `subagent_team` 现在已经覆盖：
-  - design review 通过后自动进入 issue planning
-  - issue planning review 通过后自动派发当前 round 的 issue
-  - 单个 issue 审查通过后自动进入下一个 issue 或 change acceptance
-  - change acceptance 通过后自动进入 verify
+  - spec-readiness 自动接受后进入 issue planning
+  - issue planning 自动接受后派发当前 round 的 issue
+  - 单个 issue 自动接受并 merge/commit 后进入下一个 issue 或 change acceptance
+  - change acceptance 自动接受后进入 verify
   - verify 通过后自动 archive
-- coordinator 仍然存在，只是不再需要在每个 review gate 之间人工点下一步
+- coordinator 仍然存在，只是不再需要在每个 review gate 之间人工点下一步或人工签字
 - 如果 RRA gate 不允许继续，流程会回到 change-level control，而不是盲目前推
 
 ## 安装到目标项目

@@ -103,7 +103,7 @@ Preferred flow:
 5. For each approved issue, create or reuse the worker git worktree before handoff.
 6. By default, render the subagent-team lifecycle packet and use it as the coordinator control packet for the current phase.
 7. Use one worker subagent for one approved issue only when the user explicitly narrows execution to that one issue, or the current step is already a bounded issue-worker handoff.
-8. After the worker reports `review_required`, let the coordinator review the worktree, update the change-level backlog, merge accepted changes back to the coordinator branch, and create the commit.
+8. After the worker reports `review_required`, either let the coordinator review it manually or, when `subagent_team.auto_accept_issue_review=true` and issue-local validation passed, auto-accept/merge/commit it immediately.
 9. Repeat for the next approved issue, then run a change-level acceptance round before `verify` and `archive`.
 
 ## Special Path: `mode`
@@ -123,6 +123,7 @@ Rules:
 - Default the coordinator execution entry to `openspec-subagent-team`.
 - Remind the user that the coordinator should create or reuse the issue worktree before handing the issue to a worker.
 - Remind the user that subagent-team is the default coordinator topology when delegation is available.
+- If `subagent_team.auto_accept_*` is enabled, do not describe those phases as waiting for human sign-off.
 - If the task artifacts are not ready yet, route to `new`, `propose`, or `ff` before encouraging worker sessions.
 - If the user is setting up issue-mode for the first time, remind them that workers should not touch `tasks.md`.
 - Remind the user that workers should not merge or commit; the coordinator reviews, merges, and commits after accepting the issue.

@@ -164,12 +164,12 @@ def determine_phase(
 
     verify_state = current_verify_state(repo_root, change, issues)
     latest_round = control_state.get("latest_round", {})
-    auto_run_change_verify = bool(config.get("subagent_team", {}).get("auto_run_change_verify", False))
+    auto_accept_change_acceptance = bool(config.get("subagent_team", {}).get("auto_accept_change_acceptance", False))
     if verify_state["passed"]:
         return "ready_for_archive", "", "最新 verify 已通过，change 可以进入归档收尾。"
     if verify_state["failed"]:
         return "change_verify", "", "最近一次 verify 未通过，需要修复并重新验证。"
-    if auto_run_change_verify and (not control_state.get("enabled") or bool(latest_round.get("allows_verify", False))):
+    if auto_accept_change_acceptance and (not control_state.get("enabled") or bool(latest_round.get("allows_verify", False))):
         return "change_verify", "", "全部 issue 已完成，配置允许自动进入 verify 阶段。"
     return "change_acceptance", "", "全部 issue 已完成，进入 change 级 acceptance / verify 放行。"
 
@@ -304,14 +304,10 @@ def render_phase_packet(
     should_fix_if_cheap = backlog.get("should_fix_if_cheap", {}).get("open_items", [])
     deferred_items = backlog.get("defer", {}).get("open_items", [])
     subagent_team = config.get("subagent_team", {})
-    auto_advance_after_design_review = bool(subagent_team.get("auto_advance_after_design_review", False))
-    auto_advance_after_issue_planning_review = bool(
-        subagent_team.get("auto_advance_after_issue_planning_review", False)
-    )
-    auto_advance_to_next_issue_after_issue_pass = bool(
-        subagent_team.get("auto_advance_to_next_issue_after_issue_pass", False)
-    )
-    auto_run_change_verify = bool(subagent_team.get("auto_run_change_verify", False))
+    auto_accept_spec_readiness = bool(subagent_team.get("auto_accept_spec_readiness", False))
+    auto_accept_issue_planning = bool(subagent_team.get("auto_accept_issue_planning", False))
+    auto_accept_issue_review = bool(subagent_team.get("auto_accept_issue_review", False))
+    auto_accept_change_acceptance = bool(subagent_team.get("auto_accept_change_acceptance", False))
     auto_archive_after_verify = bool(subagent_team.get("auto_archive_after_verify", False))
     automation_mode = automation_profile(config)
     command_hints = phase_command_hints(repo_root, change, phase)
@@ -321,23 +317,23 @@ def render_phase_packet(
 
     phase_next_step = {
         "spec_readiness": (
-            "审查通过后自动进入 issue planning"
-            if auto_advance_after_design_review
+            "coordinator 自动通过 spec-readiness 评审并进入 issue planning"
+            if auto_accept_spec_readiness
             else "审查通过后暂停，等待人工确认后再进入 issue planning"
         ),
         "issue_planning": (
-            "审查通过后自动派发当前 round 已批准的 issue"
-            if auto_advance_after_issue_planning_review
+            "coordinator 自动通过 issue planning 评审并派发当前 round 已批准的 issue"
+            if auto_accept_issue_planning
             else "审查通过后暂停，等待人工确认后再进入 issue execution"
         ),
         "issue_execution": (
-            "审查通过后自动进入下一个 issue 或 change acceptance"
-            if auto_advance_to_next_issue_after_issue_pass
+            "issue 完成且校验通过后，coordinator 自动接受并合并该 issue，然后进入下一个 issue 或 change acceptance"
+            if auto_accept_issue_review
             else "审查通过后暂停，等待人工确认是否继续派发下一个 issue"
         ),
         "change_acceptance": (
-            "审查通过后自动运行 verify"
-            if auto_run_change_verify
+            "coordinator 自动通过 change acceptance 并运行 verify"
+            if auto_accept_change_acceptance
             else "审查通过后暂停，等待人工确认后再运行 verify"
         ),
         "change_verify": (
@@ -357,8 +353,8 @@ def render_phase_packet(
             "开发组负责补 proposal / design / tasks，不直接跳到 issue 执行。",
             "检查组只指出实现前仍会阻塞 issue 切分的缺口。",
             (
-                "审查组通过后自动进入 plan-issues。"
-                if auto_advance_after_design_review
+                "当 `auto_accept_spec_readiness=true` 时，coordinator 不等待人工签字，直接把 spec-readiness 视为通过并进入 plan-issues。"
+                if auto_accept_spec_readiness
                 else "审查组通过后默认停住，先让人看 design / tasks，再决定是否进入 plan-issues。"
             ),
         ],
@@ -366,8 +362,8 @@ def render_phase_packet(
             "开发组负责修订 INDEX 和 ISSUE 文档。",
             "检查组确认 allowed_scope / out_of_scope / done_when / validation 可执行。",
             (
-                "审查组通过后自动派发当前 round 已批准的 issue。"
-                if auto_advance_after_issue_planning_review
+                "当 `auto_accept_issue_planning=true` 时，coordinator 不等待人工签字，直接把 issue planning 视为通过并派发当前 round 已批准的 issue。"
+                if auto_accept_issue_planning
                 else "审查组通过后默认停住，先让 coordinator 人工确认，再 dispatch issue。"
             ),
         ],
@@ -375,8 +371,8 @@ def render_phase_packet(
             "开发组可以按 issue team dispatch 调起实现型 subagent。",
             "检查组优先看回归、范围泄漏、证据缺口。",
             (
-                "审查组通过后自动进入下一个 issue 或 change acceptance。"
-                if auto_advance_to_next_issue_after_issue_pass
+                "当 `auto_accept_issue_review=true` 时，coordinator 会在 issue-local validation 全部通过后自动接受并 merge 当前 issue，再继续后续 phase。"
+                if auto_accept_issue_review
                 else "审查组通过后默认停住，让 coordinator 先确认是否派发下一个 issue。"
             ),
             "审查组不通过则回到开发组下一轮。",
@@ -385,8 +381,8 @@ def render_phase_packet(
             "开发组只补 change-level 收尾，不再随意扩 issue scope。",
             "检查组确认已接受 issue 能覆盖请求范围。",
             (
-                "审查组通过后自动切到 verify 阶段。"
-                if auto_run_change_verify
+                "当 `auto_accept_change_acceptance=true` 时，coordinator 不等待人工签字，直接把 change acceptance 视为通过并切到 verify。"
+                if auto_accept_change_acceptance
                 else "审查组通过后默认停住，让 coordinator 先确认是否运行 verify。"
             ),
         ],
@@ -453,10 +449,10 @@ def render_phase_packet(
 - 审查不通过则回到开发组下一轮。
 - backlog / round / stop decision 必须落盘，不留在聊天里。
 - 当前自动推进开关：
-  - `subagent_team.auto_advance_after_design_review={str(auto_advance_after_design_review).lower()}`
-  - `subagent_team.auto_advance_after_issue_planning_review={str(auto_advance_after_issue_planning_review).lower()}`
-  - `subagent_team.auto_advance_to_next_issue_after_issue_pass={str(auto_advance_to_next_issue_after_issue_pass).lower()}`
-  - `subagent_team.auto_run_change_verify={str(auto_run_change_verify).lower()}`
+  - `subagent_team.auto_accept_spec_readiness={str(auto_accept_spec_readiness).lower()}`
+  - `subagent_team.auto_accept_issue_planning={str(auto_accept_issue_planning).lower()}`
+  - `subagent_team.auto_accept_issue_review={str(auto_accept_issue_review).lower()}`
+  - `subagent_team.auto_accept_change_acceptance={str(auto_accept_change_acceptance).lower()}`
   - `subagent_team.auto_archive_after_verify={str(auto_archive_after_verify).lower()}`
   - `rra.gate_mode={str(config.get("rra", {}).get("gate_mode", "advisory")).strip() or "advisory"}`
 
@@ -579,15 +575,13 @@ def main() -> None:
         "latest_round_path": display_path(repo_root, latest_round_artifact_path(repo_root, args.change))
         if latest_round_artifact_path(repo_root, args.change)
         else "",
-        "auto_advance": {
-            "after_design_review": bool(config.get("subagent_team", {}).get("auto_advance_after_design_review", False)),
-            "after_issue_planning_review": bool(
-                config.get("subagent_team", {}).get("auto_advance_after_issue_planning_review", False)
+        "automation": {
+            "accept_spec_readiness": bool(config.get("subagent_team", {}).get("auto_accept_spec_readiness", False)),
+            "accept_issue_planning": bool(config.get("subagent_team", {}).get("auto_accept_issue_planning", False)),
+            "accept_issue_review": bool(config.get("subagent_team", {}).get("auto_accept_issue_review", False)),
+            "accept_change_acceptance": bool(
+                config.get("subagent_team", {}).get("auto_accept_change_acceptance", False)
             ),
-            "to_next_issue_after_issue_pass": bool(
-                config.get("subagent_team", {}).get("auto_advance_to_next_issue_after_issue_pass", False)
-            ),
-            "run_change_verify": bool(config.get("subagent_team", {}).get("auto_run_change_verify", False)),
             "archive_after_verify": bool(config.get("subagent_team", {}).get("auto_archive_after_verify", False)),
         },
         "automation_profile": automation_profile(config),
