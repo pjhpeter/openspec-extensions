@@ -15,6 +15,35 @@
   - `长时间等待 subagent 完成，使用 1 小时阻塞等待，不要 30 秒短轮询`
   - `对当前 subagent team 使用长等待，直到 subagent 完成再返回`
 
+推荐直接复制：
+
+- 默认进入 issue-mode，并走 `subagent-team`
+
+```text
+按 issue 模式继续当前 change，默认入口使用 subagent-team。
+```
+
+- 明确要求多 agent 编排
+
+```text
+按 issue 模式继续当前 change，启用 subagent-team，用多 agent 编排推进整个复杂变更生命周期。
+```
+
+- 明确要求长时间等待 subagent
+
+```text
+按 issue 模式继续当前 change，启用 subagent-team。
+对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
+```
+
+- 当前仓库是全自动配置，希望真正无人值守
+
+```text
+按当前 openspec/issue-mode.json 配置继续当前 change。
+默认入口使用 subagent-team，按全自动方式推进整个生命周期。
+对 subagent 使用 1 小时阻塞等待，直到完成再返回。
+```
+
 你可以直接这样说：
 
 - 帮我起一个变更，把文档一次性补齐

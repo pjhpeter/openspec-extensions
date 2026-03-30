@@ -75,6 +75,53 @@
   - `长时间等待 subagent 完成，使用 1 小时阻塞等待，不要 30 秒短轮询`
   - `对当前 subagent team 使用长等待，直到 subagent 完成再返回`
 
+## 可直接复制的话术模板
+
+下面这些话术建议直接复制给 Codex，用来避免 runtime 因为缺少显式授权或等待策略而没有真正进入 `subagent-team` 主链。
+
+常用入口：
+
+- 进入 issue-mode 并默认走 `subagent-team`
+
+```text
+按 issue 模式继续当前 change，默认入口使用 subagent-team。
+```
+
+- 进入 issue-mode，并明确要求多 agent 编排
+
+```text
+按 issue 模式继续当前 change，启用 subagent-team，用多 agent 编排推进整个复杂变更生命周期。
+```
+
+- 进入 issue-mode，并明确要求长时间阻塞等待 subagent
+
+```text
+按 issue 模式继续当前 change，启用 subagent-team。
+对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
+```
+
+- 当前仓库已经配置为全自动，希望真正无人值守推进
+
+```text
+按当前 openspec/issue-mode.json 配置继续当前 change。
+默认入口使用 subagent-team，按全自动方式推进整个生命周期。
+对 subagent 使用 1 小时阻塞等待，直到完成再返回。
+```
+
+- 当前仓库是半自动，希望先看设计文档再决定是否继续
+
+```text
+先按 issue 模式补齐 proposal、design、tasks。
+暂时不要自动进入下一阶段，我要先看设计文档和任务拆分结果。
+```
+
+- 已经在 issue-mode 里，希望继续当前 change
+
+```text
+继续当前 change，保持 subagent-team 主链推进。
+如果需要等待 subagent，使用 1 小时阻塞等待。
+```
+
 ## 配置契约
 
 当前支持的 `openspec/issue-mode.json` 字段如下：
