@@ -17,6 +17,7 @@ SKILL_NAMES = [
     "openspec-execute-issue",
     "openspec-monitor-worker",
     "openspec-reconcile-change",
+    "openspec-subagent-team",
     "openspec-shared",
 ]
 RUNTIME_SCRIPTS = [

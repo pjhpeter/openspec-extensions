@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenSpec Subagent Team"
+  short_description: "Run issue-mode work through a bounded subagent-team round loop"
+  default_prompt: "Use $openspec-subagent-team to run this OpenSpec issue through a subagent team development, check, repair, and review loop."

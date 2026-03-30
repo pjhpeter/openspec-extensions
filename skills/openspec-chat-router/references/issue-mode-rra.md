@@ -6,6 +6,7 @@ Use this reference when a complex OpenSpec change should be governed by a change
 
 - `issue-mode` is the execution plane:
   - issue docs
+  - issue team dispatch packets
   - worker worktrees
   - `issues/*.progress.json`
   - `runs/*.json`
@@ -33,6 +34,7 @@ Recommended ownership:
 
 - coordinator owns `control/BACKLOG.md`
 - coordinator owns `control/ROUND-*.md`
+- coordinator may own `issues/ISSUE-*.team.dispatch.md`
 - workers may reference backlog item ids in reports but do not edit the control files directly
 
 ## Suggested Round Structure
@@ -153,6 +155,7 @@ Fail outcome:
 
 - Read worker artifacts from disk before deciding the next step.
 - Keep one normalized backlog for the active change-level round instead of scattering decisions across chat turns.
+- When the user explicitly asks for subagent team collaboration, render a fresh `ISSUE-*.team.dispatch.md` before spawning the round.
 - Do not move from issue planning to dispatch while `Must fix now` items are still open.
 - Do not move from "all issues completed" to `verify` or `archive` without a change-level acceptance decision.
 - Treat detached automation as an execution convenience, not a replacement for change-level acceptance criteria.
@@ -170,5 +173,6 @@ Chat text is not the workflow state.
 
 - `issues/*.progress.json` and `runs/*.json` are the execution state.
 - `control/BACKLOG.md` and `control/ROUND-*.md` are the acceptance and decision state.
+- `issues/ISSUE-*.team.dispatch.md` is the coordinator handoff state for explicit subagent-team rounds.
 
 If the change already has control artifacts, read them before dispatch, reconcile, verify, or archive decisions.

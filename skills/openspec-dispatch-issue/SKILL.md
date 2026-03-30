@@ -22,16 +22,25 @@ Read `issue-mode-contract.md`, `issue-mode-config.md`, `issue-mode-rra.md`, and 
      --issue-id "<issue-id>"
    ```
    If the user only wants to preview the target path without creating it yet, add `--dry-run`.
-5. Render the dispatch:
+5. Render the standard issue dispatch:
    ```bash
    python3 .codex/skills/openspec-dispatch-issue/scripts/render_issue_dispatch.py \
      --repo-root . \
      --change "<change-name>" \
      --issue-id "<issue-id>"
    ```
-6. Use the generated dispatch file plus the created/reused worktree as the source of truth when sending work to a worker.
-7. In runtimes with delegation, prefer handing that dispatch directly to one spawned worker subagent.
-8. Keep the worker inside that issue worktree and return review, merge, and commit to the coordinator.
+6. If the user explicitly wants subagent team orchestration instead of one worker-only handoff, also render the team dispatch:
+   ```bash
+   python3 .codex/skills/openspec-dispatch-issue/scripts/render_subagent_team_dispatch.py \
+     --repo-root . \
+     --change "<change-name>" \
+     --issue-id "<issue-id>"
+   ```
+7. Use the generated dispatch artifact plus the created/reused worktree as the source of truth when sending work to a worker or subagent team.
+8. In runtimes with delegation:
+   - use `ISSUE-*.team.dispatch.md` when the user explicitly wants a development / check / review subagent team
+   - use `ISSUE-*.dispatch.md` when a single bounded worker subagent is enough
+9. Keep the worker inside that issue worktree and return review, merge, and commit to the coordinator.
 
 ## Rules
 
@@ -40,6 +49,7 @@ Read `issue-mode-contract.md`, `issue-mode-config.md`, `issue-mode-rra.md`, and 
 - Do not improvise scope boundaries from memory when an issue doc exists.
 - If the issue doc is missing required frontmatter fields, fix the issue doc first.
 - If the active change-level round still has unresolved `Must fix now` items that block dispatch, do not launch the worker yet.
+- If the user explicitly wants subagent team collaboration, prefer rendering `ISSUE-*.team.dispatch.md` over detached worker launch.
 - The coordinator owns handoff, review, merge, and final commit for the issue.
 - Spawned subagents and detached workers follow the same issue boundary contract.
 - Do not default to suggesting a separate worker chat or heartbeat; mention detached/background paths only when the user explicitly wants them.
@@ -52,8 +62,9 @@ Prefer a short coordinator response:
 已为 `ISSUE-001` 生成 worker dispatch。
 
 - Dispatch: openspec/changes/<change>/issues/ISSUE-001.dispatch.md
+- Team Dispatch: openspec/changes/<change>/issues/ISSUE-001.team.dispatch.md
 - Worker worktree: .worktree/<change>/ISSUE-001
 - Worktree status: created or reused
 - Round gate: approved for dispatch
-- 直接把这个 dispatch 交给一个 subagent 即可
+- 复杂任务优先把 team dispatch 交给 coordinator 主会话编排 subagent team
 ```

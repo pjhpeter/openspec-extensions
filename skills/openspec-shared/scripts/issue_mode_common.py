@@ -173,6 +173,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "rra": {
         "gate_mode": "advisory",
     },
+    "subagent_team": {
+        "auto_advance_after_design_review": False,
+    },
     "worker_launcher": {
         "session_prefix": "opsx-worker",
         "start_grace_seconds": 120,
@@ -330,6 +333,24 @@ def extract_open_work_items(lines: list[str]) -> list[str]:
             if is_placeholder_work_item(text):
                 continue
             items.append(text)
+    return dedupe_strings(items)
+
+
+def extract_section_items(lines: list[str]) -> list[str]:
+    items: list[str] = []
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("<!--"):
+            continue
+        checkbox_match = CHECKBOX_ITEM_RE.match(line)
+        if checkbox_match:
+            items.append(checkbox_match.group("text").strip())
+            continue
+        list_match = LIST_ITEM_RE.match(line)
+        if list_match:
+            items.append(list_match.group("text").strip())
+            continue
+        items.append(line)
     return dedupe_strings(items)
 
 
@@ -512,6 +533,17 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
     if gate_mode not in {"advisory", "enforce"}:
         raise SystemExit(f"{CONFIG_RELATIVE_PATH} field `rra.gate_mode` must be `advisory` or `enforce`.")
 
+    subagent_team = config.get("subagent_team", {})
+    if not isinstance(subagent_team, dict):
+        subagent_team = {}
+    auto_advance_after_design_review = normalize_bool(
+        subagent_team.get(
+            "auto_advance_after_design_review",
+            DEFAULT_CONFIG["subagent_team"]["auto_advance_after_design_review"],
+        ),
+        bool(DEFAULT_CONFIG["subagent_team"]["auto_advance_after_design_review"]),
+    )
+
     worker_launcher = config.get("worker_launcher", {})
     if not isinstance(worker_launcher, dict):
         worker_launcher = {}
@@ -578,6 +610,9 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
         },
         "rra": {
             "gate_mode": gate_mode,
+        },
+        "subagent_team": {
+            "auto_advance_after_design_review": auto_advance_after_design_review,
         },
         "worker_launcher": {
             "session_prefix": session_prefix,
@@ -728,11 +763,21 @@ def read_change_control_state(repo_root: Path, change: str) -> dict[str, Any]:
         NORMALIZED_BACKLOG_SECTION_ALIASES,
     )
     must_fix_now_items = extract_open_work_items(backlog_sections.get("must_fix_now", []))
+    should_fix_if_cheap_items = extract_open_work_items(backlog_sections.get("should_fix_if_cheap", []))
+    defer_items = extract_open_work_items(backlog_sections.get("defer", []))
 
     round_sections = extract_markdown_sections(
         latest_round_path.read_text() if latest_round_path else "",
         NORMALIZED_ROUND_SECTION_ALIASES,
     )
+    round_target_items = extract_section_items(round_sections.get("round_target", []))
+    target_mode_items = extract_section_items(round_sections.get("target_mode", []))
+    acceptance_criteria_items = extract_section_items(round_sections.get("acceptance_criteria", []))
+    non_goal_items = extract_section_items(round_sections.get("non_goals", []))
+    scope_in_round_items = extract_section_items(round_sections.get("scope_in_round", []))
+    normalized_backlog_items = extract_section_items(round_sections.get("normalized_backlog", []))
+    fixes_completed_items = extract_section_items(round_sections.get("fixes_completed", []))
+    re_review_items = extract_section_items(round_sections.get("re_review_result", []))
     acceptance_lines = round_sections.get("acceptance_verdict") or round_sections.get("re_review_result", [])
     acceptance_text = collapse_section_lines(acceptance_lines)
     next_action_text = collapse_section_lines(round_sections.get("next_action", []))
@@ -744,11 +789,35 @@ def read_change_control_state(repo_root: Path, change: str) -> dict[str, Any]:
         "enabled": backlog_path.exists() or latest_round_path is not None,
         "backlog_path": display_path(repo_root, backlog_path) if backlog_path.exists() else "",
         "latest_round_path": display_path(repo_root, latest_round_path) if latest_round_path else "",
+        "backlog": {
+            "must_fix_now": {
+                "open_count": len(must_fix_now_items),
+                "open_items": must_fix_now_items,
+            },
+            "should_fix_if_cheap": {
+                "open_count": len(should_fix_if_cheap_items),
+                "open_items": should_fix_if_cheap_items,
+            },
+            "defer": {
+                "open_count": len(defer_items),
+                "open_items": defer_items,
+            },
+        },
         "must_fix_now": {
             "open_count": len(must_fix_now_items),
             "open_items": must_fix_now_items,
         },
         "latest_round": {
+            "round_target": round_target_items[0] if round_target_items else "",
+            "round_target_items": round_target_items,
+            "target_mode": target_mode_items[0] if target_mode_items else "",
+            "target_mode_items": target_mode_items,
+            "acceptance_criteria": acceptance_criteria_items,
+            "non_goals": non_goal_items,
+            "scope_in_round": scope_in_round_items,
+            "normalized_backlog": normalized_backlog_items,
+            "fixes_completed": fixes_completed_items,
+            "re_review_result": re_review_items,
             "acceptance_text": acceptance_text,
             "acceptance_status": acceptance_status,
             "next_action_text": next_action_text,

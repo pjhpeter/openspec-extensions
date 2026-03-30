@@ -1,6 +1,6 @@
 ---
 name: openspec-chat-router
-description: Route natural-language chat or IM requests into the correct OpenSpec workflow step without requiring slash commands. Use when the user wants to drive the OpenSpec change workflow in plain language, such as “进入openspec模式”, “进入 openspec 模式”, “开启openspec模式”, “给我 openspec 话术模板”, “列出当前 change 列表”, “起一个变更”, “继续当前 change”, “把文档补齐后开始做”, “检查能不能归档”, “同步 delta spec”, “按 issue 模式继续”, “拆成 issue”, “给我 ISSUE-001 的 worker 模板”, “直接开 subagent 做 ISSUE-001”, “执行 ISSUE-001”, “同步 worker 进度”, “收敛 issue 状态”, “根据 worker 结果继续推进”, or, when they explicitly want background automation, “开启 coordinator heartbeat”, “自动检查 worker 并通知我”, “启动 heartbeat”, “看看 heartbeat 状态”, “停止 heartbeat”.
+description: Route natural-language chat or IM requests into the correct OpenSpec workflow step without requiring slash commands. Use when the user wants to drive the OpenSpec change workflow in plain language, such as “进入openspec模式”, “进入 openspec 模式”, “开启openspec模式”, “给我 openspec 话术模板”, “列出当前 change 列表”, “起一个变更”, “继续当前 change”, “把文档补齐后开始做”, “检查能不能归档”, “同步 delta spec”, “按 issue 模式继续”, “拆成 issue”, “给我 ISSUE-001 的 worker 模板”, “直接开 subagent 做 ISSUE-001”, “用 subagent team 推进 ISSUE-001”, “执行 ISSUE-001”, “同步 worker 进度”, “收敛 issue 状态”, “根据 worker 结果继续推进”, or, when they explicitly want background automation, “开启 coordinator heartbeat”, “自动检查 worker 并通知我”, “启动 heartbeat”, “看看 heartbeat 状态”, “停止 heartbeat”.
 ---
 
 # OpenSpec Chat Router
@@ -26,6 +26,7 @@ These companion skills live next to this router and should be treated as relativ
 - `../openspec-execute-issue/SKILL.md`
 - `../openspec-monitor-worker/SKILL.md`
 - `../openspec-reconcile-change/SKILL.md`
+- `../openspec-subagent-team/SKILL.md`
 - `../openspec-verify-change/SKILL.md`
 - `../openspec-sync-specs/SKILL.md`
 - `../openspec-archive-change/SKILL.md`
@@ -49,6 +50,7 @@ Do not rely on hardcoded absolute filesystem paths for these resources.
 - If the user asks to enter OpenSpec mode, print the OpenSpec mode cheat sheet instead of running a workflow stage.
 - For large or complex work, prefer issue-based multi-session execution plus a change-level review/repair/re-review/acceptance loop rather than keeping one long-running session alive.
 - In issue-based execution, one worker context should handle one issue only.
+- When the user explicitly asks for subagent team collaboration, prefer the coordinator owning a development / check / repair / review round via `openspec-subagent-team`.
 - In runtimes that support subagents or delegation, prefer the coordinator spawning one worker subagent per issue instead of asking the user to open a separate worker chat by default.
 - In issue-based execution, the default flow is: coordinator creates or reuses the issue worktree, dispatches one worker subagent or one external worker session into that worktree, waits for worker completion, then reviews the issue from the main session before accepting it.
 - In multi-session work on the same change, the coordinator session owns `tasks.md`, final progress, `verify`, and `archive` unless the user explicitly chooses a different owner.
@@ -76,6 +78,7 @@ Map the user's request to the closest OpenSpec action.
 | They want to implement, code, land, or continue coding from the change tasks | `apply` |
 | They want to split a complex change into issue-sized work packages or create issue docs | `plan-issues` |
 | They want to generate the next worker prompt, create the worker worktree, prepare a subagent handoff, or dispatch one issue | `dispatch-issue` |
+| They explicitly want a subagent team / development-check-review loop for one issue or round | `subagent-team` |
 | They want one worker subagent or one worker session to execute a single issue with explicit scope boundaries | `execute-issue` |
 | They want to observe a detached worker process, inspect whether it is still alive, or recover what it is doing from persistent-host/process/session files/worktree state | `monitor-worker` |
 | They want to sync worker outputs, collect issue progress, or decide the next coordinator step | `reconcile` |
@@ -101,6 +104,7 @@ Use these defaults when the user does not name a stage explicitly:
 - “开始做 / 开始实现 / 直接落地” -> `apply`
 - “拆成 issue / 给出 issue 边界 / 生成 issue 文档” -> `plan-issues`
 - “给我 ISSUE-001 的 worker 模板 / 派发下一个 issue / 给 ISSUE-001 创建 worker worktree / 直接开 subagent 做 ISSUE-001” -> `dispatch-issue`
+- “用 subagent team 推进 ISSUE-001 / 不要 detached worker，用 team 模式做 / 开发组检查组审查组一起推进” -> `subagent-team`
 - “本会话只处理 ISSUE-001 / 执行这个 issue / worker 继续做这个 issue / subagent 只做 ISSUE-001” -> `execute-issue`
 - “看看 worker1 还活着吗 / 监控 worker / worker 做到哪一步了” -> `monitor-worker`
 - “同步 worker 进度 / 收敛 issue 状态 / 根据 worker 结果继续推进” -> `reconcile`
@@ -123,10 +127,11 @@ Preferred flow:
 3. Split implementation into issue-sized units with clear boundaries.
 4. Review the issue plan before dispatching issue work.
 5. For each approved issue, create or reuse the worker git worktree before handoff.
-6. If the runtime supports delegation, spawn one worker subagent per issue and keep it inside that issue worktree only.
-7. If detached/background execution is required, fall back to one external worker session per issue.
-8. After the worker reports `review_required`, let the coordinator review the worktree, update the change-level backlog, merge accepted changes back to the coordinator branch, and create the commit.
-9. Let the coordinator session maintain the global checklist, change-level acceptance, and final verification.
+6. If the user explicitly wants team orchestration, render `ISSUE-*.team.dispatch.md` and run a bounded subagent-team round from the coordinator session.
+7. Otherwise, if the runtime supports delegation, spawn one worker subagent per issue and keep it inside that issue worktree only.
+8. If detached/background execution is required, fall back to one external worker session per issue.
+9. After the worker reports `review_required`, let the coordinator review the worktree, update the change-level backlog, merge accepted changes back to the coordinator branch, and create the commit.
+10. Let the coordinator session maintain the global checklist, change-level acceptance, and final verification.
 
 Issue sizing guidance:
 
@@ -230,6 +235,17 @@ Dispatch should be generated from the issue doc on disk, not improvised from cha
 If the repo uses worker git worktrees, this path can also create or reuse the issue worktree before handoff.
 When the runtime supports delegation and the user wants the coordinator to proceed immediately, use the generated dispatch as the input for one spawned worker subagent instead of requiring a separate worker chat by default.
 
+### Special path: `subagent-team`
+
+If the user explicitly wants development / check / repair / review team orchestration for an issue or round, prefer `openspec-subagent-team`.
+
+Summary rule:
+
+- render `ISSUE-*.team.dispatch.md`
+- keep the main agent as control plane owner
+- use subagent teams only for the approved round scope
+- keep detached/background worker paths as fallback only
+
 ### Special path: `reconcile`
 
 If the user asks to sync worker outputs, collect issue progress, or continue a complex change after workers have written status files, prefer `openspec-reconcile-change`.
@@ -273,6 +289,7 @@ If the corresponding companion skill exists, follow it:
 - `apply` -> `openspec-apply-change`
 - `plan-issues` -> `openspec-plan-issues`
 - `dispatch-issue` -> `openspec-dispatch-issue`
+- `subagent-team` -> `openspec-subagent-team`
 - `execute-issue` -> `openspec-execute-issue`
 - `monitor-worker` -> `openspec-monitor-worker`
 - `reconcile` -> `openspec-reconcile-change`

@@ -62,6 +62,7 @@ openspec/changes/<change-name>/
 │   ├── INDEX.md
 │   ├── ISSUE-001.md
 │   ├── ISSUE-001.dispatch.md
+│   ├── ISSUE-001.team.dispatch.md
 │   ├── ISSUE-001.progress.json
 │   └── ISSUE-002.progress.json
 └── runs/
@@ -163,6 +164,25 @@ Use one run artifact per worker context:
 6. Do not merge the worktree or create the final git commit.
 7. Report the artifact paths back to the coordinator.
 
+## Team Dispatch Artifact
+
+When the coordinator uses explicit subagent-team orchestration, it may also render:
+
+```text
+openspec/changes/<change-name>/issues/ISSUE-001.team.dispatch.md
+```
+
+Use it as the coordinator-owned control packet for:
+
+- round target
+- target mode
+- acceptance criteria
+- normalized backlog handoff rules
+- review / development / acceptance team topology
+
+This artifact does not replace `ISSUE-*.progress.json`.
+Execution state still comes from progress/run artifacts on disk.
+
 ## Coordinator Reconcile Rules
 
 1. Read all `issues/*.progress.json` first.
@@ -211,4 +231,5 @@ If `worker_worktree` or `validation` is missing, helpers fall back to `openspec/
 Chat text is not the workflow state.
 Issue progress files are the execution state.
 Control backlog and round reports are the acceptance state.
+Team dispatch artifacts are the coordinator handoff state for explicit subagent-team rounds.
 In issue mode, accepted code lands through coordinator review plus coordinator-owned merge and commit, not through worker self-merge.

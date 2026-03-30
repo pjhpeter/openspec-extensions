@@ -13,6 +13,7 @@ SKILL_DIRECTORIES = [
     Path(".codex/skills/openspec-execute-issue"),
     Path(".codex/skills/openspec-monitor-worker"),
     Path(".codex/skills/openspec-reconcile-change"),
+    Path(".codex/skills/openspec-subagent-team"),
     Path(".codex/skills/openspec-shared"),
 ]
 CONFIG_PATH = Path("openspec/issue-mode.json")

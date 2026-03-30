@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sys
+import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -9,7 +11,7 @@ SCRIPT_DIR = Path(__file__).resolve().parents[1]
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from issue_mode_common import extract_open_work_items  # noqa: E402
+from issue_mode_common import extract_open_work_items, read_change_control_state  # noqa: E402
 
 
 class ExtractOpenWorkItemsTest(unittest.TestCase):
@@ -43,6 +45,82 @@ class ExtractOpenWorkItemsTest(unittest.TestCase):
         ])
 
         self.assertEqual(items, ["真正待办事项"])
+
+
+class ReadChangeControlStateTest(unittest.TestCase):
+    def test_extracts_structured_round_contract_and_backlog(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            control_dir = repo_root / "openspec" / "changes" / "demo-change" / "control"
+            control_dir.mkdir(parents=True)
+            (control_dir / "BACKLOG.md").write_text(textwrap.dedent(
+                """\
+                # Backlog
+
+                ## Must Fix Now
+                - [ ] 修复 ISSUE-002 gate
+
+                ## Should Fix If Cheap
+                - 补一条轻量日志
+
+                ## Defer
+                - 延后处理非关键重构
+                """
+            ))
+            (control_dir / "ROUND-02.md").write_text(textwrap.dedent(
+                """\
+                # Round 2
+
+                ## Round Target
+                - 让 ISSUE-001 达到可接受状态
+
+                ## Target Mode
+                - release
+
+                ## Acceptance Criteria
+                - 主路径可用
+                - 校验命令能跑通
+
+                ## Non-Goals
+                - 不处理额外重构
+
+                ## Scope In Round
+                - ISSUE-001
+                - src/feature.ts
+
+                ## Normalized Backlog
+                - Must fix now: 修复 ISSUE-001 回归
+
+                ## Fixes Completed
+                - 补齐 ISSUE-001 的按钮状态
+
+                ## Re-review Result
+                - 已覆盖受影响主路径
+
+                ## Acceptance Verdict
+                - pass with noted debt
+
+                ## Next Action
+                - 可以继续 verify，必要时补做 ISSUE-001 follow-up
+                """
+            ))
+
+            state = read_change_control_state(repo_root, "demo-change")
+
+        self.assertTrue(state["enabled"])
+        self.assertEqual(state["backlog"]["must_fix_now"]["open_items"], ["修复 ISSUE-002 gate"])
+        self.assertEqual(state["backlog"]["should_fix_if_cheap"]["open_items"], ["补一条轻量日志"])
+        self.assertEqual(state["backlog"]["defer"]["open_items"], ["延后处理非关键重构"])
+        self.assertEqual(state["latest_round"]["round_target"], "让 ISSUE-001 达到可接受状态")
+        self.assertEqual(state["latest_round"]["target_mode"], "release")
+        self.assertEqual(state["latest_round"]["acceptance_criteria"], ["主路径可用", "校验命令能跑通"])
+        self.assertEqual(state["latest_round"]["non_goals"], ["不处理额外重构"])
+        self.assertEqual(state["latest_round"]["scope_in_round"], ["ISSUE-001", "src/feature.ts"])
+        self.assertEqual(state["latest_round"]["fixes_completed"], ["补齐 ISSUE-001 的按钮状态"])
+        self.assertEqual(state["latest_round"]["re_review_result"], ["已覆盖受影响主路径"])
+        self.assertEqual(state["latest_round"]["acceptance_status"], "accepted")
+        self.assertTrue(state["latest_round"]["allows_verify"])
+        self.assertEqual(state["latest_round"]["referenced_issue_ids"], ["ISSUE-001"])
 
 
 if __name__ == "__main__":

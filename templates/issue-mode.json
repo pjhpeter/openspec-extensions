@@ -17,11 +17,16 @@
     "interval_seconds": 60,
     "stale_seconds": 900,
     "notify_topic": "",
-    "auto_dispatch_next": true,
-    "auto_launch_next": false
+    "auto_dispatch_next": false,
+    "auto_launch_next": false,
+    "auto_accept_review": false,
+    "auto_verify_change": false
   },
   "rra": {
     "gate_mode": "advisory"
+  },
+  "subagent_team": {
+    "auto_advance_after_design_review": false
   },
   "worker_launcher": {
     "session_prefix": "opsx-worker",
