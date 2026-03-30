@@ -6,7 +6,7 @@
 
 - 用自然语言驱动 OpenSpec，而不是要求用户背 slash command
 - 把复杂变更拆成 issue，并把 backlog / round / acceptance 放到磁盘
-- 以 subagent 或 subagent-team 作为唯一推荐执行主链
+- 以 subagent-team 作为复杂 change 的默认执行主链；只在显式收窄到单 issue worker 时才使用单 subagent
 - 由 coordinator 负责 reconcile、review、merge、commit、verify、archive
 
 这里不再保留 detached worker、heartbeat、monitor-worker 这一套 fallback runtime。
