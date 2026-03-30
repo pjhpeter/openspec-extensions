@@ -34,9 +34,13 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
    - `resolve_blocker` -> stop and surface blocker
    - `resolve_verify_failure` -> inspect the verify artifact and fix the failing validation or unchecked tasks
    - `coordinator_review` -> review the issue, then either accept it with `coordinator_merge_issue.py` or create `Must fix now` backlog items and send it back to repair
+   - `await_issue_dispatch_confirmation` -> semi-auto pause before the first issue dispatch after issue planning
    - `dispatch_next_issue` -> prepare the next worker issue
-   - `verify_change` -> run a change-level acceptance decision first, then move to `openspec-verify-change`
-   - `ready_for_archive` -> verify has passed and the change can move to archive when desired
+   - `await_next_issue_confirmation` -> semi-auto pause before dispatching the next pending issue
+   - `verify_change` -> run change-level verify now
+   - `await_verify_confirmation` -> semi-auto pause before running verify
+   - `archive_change` -> verify has passed and config allows immediate archive
+   - `ready_for_archive` -> verify has passed, but archive still expects manual confirmation
    - `wait_for_active_issue` -> do not force progress
 
 ## Rules
@@ -51,6 +55,7 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
 - Do not dispatch, verify, or archive while unresolved `Must fix now` items remain in the active change-level backlog.
 - If the helper finds no issue artifacts, fall back to normal OpenSpec routing.
 - If coordinator review accepts an issue, merge and commit it before dispatching the next dependent issue or moving to `verify`.
+- Read `automation_profile` and `automation` from the helper output before deciding whether a pause is intentional or indicates a stuck flow.
 
 ## Output Style
 

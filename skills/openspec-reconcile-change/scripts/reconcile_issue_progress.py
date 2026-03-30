@@ -12,7 +12,7 @@ if str(SHARED_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SHARED_SCRIPTS))
 
 from coordinator_change_common import read_json, verification_artifact_is_current, verify_artifact_path  # noqa: E402
-from issue_mode_common import load_issue_mode_config, read_change_control_state  # noqa: E402
+from issue_mode_common import automation_profile, load_issue_mode_config, read_change_control_state  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -80,7 +80,18 @@ def determine_base_next_action(
     repo_root: Path,
     change: str,
     issues: list[dict[str, Any]],
+    config: dict[str, Any],
 ) -> tuple[str, str, str]:
+    subagent_team = config.get("subagent_team", {})
+    auto_advance_after_issue_planning_review = bool(
+        subagent_team.get("auto_advance_after_issue_planning_review", False)
+    )
+    auto_advance_to_next_issue_after_issue_pass = bool(
+        subagent_team.get("auto_advance_to_next_issue_after_issue_pass", False)
+    )
+    auto_run_change_verify = bool(subagent_team.get("auto_run_change_verify", False))
+    auto_archive_after_verify = bool(subagent_team.get("auto_archive_after_verify", False))
+
     if not issues:
         return "no_issue_artifacts", "", "未找到 issue 工件。"
 
@@ -103,16 +114,27 @@ def determine_base_next_action(
 
     pending = [issue for issue in issues if issue.get("status") in {"pending", ""}]
     if pending:
-        return "dispatch_next_issue", pending[0]["issue_id"], f"{len(pending)} 个 issue 尚未开始。"
+        completed = [issue for issue in issues if issue.get("status") == "completed"]
+        if completed:
+            if auto_advance_to_next_issue_after_issue_pass:
+                return "dispatch_next_issue", pending[0]["issue_id"], f"{len(pending)} 个 issue 尚未开始，配置允许自动进入下一 issue。"
+            return "await_next_issue_confirmation", pending[0]["issue_id"], f"{len(pending)} 个 issue 尚未开始，等待人工确认是否继续派发。"
+        if auto_advance_after_issue_planning_review:
+            return "dispatch_next_issue", pending[0]["issue_id"], f"{len(pending)} 个 issue 尚未开始，配置允许 issue planning 通过后自动派发。"
+        return "await_issue_dispatch_confirmation", pending[0]["issue_id"], f"{len(pending)} 个 issue 尚未开始，等待人工确认是否开始 issue execution。"
 
     completed = [issue for issue in issues if issue.get("status") == "completed"]
     if completed and len(completed) == len(issues):
         verify_artifact = read_json(verify_artifact_path(repo_root, change))
         if verify_artifact and verification_artifact_is_current(issues, verify_artifact):
             if verify_artifact.get("status") == "passed":
+                if auto_archive_after_verify:
+                    return "archive_change", "", "全部 issue 已完成且 change 已通过 verify，配置允许自动 archive。"
                 return "ready_for_archive", "", "全部 issue 已完成且 change 已通过 verify。"
             return "resolve_verify_failure", "", "全部 issue 已完成，但最近一次 verify 未通过。"
-        return "verify_change", completed[0]["issue_id"], "全部 issue 已完成，可进入 verify。"
+        if auto_run_change_verify:
+            return "verify_change", completed[0]["issue_id"], "全部 issue 已完成，配置允许自动进入 verify。"
+        return "await_verify_confirmation", completed[0]["issue_id"], "全部 issue 已完成，等待人工确认后再运行 verify。"
 
     return "inspect_change", issues[0]["issue_id"], "需要 coordinator 人工检查当前 change 状态。"
 
@@ -169,7 +191,7 @@ def main() -> None:
     gate_mode = str(config.get("rra", {}).get("gate_mode", "advisory"))
 
     counts = count_statuses(issues)
-    base_next_action, base_recommended_issue_id, base_reason = determine_base_next_action(repo_root, args.change, issues)
+    base_next_action, base_recommended_issue_id, base_reason = determine_base_next_action(repo_root, args.change, issues, config)
     control_gate = determine_control_gate(control_state, issues)
     next_action = base_next_action
     recommended_issue_id = base_recommended_issue_id
@@ -200,6 +222,18 @@ def main() -> None:
         "control": {
             **control_state,
             "gate": control_gate_payload,
+        },
+        "automation_profile": automation_profile(config),
+        "automation": {
+            "after_design_review": bool(config.get("subagent_team", {}).get("auto_advance_after_design_review", False)),
+            "after_issue_planning_review": bool(
+                config.get("subagent_team", {}).get("auto_advance_after_issue_planning_review", False)
+            ),
+            "to_next_issue_after_issue_pass": bool(
+                config.get("subagent_team", {}).get("auto_advance_to_next_issue_after_issue_pass", False)
+            ),
+            "run_change_verify": bool(config.get("subagent_team", {}).get("auto_run_change_verify", False)),
+            "archive_after_verify": bool(config.get("subagent_team", {}).get("auto_archive_after_verify", False)),
         },
         "issues": issues,
     }

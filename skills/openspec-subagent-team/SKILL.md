@@ -19,6 +19,7 @@ Read these first:
 - make subagent team orchestration the primary path for complex issue-mode work
 - keep round scope, backlog, and review decisions on disk
 - avoid relying on detached worker fallback infrastructure
+- let `subagent_team.*` govern the whole lifecycle from spec-readiness through archive
 
 ## Workflow
 
@@ -31,39 +32,48 @@ Read these first:
    ```
 3. Read the packet it generates under:
    - `openspec/changes/<change>/control/SUBAGENT-TEAM.dispatch.md`
-4. If the current phase is issue execution, also render the issue packet:
+4. Treat the rendered phase as the source of truth for where the change currently is:
+   - `spec_readiness`
+   - `issue_planning`
+   - `issue_execution`
+   - `change_acceptance`
+   - `change_verify`
+   - `ready_for_archive`
+5. If the current phase is issue execution, also render the issue packet:
    ```bash
    python3 .codex/skills/openspec-dispatch-issue/scripts/render_subagent_team_dispatch.py \
      --repo-root . \
      --change "<change-name>" \
      --issue-id "<issue-id>"
    ```
-5. Keep the main agent as control plane owner:
+6. Keep the main agent as control plane owner:
    - define or confirm the round target
    - dedupe findings into one normalized backlog
    - decide stop / continue
-6. Use a fixed topology by default:
+7. Use a fixed topology by default:
    - development group: 3 subagents
    - check group: 3 subagents
    - review group: 3 subagents
-7. Run the loop:
+8. Run the loop:
    - development
    - check
    - repair
    - review
    - if review fails, go back to development
-8. Developers that implement code for the issue must follow `openspec-execute-issue` and write issue progress/run artifacts.
-9. Coordinator keeps merge, commit, verify, archive, and change-level control artifacts.
+9. Developers that implement code for the issue must follow `openspec-execute-issue` and write issue progress/run artifacts.
+10. Coordinator keeps merge, commit, verify, archive, and change-level control artifacts.
 
 ## Rules
 
 - Only use this path when the user explicitly asks for subagents / team collaboration, or when the request already assumes subagent-team orchestration.
-- `subagent_team.auto_advance_after_design_review` controls whether spec-readiness review passes should automatically continue into issue planning. Default should stay `false` unless the repo explicitly wants unattended continuation after design review.
+- `subagent_team.*` now controls full-process auto-advance, not just the design-review checkpoint.
+- `semi_auto` means the lifecycle pauses after each review gate; `full_auto` means the lifecycle auto-continues across `spec_readiness -> issue_planning -> issue_execution -> change_acceptance -> change_verify -> archive` while still respecting RRA gates.
 - One issue stays one bounded execution unit even when multiple subagents participate in the round.
 - Do not pass raw checker notes directly to developers; normalize first.
 - Reject style-only churn unless it affects correctness, delivery risk, or acceptance.
 - If the loop stalls after two or three rounds, shrink scope or tighten the review target instead of expanding the backlog.
 - Do not replace coordinator-owned merge/commit/verify/archive with worker self-management.
+- Keep `worker_worktree` as the issue boundary; it is part of the active contract, not legacy baggage.
 
 ## Output
 

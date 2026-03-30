@@ -143,7 +143,11 @@ class LoadIssueModeConfigTest(unittest.TestCase):
                     "gate_mode": "enforce"
                   },
                   "subagent_team": {
-                    "auto_advance_after_design_review": true
+                    "auto_advance_after_design_review": true,
+                    "auto_advance_after_issue_planning_review": true,
+                    "auto_advance_to_next_issue_after_issue_pass": true,
+                    "auto_run_change_verify": true,
+                    "auto_archive_after_verify": true
                   },
                   "codex_home": "~/.codex",
                   "persistent_host": {
@@ -168,6 +172,10 @@ class LoadIssueModeConfigTest(unittest.TestCase):
         self.assertEqual(config["worker_worktree"]["branch_prefix"], "demo")
         self.assertEqual(config["rra"]["gate_mode"], "enforce")
         self.assertTrue(config["subagent_team"]["auto_advance_after_design_review"])
+        self.assertTrue(config["subagent_team"]["auto_advance_after_issue_planning_review"])
+        self.assertTrue(config["subagent_team"]["auto_advance_to_next_issue_after_issue_pass"])
+        self.assertTrue(config["subagent_team"]["auto_run_change_verify"])
+        self.assertTrue(config["subagent_team"]["auto_archive_after_verify"])
         self.assertNotIn("codex_home", config)
         self.assertNotIn("persistent_host", config)
         self.assertNotIn("coordinator_heartbeat", config)

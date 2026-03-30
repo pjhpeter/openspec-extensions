@@ -162,8 +162,19 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "subagent_team": {
         "auto_advance_after_design_review": False,
+        "auto_advance_after_issue_planning_review": False,
+        "auto_advance_to_next_issue_after_issue_pass": False,
+        "auto_run_change_verify": False,
+        "auto_archive_after_verify": False,
     },
 }
+SUBAGENT_TEAM_AUTOMATION_FIELDS = (
+    "auto_advance_after_design_review",
+    "auto_advance_after_issue_planning_review",
+    "auto_advance_to_next_issue_after_issue_pass",
+    "auto_run_change_verify",
+    "auto_archive_after_verify",
+)
 
 
 def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -427,6 +438,43 @@ def normalize_bool(value: object, default: bool) -> bool:
     return default
 
 
+def normalize_subagent_team_flags(raw: object) -> dict[str, bool]:
+    values = raw if isinstance(raw, dict) else {}
+    defaults = DEFAULT_CONFIG["subagent_team"]
+    return {
+        "auto_advance_after_design_review": normalize_bool(
+            values.get("auto_advance_after_design_review", defaults["auto_advance_after_design_review"]),
+            bool(defaults["auto_advance_after_design_review"]),
+        ),
+        "auto_advance_after_issue_planning_review": normalize_bool(
+            values.get("auto_advance_after_issue_planning_review", defaults["auto_advance_after_issue_planning_review"]),
+            bool(defaults["auto_advance_after_issue_planning_review"]),
+        ),
+        "auto_advance_to_next_issue_after_issue_pass": normalize_bool(
+            values.get("auto_advance_to_next_issue_after_issue_pass", defaults["auto_advance_to_next_issue_after_issue_pass"]),
+            bool(defaults["auto_advance_to_next_issue_after_issue_pass"]),
+        ),
+        "auto_run_change_verify": normalize_bool(
+            values.get("auto_run_change_verify", defaults["auto_run_change_verify"]),
+            bool(defaults["auto_run_change_verify"]),
+        ),
+        "auto_archive_after_verify": normalize_bool(
+            values.get("auto_archive_after_verify", defaults["auto_archive_after_verify"]),
+            bool(defaults["auto_archive_after_verify"]),
+        ),
+    }
+
+
+def automation_profile(config: dict[str, Any]) -> str:
+    gate_mode = str(config.get("rra", {}).get("gate_mode", "advisory")).strip() or "advisory"
+    subagent_team = config.get("subagent_team", {})
+    if all(bool(subagent_team.get(field, False)) for field in SUBAGENT_TEAM_AUTOMATION_FIELDS) and gate_mode == "enforce":
+        return "full_auto"
+    if not any(bool(subagent_team.get(field, False)) for field in SUBAGENT_TEAM_AUTOMATION_FIELDS) and gate_mode == "advisory":
+        return "semi_auto"
+    return "custom"
+
+
 def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
     config_path = repo_root / CONFIG_RELATIVE_PATH
     config = dict(DEFAULT_CONFIG)
@@ -462,16 +510,7 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
     if gate_mode not in {"advisory", "enforce"}:
         raise SystemExit(f"{CONFIG_RELATIVE_PATH} field `rra.gate_mode` must be `advisory` or `enforce`.")
 
-    subagent_team = config.get("subagent_team", {})
-    if not isinstance(subagent_team, dict):
-        subagent_team = {}
-    auto_advance_after_design_review = normalize_bool(
-        subagent_team.get(
-            "auto_advance_after_design_review",
-            DEFAULT_CONFIG["subagent_team"]["auto_advance_after_design_review"],
-        ),
-        bool(DEFAULT_CONFIG["subagent_team"]["auto_advance_after_design_review"]),
-    )
+    subagent_team = normalize_subagent_team_flags(config.get("subagent_team", {}))
 
     return {
         "worktree_root": worktree_root,
@@ -484,9 +523,7 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
         "rra": {
             "gate_mode": gate_mode,
         },
-        "subagent_team": {
-            "auto_advance_after_design_review": auto_advance_after_design_review,
-        },
+        "subagent_team": subagent_team,
         "config_path": str(CONFIG_RELATIVE_PATH),
         "config_exists": config_path.exists(),
     }

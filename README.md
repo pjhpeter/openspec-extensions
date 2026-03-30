@@ -57,22 +57,9 @@
 9. 主会话 review、merge、commit。
 10. 所有必要 issue 都 accept 后，再做 change 级 acceptance，然后进入 `verify` / `archive`。
 
-## 为什么还保留 worktree
-
-虽然 detached worker fallback 已经移除，但 `worker_worktree` 仍然保留，因为它现在承担的是 issue 隔离边界，而不是旧 runtime 的兼容层：
-
-- dispatch 仍需要明确 issue 的执行根目录
-- team dispatch 仍需要显式告诉 subagent 代码边界
-- coordinator merge 仍从 issue worktree 收敛可接受改动
-
-所以现在的关系是：
-
-- 已删除：detached/background worker fallback
-- 仍保留：issue worktree 隔离
-
 ## 配置契约
 
-当前支持的 `openspec/issue-mode.json` 字段只有：
+当前支持的 `openspec/issue-mode.json` 字段如下：
 
 ```json
 {
@@ -87,7 +74,11 @@
     "gate_mode": "advisory"
   },
   "subagent_team": {
-    "auto_advance_after_design_review": false
+    "auto_advance_after_design_review": false,
+    "auto_advance_after_issue_planning_review": false,
+    "auto_advance_to_next_issue_after_issue_pass": false,
+    "auto_run_change_verify": false,
+    "auto_archive_after_verify": false
   }
 }
 ```
@@ -96,20 +87,106 @@
 
 - `worktree_root`、`worker_worktree.*` 仍是 active 配置
 - `validation_commands` 是 issue 默认校验命令
+- `worker_worktree` 继续保留，不再作为 fallback 遗留物，而是作为 issue 隔离边界和 coordinator merge 的收敛目录
 - `rra.gate_mode` 控制 RRA 这个 change-level control plane 是“给建议”还是“做硬门禁”
   - `advisory`：
     - 继续计算 round backlog / round scope / verify 放行这些 gate
     - 但只把结果写进 dispatch packet 和 reconcile 输出，不直接阻断流程
-    - 适合希望流程尽量无人值守推进、由 coordinator 自己决定是否接受建议的场景
+    - 适合半自动模式，或者你希望 coordinator 可以看到 gate 结论但保留人工裁量的场景
   - `enforce`：
     - 命中 gate 时会把 RRA 结论变成硬约束
     - 例如当前 round 还有 `Must fix now` 未处理，或某个 issue 不在当前 round scope 内，就会直接阻止 dispatch
     - 所有 issue 做完但 round 还没明确放行 verify 时，也会强制下一步先回到 change-level acceptance
-    - 适合你希望整个生命周期严格服从 round contract，而不是允许 coordinator 自行越过 gate 的场景
+    - 适合全自动模式，或者你希望整个生命周期严格服从 round contract 的场景
   - 可以把它理解成：
     - `advisory` = 红灯会提示，但不会强制拦车
     - `enforce` = 红灯就是红灯，不满足条件就不能继续
-- `subagent_team.auto_advance_after_design_review` 控制 design review 通过后是否自动进入 issue planning
+- `subagent_team.*` 控制 subagent team 是否自动跨 phase 推进：
+  - `auto_advance_after_design_review`：spec-readiness 通过后自动进入 issue planning
+  - `auto_advance_after_issue_planning_review`：issue planning 通过后自动派发当前 round 的 issue
+  - `auto_advance_to_next_issue_after_issue_pass`：单个 issue 审查通过后自动进入下一个 issue 或 change acceptance
+  - `auto_run_change_verify`：change acceptance 通过后自动进入 verify
+  - `auto_archive_after_verify`：verify 通过后自动进入 archive
+- runtime 会基于这些值派生一个 automation profile：
+  - `semi_auto`：`rra.gate_mode=advisory` 且五个 `subagent_team` 开关全为 `false`
+  - `full_auto`：`rra.gate_mode=enforce` 且五个 `subagent_team` 开关全为 `true`
+  - `custom`：其余任意组合
+
+## 配置示例
+
+### 半自动配置
+
+适合需要人工查看设计文档、人工确认 issue planning、人工决定 verify / archive 的项目。
+
+```json
+{
+  "worktree_root": ".worktree",
+  "validation_commands": ["pnpm lint", "pnpm type-check"],
+  "worker_worktree": {
+    "mode": "detach",
+    "base_ref": "HEAD",
+    "branch_prefix": "opsx"
+  },
+  "rra": {
+    "gate_mode": "advisory"
+  },
+  "subagent_team": {
+    "auto_advance_after_design_review": false,
+    "auto_advance_after_issue_planning_review": false,
+    "auto_advance_to_next_issue_after_issue_pass": false,
+    "auto_run_change_verify": false,
+    "auto_archive_after_verify": false
+  }
+}
+```
+
+说明：
+
+- spec-readiness review 通过后会暂停，等待 coordinator 人工确认，再进入 issue planning
+- issue-planning review 通过后会暂停，等待 coordinator 人工确认后再派发 issue
+- 单个 issue 审查通过后会暂停，等待 coordinator 决定是否派发下一 issue
+- change acceptance 通过后会暂停，等待 coordinator 决定是否运行 verify
+- verify 通过后会暂停，等待 coordinator 决定是否 archive
+- RRA gate 会持续给出 round backlog / round scope / verify 放行建议，但不会硬性阻断流程
+- `worker_worktree` 继续保留，作为 issue 隔离边界和 coordinator merge 的收敛目录
+
+### 全自动配置
+
+适合目标是“真正无人值守推进整个复杂变更生命周期”的项目。这里的关键不是去掉 coordinator，而是让 coordinator 根据 `subagent_team.*` 开关自动跨阶段推进。
+
+```json
+{
+  "worktree_root": ".worktree",
+  "validation_commands": ["pnpm lint", "pnpm type-check"],
+  "worker_worktree": {
+    "mode": "detach",
+    "base_ref": "HEAD",
+    "branch_prefix": "opsx"
+  },
+  "rra": {
+    "gate_mode": "enforce"
+  },
+  "subagent_team": {
+    "auto_advance_after_design_review": true,
+    "auto_advance_after_issue_planning_review": true,
+    "auto_advance_to_next_issue_after_issue_pass": true,
+    "auto_run_change_verify": true,
+    "auto_archive_after_verify": true
+  }
+}
+```
+
+说明：
+
+- `rra.gate_mode=enforce` 让全自动推进仍然服从 round contract，而不是无条件往下跑
+- `subagent_team` 现在已经覆盖：
+  - design review 通过后自动进入 issue planning
+  - issue planning review 通过后自动派发当前 round 的 issue
+  - 单个 issue 审查通过后自动进入下一个 issue 或 change acceptance
+  - change acceptance 通过后自动进入 verify
+  - verify 通过后自动 archive
+- coordinator 仍然存在，只是不再需要在每个 review gate 之间人工点下一步
+- 如果 RRA gate 不允许继续，流程会回到 change-level control，而不是盲目前推
 
 ## 安装到目标项目
 
@@ -160,16 +237,11 @@ python3 scripts/install_openspec_extensions.py \
 openspec/changes/*/runs/CHANGE-VERIFY.json
 ```
 
-## 当前收敛方向
+## 当前状态
 
-现在这套扩展的方向是：
+现在这套扩展的稳定执行模型是：
 
 - 主链只有 coordinator + subagents
-- 自动推进能力应继续收敛到 `subagent_team.*`
-- worktree 只作为 issue 边界，不再承载 detached runtime 兼容
-
-下一阶段如果继续简化，重点不再是删 fallback，而是判断：
-
-1. 是否还要保留 issue worktree
-2. coordinator merge 是否还能进一步去 worktree 化
-3. `subagent_team` 还需要哪些生命周期开关
+- `worker_worktree` 作为 issue 边界与 merge 隔离层继续保留
+- `subagent_team.*` 覆盖 `spec_readiness -> issue_planning -> issue_execution -> change_acceptance -> verify -> archive` 全流程
+- 通过 `openspec/issue-mode.json` 可以切换 `semi_auto`、`full_auto` 或自定义混合模式

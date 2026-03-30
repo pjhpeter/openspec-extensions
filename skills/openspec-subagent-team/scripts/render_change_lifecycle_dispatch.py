@@ -14,6 +14,7 @@ if str(SHARED_SCRIPTS) not in sys.path:
 
 from coordinator_change_common import read_json, verification_artifact_is_current, verify_artifact_path  # noqa: E402
 from issue_mode_common import (  # noqa: E402
+    automation_profile,
     display_path,
     latest_round_artifact_path,
     load_issue_mode_config,
@@ -38,6 +39,7 @@ def parse_args() -> argparse.Namespace:
             "issue_planning",
             "issue_execution",
             "change_acceptance",
+            "change_verify",
             "ready_for_archive",
         ],
         default="auto",
@@ -101,12 +103,14 @@ def collect_issues(repo_root: Path, change: str) -> list[dict[str, Any]]:
 
 def current_verify_state(repo_root: Path, change: str, issues: list[dict[str, Any]]) -> dict[str, Any]:
     verify_payload = read_json(verify_artifact_path(repo_root, change))
+    current = bool(verify_payload) and verification_artifact_is_current(issues, verify_payload)
+    status = str(verify_payload.get("status", "")).strip() if verify_payload else ""
     return {
         "artifact": verify_payload,
-        "current": bool(verify_payload) and verification_artifact_is_current(issues, verify_payload),
-        "passed": bool(verify_payload)
-        and verification_artifact_is_current(issues, verify_payload)
-        and str(verify_payload.get("status", "")).strip() == "passed",
+        "current": current,
+        "status": status,
+        "passed": current and status == "passed",
+        "failed": current and status == "failed",
     }
 
 
@@ -130,7 +134,15 @@ def focus_issue_id(issues: list[dict[str, Any]]) -> str:
     return ""
 
 
-def determine_phase(repo_root: Path, change: str, issues: list[dict[str, Any]], explicit_issue_id: str) -> tuple[str, str, str]:
+def determine_phase(
+    repo_root: Path,
+    change: str,
+    issues: list[dict[str, Any]],
+    explicit_issue_id: str,
+    *,
+    control_state: dict[str, Any],
+    config: dict[str, Any],
+) -> tuple[str, str, str]:
     change_dir = repo_root / "openspec" / "changes" / change
     proposal_path = change_dir / "proposal.md"
     design_path = change_dir / "design.md"
@@ -151,8 +163,14 @@ def determine_phase(repo_root: Path, change: str, issues: list[dict[str, Any]], 
         return "issue_execution", selected_issue_id, "仍有 issue 未完成，继续执行当前 issue 回合。"
 
     verify_state = current_verify_state(repo_root, change, issues)
+    latest_round = control_state.get("latest_round", {})
+    auto_run_change_verify = bool(config.get("subagent_team", {}).get("auto_run_change_verify", False))
     if verify_state["passed"]:
         return "ready_for_archive", "", "最新 verify 已通过，change 可以进入归档收尾。"
+    if verify_state["failed"]:
+        return "change_verify", "", "最近一次 verify 未通过，需要修复并重新验证。"
+    if auto_run_change_verify and (not control_state.get("enabled") or bool(latest_round.get("allows_verify", False))):
+        return "change_verify", "", "全部 issue 已完成，配置允许自动进入 verify 阶段。"
     return "change_acceptance", "", "全部 issue 已完成，进入 change 级 acceptance / verify 放行。"
 
 
@@ -165,7 +183,7 @@ def phase_target_mode(control_state: dict[str, Any], phase: str) -> str:
         return "mvp"
     if phase == "issue_planning":
         return "release"
-    if phase == "change_acceptance":
+    if phase in {"change_acceptance", "change_verify", "ready_for_archive"}:
         return "release"
     return "quality"
 
@@ -183,6 +201,8 @@ def phase_goal(phase: str, change: str, issue_id: str, control_state: dict[str, 
         return f"推进 {issue_id or '当前 issue'} 完成开发、检查、修复、审查回合。"
     if phase == "change_acceptance":
         return f"确认 {change} 已达到 verify / archive 前的 change 级通过条件。"
+    if phase == "change_verify":
+        return f"对 {change} 运行 change 级 verify，并处理验证失败或遗漏项。"
     return f"{change} 已满足归档前条件，执行最终收尾。"
 
 
@@ -212,6 +232,12 @@ def phase_acceptance_criteria(phase: str, issue_id: str, issues: list[dict[str, 
             "change 级 Must fix now 已清空",
             "可以放行 verify",
         ]
+    if phase == "change_verify":
+        return [
+            "repository validation commands 全部通过",
+            "tasks.md 不再包含未勾选项",
+            "CHANGE-VERIFY.json 为当前 issue 集合的最新验证结果",
+        ]
     return [
         "最新 verify 已通过",
         "遗留 debt 已显式记录",
@@ -233,7 +259,19 @@ def phase_scope_items(phase: str, change_dir: Path, issue_id: str, issues: list[
         ]
     if phase == "issue_execution":
         return [issue_id] if issue_id else [issue.get("issue_id", "") for issue in issues if issue.get("issue_id")]
+    if phase == "change_verify":
+        return ["control/BACKLOG.md", "tasks.md", "runs/CHANGE-VERIFY.json", "repo validation commands"]
     return ["change-level accepted issues", "control/BACKLOG.md", "latest control/ROUND-*.md"]
+
+
+def phase_command_hints(repo_root: Path, change: str, phase: str) -> list[str]:
+    if phase == "change_verify":
+        return [
+            f'python3 .codex/skills/openspec-shared/scripts/coordinator_verify_change.py --repo-root "{repo_root}" --change "{change}"'
+        ]
+    if phase == "ready_for_archive":
+        return [f'openspec archive "{change}"']
+    return []
 
 
 def bullet_list(items: list[str]) -> str:
@@ -265,9 +303,21 @@ def render_phase_packet(
     must_fix_now = backlog.get("must_fix_now", {}).get("open_items", [])
     should_fix_if_cheap = backlog.get("should_fix_if_cheap", {}).get("open_items", [])
     deferred_items = backlog.get("defer", {}).get("open_items", [])
-    auto_advance_after_design_review = bool(
-        config.get("subagent_team", {}).get("auto_advance_after_design_review", False)
+    subagent_team = config.get("subagent_team", {})
+    auto_advance_after_design_review = bool(subagent_team.get("auto_advance_after_design_review", False))
+    auto_advance_after_issue_planning_review = bool(
+        subagent_team.get("auto_advance_after_issue_planning_review", False)
     )
+    auto_advance_to_next_issue_after_issue_pass = bool(
+        subagent_team.get("auto_advance_to_next_issue_after_issue_pass", False)
+    )
+    auto_run_change_verify = bool(subagent_team.get("auto_run_change_verify", False))
+    auto_archive_after_verify = bool(subagent_team.get("auto_archive_after_verify", False))
+    automation_mode = automation_profile(config)
+    command_hints = phase_command_hints(repo_root, change, phase)
+    coordinator_commands_section = ""
+    if command_hints:
+        coordinator_commands_section = f"## Coordinator Commands\n\n{bullet_list(command_hints)}\n\n"
 
     phase_next_step = {
         "spec_readiness": (
@@ -275,10 +325,31 @@ def render_phase_packet(
             if auto_advance_after_design_review
             else "审查通过后暂停，等待人工确认后再进入 issue planning"
         ),
-        "issue_planning": "审查通过后进入 issue execution",
-        "issue_execution": "审查通过后进入下一个 issue 或 change acceptance",
-        "change_acceptance": "审查通过后运行 verify，随后 archive",
-        "ready_for_archive": "直接 archive 或做最终 closeout",
+        "issue_planning": (
+            "审查通过后自动派发当前 round 已批准的 issue"
+            if auto_advance_after_issue_planning_review
+            else "审查通过后暂停，等待人工确认后再进入 issue execution"
+        ),
+        "issue_execution": (
+            "审查通过后自动进入下一个 issue 或 change acceptance"
+            if auto_advance_to_next_issue_after_issue_pass
+            else "审查通过后暂停，等待人工确认是否继续派发下一个 issue"
+        ),
+        "change_acceptance": (
+            "审查通过后自动运行 verify"
+            if auto_run_change_verify
+            else "审查通过后暂停，等待人工确认后再运行 verify"
+        ),
+        "change_verify": (
+            "verify 通过后自动进入 archive"
+            if auto_archive_after_verify
+            else "verify 通过后暂停，等待人工确认后再 archive"
+        ),
+        "ready_for_archive": (
+            "直接进入 archive / closeout"
+            if auto_archive_after_verify
+            else "等待人工确认后再 archive / closeout"
+        ),
     }[phase]
 
     phase_specific_rules = {
@@ -294,17 +365,39 @@ def render_phase_packet(
         "issue_planning": [
             "开发组负责修订 INDEX 和 ISSUE 文档。",
             "检查组确认 allowed_scope / out_of_scope / done_when / validation 可执行。",
-            "审查组通过后才允许 dispatch issue。",
+            (
+                "审查组通过后自动派发当前 round 已批准的 issue。"
+                if auto_advance_after_issue_planning_review
+                else "审查组通过后默认停住，先让 coordinator 人工确认，再 dispatch issue。"
+            ),
         ],
         "issue_execution": [
             "开发组可以按 issue team dispatch 调起实现型 subagent。",
             "检查组优先看回归、范围泄漏、证据缺口。",
+            (
+                "审查组通过后自动进入下一个 issue 或 change acceptance。"
+                if auto_advance_to_next_issue_after_issue_pass
+                else "审查组通过后默认停住，让 coordinator 先确认是否派发下一个 issue。"
+            ),
             "审查组不通过则回到开发组下一轮。",
         ],
         "change_acceptance": [
             "开发组只补 change-level 收尾，不再随意扩 issue scope。",
             "检查组确认已接受 issue 能覆盖请求范围。",
-            "审查组通过后才允许 verify。",
+            (
+                "审查组通过后自动切到 verify 阶段。"
+                if auto_run_change_verify
+                else "审查组通过后默认停住，让 coordinator 先确认是否运行 verify。"
+            ),
+        ],
+        "change_verify": [
+            "开发组只处理 verify 失败所暴露的缺口，不再随意新增 issue。",
+            "检查组负责运行并检查 repo validation、tasks completion、verify artifact。",
+            (
+                "verify 通过后自动进入 archive 阶段。"
+                if auto_archive_after_verify
+                else "verify 通过后默认停住，让 coordinator 先确认是否 archive。"
+            ),
         ],
         "ready_for_archive": [
             "不再新增 issue。",
@@ -330,6 +423,8 @@ def render_phase_packet(
   - `{phase}`
 - Phase reason:
   - {phase_reason}
+- Automation profile:
+  - `{automation_mode}`
 - Target mode:
   - `{target_mode}`
 - Round goal:
@@ -357,8 +452,13 @@ def render_phase_packet(
 - 审查通过才允许进入下一 phase。
 - 审查不通过则回到开发组下一轮。
 - backlog / round / stop decision 必须落盘，不留在聊天里。
-- 设计文档评审后的自动推进开关：
+- 当前自动推进开关：
   - `subagent_team.auto_advance_after_design_review={str(auto_advance_after_design_review).lower()}`
+  - `subagent_team.auto_advance_after_issue_planning_review={str(auto_advance_after_issue_planning_review).lower()}`
+  - `subagent_team.auto_advance_to_next_issue_after_issue_pass={str(auto_advance_to_next_issue_after_issue_pass).lower()}`
+  - `subagent_team.auto_run_change_verify={str(auto_run_change_verify).lower()}`
+  - `subagent_team.auto_archive_after_verify={str(auto_archive_after_verify).lower()}`
+  - `rra.gate_mode={str(config.get("rra", {}).get("gate_mode", "advisory")).strip() or "advisory"}`
 
 ## Current Backlog
 
@@ -372,7 +472,7 @@ def render_phase_packet(
 ## Phase-Specific Rules
 {bullet_list(phase_specific_rules)}
 
-{issue_team_section}## Required Output
+{coordinator_commands_section}{issue_team_section}## Required Output
 
 1. Phase target
 2. Normalized backlog
@@ -427,7 +527,14 @@ def main() -> None:
     issues = collect_issues(repo_root, args.change)
 
     if args.phase == "auto":
-        phase, detected_issue_id, phase_reason = determine_phase(repo_root, args.change, issues, args.issue_id)
+        phase, detected_issue_id, phase_reason = determine_phase(
+            repo_root,
+            args.change,
+            issues,
+            args.issue_id,
+            control_state=control_state,
+            config=config,
+        )
     else:
         phase = args.phase
         detected_issue_id = args.issue_id.strip()
@@ -474,7 +581,16 @@ def main() -> None:
         else "",
         "auto_advance": {
             "after_design_review": bool(config.get("subagent_team", {}).get("auto_advance_after_design_review", False)),
+            "after_issue_planning_review": bool(
+                config.get("subagent_team", {}).get("auto_advance_after_issue_planning_review", False)
+            ),
+            "to_next_issue_after_issue_pass": bool(
+                config.get("subagent_team", {}).get("auto_advance_to_next_issue_after_issue_pass", False)
+            ),
+            "run_change_verify": bool(config.get("subagent_team", {}).get("auto_run_change_verify", False)),
+            "archive_after_verify": bool(config.get("subagent_team", {}).get("auto_archive_after_verify", False)),
         },
+        "automation_profile": automation_profile(config),
         "control_state": control_state,
         "issue_count": len(issues),
         "dry_run": args.dry_run,
