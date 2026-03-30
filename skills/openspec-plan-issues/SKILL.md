@@ -35,7 +35,7 @@ Read `../openspec-chat-router/references/issue-mode-contract.md`, `../openspec-c
 ## Rules
 
 - Coordinator owns issue planning.
-- Design review by the 3 review subagents must pass before this skill becomes the next step.
+- Design review by the dedicated `1` author + `2` reviewers subagent team must pass before this skill becomes the next step.
 - `tasks.md` belongs to issue planning in the complex-change path; it should be created or refreshed from the approved design review before dispatching issues.
 - Split the change into bounded, worker-facing issue docs that stay stable across fresh sessions.
 - Prefer 2-5 issues for a normal complex change. Split further only when boundaries are still mixed.

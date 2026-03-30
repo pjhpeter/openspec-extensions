@@ -32,6 +32,14 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
 6. Update coordinator-owned files only, such as `tasks.md`, change-level summaries, and control artifacts.
 7. Follow the helper result:
    - `resolve_blocker` -> stop and surface blocker
+   - `review_change_code` -> run change-level code review now:
+     ```bash
+     python3 .codex/skills/openspec-shared/scripts/coordinator_review_change.py \
+       --repo-root . \
+       --change "<change-name>"
+     ```
+     then rerun reconcile immediately
+   - `resolve_change_review_failure` -> inspect `runs/CHANGE-REVIEW.json`, fix the blocking review findings, then rerun reconcile before verify
    - `resolve_verify_failure` -> inspect the verify artifact and fix the failing validation or unchecked tasks
    - `auto_accept_issue` -> run `coordinator_merge_issue.py` immediately, then rerun reconcile and keep advancing without waiting for user confirmation
    - `coordinator_review` -> review the issue, then either accept it with `coordinator_merge_issue.py` or create `Must fix now` backlog items and send it back to repair
@@ -57,6 +65,7 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
 - If the helper finds no issue artifacts, fall back to normal OpenSpec routing.
 - If `auto_accept_issue_review=true` and the helper emits `auto_accept_issue`, do not stop to ask the user; merge/commit the issue immediately and continue.
 - If coordinator review accepts an issue, merge and commit it before dispatching the next dependent issue or moving to `verify`.
+- Do not move from "all issues completed" to `verify` until `runs/CHANGE-REVIEW.json` exists, is current, and has `status=passed`.
 - Read `automation_profile` and `automation` from the helper output before deciding whether a pause is intentional or indicates a stuck flow.
 
 ## Output Style

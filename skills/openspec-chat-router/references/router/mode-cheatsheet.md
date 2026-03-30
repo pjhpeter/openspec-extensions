@@ -8,6 +8,7 @@
 - 如果 `openspec/issue-mode.json` 里启用了 `subagent_team.auto_accept_*`，对应 gate 会由 coordinator 自动接受并继续，不再等待人工评审确认
 - 但某些 runtime 对真实拉起 subagent / delegation 仍要求你在当前会话里显式授权
 - 对长时间 subagent 任务，某些 runtime / session 还可能使用较短等待并提前返回；要真正无人值守，最好显式要求长阻塞等待，例如 1 小时
+- 某些 runtime 还会让 spawned subagent 继承当前会话的全局 `reasoning_effort`；如果你希望非编码 subagent 不要都跑成 `xhigh`，要在 spawn 时显式覆写
 - 如果你希望当前会话一定走多 agent 编排，直接说：
   - `按 issue 模式继续，并启用 subagent-team`
   - `这个 change 用 subagent team 推进`
@@ -37,10 +38,10 @@
 开始实现当前 change；如果任务规模仍然简单，就不要进入 issue-mode，直接完成实现并运行校验。
 ```
 
-4. 收尾
+4. review / verify / archive 收尾
 
 ```text
-检查当前 change 是否可以归档；如果 verify 通过，就同步 spec 并归档。
+先对当前 change 修改的代码执行 /review；review 通过后再检查当前 change 是否可以归档；如果 verify 通过，就同步 spec 并归档。
 ```
 
 ### 复杂任务全生命周期链路
@@ -68,6 +69,8 @@
 ```text
 按当前 openspec/issue-mode.json 配置继续当前 change。
 默认入口使用 subagent-team，按全自动方式推进整个生命周期。
+设计文档编写 subagent 和编码 subagent 使用 xhigh，其他 subagent 使用 Medium。
+在所有 issues 完成后，先对当前 change 修改的代码执行 /review，通过后再进入 verify。
 对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
 ```
 

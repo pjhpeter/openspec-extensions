@@ -21,6 +21,7 @@ SKILL_NAMES = [
 ]
 GITIGNORE_ENTRIES = [
     ".worktree/",
+    "openspec/changes/*/runs/CHANGE-REVIEW.json",
     "openspec/changes/*/runs/CHANGE-VERIFY.json",
 ]
 LEGACY_RUNTIME_PATHS = [

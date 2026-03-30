@@ -11,7 +11,13 @@ SHARED_SCRIPTS = Path(__file__).resolve().parents[2] / "openspec-shared" / "scri
 if str(SHARED_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SHARED_SCRIPTS))
 
-from coordinator_change_common import read_json, verification_artifact_is_current, verify_artifact_path  # noqa: E402
+from coordinator_change_common import (  # noqa: E402
+    read_json,
+    review_artifact_is_current,
+    review_artifact_path,
+    verification_artifact_is_current,
+    verify_artifact_path,
+)
 from issue_mode_common import automation_profile, load_issue_mode_config, read_change_control_state  # noqa: E402
 
 PASSING_VALIDATION_STATUSES = {
@@ -99,6 +105,19 @@ def issue_validation_passed(issue: dict[str, Any]) -> bool:
     return True
 
 
+def current_review_state(repo_root: Path, change: str, issues: list[dict[str, Any]]) -> dict[str, Any]:
+    review_payload = read_json(review_artifact_path(repo_root, change))
+    current = bool(review_payload) and review_artifact_is_current(issues, review_payload)
+    status = str(review_payload.get("status", "")).strip() if review_payload else ""
+    return {
+        "artifact": review_payload,
+        "current": current,
+        "status": status,
+        "passed": current and status == "passed",
+        "failed": current and status == "failed",
+    }
+
+
 def determine_base_next_action(
     repo_root: Path,
     change: str,
@@ -157,6 +176,14 @@ def determine_base_next_action(
 
     completed = [issue for issue in issues if issue.get("status") == "completed"]
     if completed and len(completed) == len(issues):
+        review_state = current_review_state(repo_root, change, issues)
+        if review_state["failed"]:
+            return "resolve_change_review_failure", "", "全部 issue 已完成，但最近一次 change-level /review 未通过。"
+        if not review_state["passed"]:
+            if review_state["artifact"]:
+                return "review_change_code", "", "全部 issue 已完成，但 change-level /review 工件已过期，需要重新运行。"
+            return "review_change_code", "", "全部 issue 已完成，需先运行 change-level /review 再决定是否 verify。"
+
         verify_artifact = read_json(verify_artifact_path(repo_root, change))
         if verify_artifact and verification_artifact_is_current(issues, verify_artifact):
             if verify_artifact.get("status") == "passed":
@@ -229,12 +256,19 @@ def main() -> None:
     recommended_issue_id = base_recommended_issue_id
     reason = base_reason
     if control_gate is not None and gate_mode == "enforce":
-        next_action, recommended_issue_id, reason = control_gate
-
+        if not (
+            next_action in {"review_change_code", "resolve_change_review_failure"}
+            and control_gate[0] == "change_acceptance_required"
+        ):
+            next_action, recommended_issue_id, reason = control_gate
     control_gate_payload = {
         "mode": gate_mode,
         "active": control_gate is not None,
-        "enforced": control_gate is not None and gate_mode == "enforce",
+        "enforced": control_gate is not None and gate_mode == "enforce" and not (
+            next_action in {"review_change_code", "resolve_change_review_failure"}
+            and control_gate is not None
+            and control_gate[0] == "change_acceptance_required"
+        ),
         "action": control_gate[0] if control_gate is not None else "",
         "recommended_issue_id": control_gate[1] if control_gate is not None else "",
         "reason": control_gate[2] if control_gate is not None else "",

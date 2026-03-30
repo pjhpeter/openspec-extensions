@@ -11,6 +11,14 @@
 
 这里不再保留 detached worker、heartbeat、monitor-worker 这一套 fallback runtime。
 
+## Subagent 推理强度约定
+
+- 设计文档编写 subagent 使用 `reasoning_effort=xhigh`
+- 任何会修改 repo 代码或测试的 subagent 使用 `reasoning_effort=xhigh`
+- 设计评审、任务拆分、检查组、审查组、变更验收、归档收尾等非编码 subagent 使用 `reasoning_effort=medium`
+- 这不是 `openspec/issue-mode.json` 的配置项，而是当前 skill / dispatch 契约
+- coordinator 拉起 subagent 时要显式设置 `reasoning_effort`，不要直接继承当前会话的全局默认值
+
 ## 仓库里有什么
 
 ```text
@@ -47,7 +55,7 @@
 复杂任务的默认路径是：
 
 1. 主会话先把 proposal / design 补到可评审状态。
-2. 主会话进入 change 级 spec-readiness；这里的审查组固定是 3 个 review subagent，设计评审通过后才能做任务拆分。
+2. 主会话进入 change 级 spec-readiness；这里使用 1 个设计作者 subagent 和 2 个设计评审 subagent，设计评审通过后才能做任务拆分。
 3. 用 `plan-issues` 生成或修订 `tasks.md`、`issues/INDEX.md` 和各个 `ISSUE-*.md`。
 4. 主会话做 issue-planning review，确认任务拆分、边界、ownership、依赖和 acceptance。
 5. 只为当前 round 已批准的 issue 创建或复用 worktree，并生成 dispatch / team dispatch。
@@ -55,7 +63,7 @@
 7. worker 只写 issue-local progress 和 run 工件，不自合并、不自提交。
 8. 主会话用 `reconcile` 从磁盘工件收敛状态，并整理 change 级 backlog / round verdict。
 9. 主会话 review、merge、commit。
-10. 所有必要 issue 都 accept 后，再做 change 级 acceptance，然后进入 `verify` / `archive`。
+10. 所有必要 issue 都 accept 后，先对当前 change 修改的代码运行一次 `/review`，再做 change 级 acceptance，然后进入 `verify` / `archive`。
 
 ## 运行时注意点
 
@@ -63,6 +71,7 @@
 - 但某些 Codex / agent runtime 会把“真实拉起 subagent / delegation”视为更高优先级的权限动作
 - 这类 runtime 可能仍要求用户在当前会话里显式表达“启用 subagent / subagent-team / 多 agent 编排”
 - 对长时间运行的 subagent 任务，如果当前 runtime / session 没有默认长等待策略，还需要显式要求 coordinator 对 subagent 使用长阻塞等待，否则可能在 subagent 完成前就提前返回
+- 某些 runtime 还会让 spawned subagent 继承当前会话的全局 `reasoning_effort`；如果你希望非编码 subagent 不要都跑成 `xhigh`，必须在 spawn 时显式覆写
 - 所以你可能会看到两层语义同时存在：
   - skill 认为默认入口应该是 `subagent-team`
   - runtime 仍因为缺少显式授权而退回本地 coordinator 执行路径
@@ -101,16 +110,16 @@
 开始实现当前 change；如果任务规模仍然简单，就不要进入 issue-mode，直接完成实现并运行校验。
 ```
 
-4. verify / archive 收尾
+4. review / verify / archive 收尾
 
 ```text
-检查当前 change 是否可以归档；如果 verify 通过，就同步 spec 并归档。
+先对当前 change 修改的代码执行 /review；review 通过后再检查当前 change 是否可以归档；如果 verify 通过，就同步 spec 并归档。
 ```
 
 5. 如果中途会话返回过早，继续推进
 
 ```text
-继续当前 change，保持 OpenSpec 主链推进，直接完成剩余实现、verify 和 archive。
+继续当前 change，保持 OpenSpec 主链推进，先完成 review，再做 verify 和 archive。
 ```
 
 ### 复杂任务全生命周期链路
@@ -140,6 +149,8 @@
 ```text
 按当前 openspec/issue-mode.json 配置继续当前 change。
 默认入口使用 subagent-team，按全自动方式推进整个生命周期。
+设计文档编写 subagent 和编码 subagent 使用 xhigh，其他 subagent 使用 Medium。
+在所有 issues 完成后，先对当前 change 修改的代码执行 /review，通过后再进入 verify。
 对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
 ```
 
@@ -202,10 +213,10 @@
     - `advisory` = 红灯会提示，但不会强制拦车
     - `enforce` = 红灯就是红灯，不满足条件就不能继续
 - `subagent_team.*` 控制 subagent team 是否自动接受当前 gate 并跨 phase 推进：
-  - `auto_accept_spec_readiness`：proposal / design 经过 3 个 review subagent 的设计评审后，自动接受 spec-readiness，不再等待人工评审签字，直接进入任务拆分 / issue planning
+  - `auto_accept_spec_readiness`：proposal / design 经过 1 个设计作者和 2 个设计评审组成的 design review 后，自动接受 spec-readiness，不再等待人工评审签字，直接进入任务拆分 / issue planning
   - `auto_accept_issue_planning`：`tasks.md` 以及 INDEX / ISSUE 文档达到可派发状态后，自动接受 issue planning，不再等待人工评审签字，直接派发当前 round 的 issue
   - `auto_accept_issue_review`：issue 进入 `review_required` 且 issue-local validation 全部通过后，coordinator 自动接受并 merge/commit，然后进入下一个 issue 或 change acceptance
-  - `auto_accept_change_acceptance`：change acceptance 满足放行条件后，自动接受该 gate 并进入 verify
+  - `auto_accept_change_acceptance`：change acceptance 满足放行条件后自动接受该 gate 并进入 verify；但前提仍然是 change-level `/review` 已通过
   - `auto_archive_after_verify`：verify 通过后自动进入 archive
 - `subagent_team.*` 不负责决定默认入口拓扑：
   - issue-mode 下，coordinator 默认入口就是 `openspec-subagent-team`
@@ -287,6 +298,7 @@
   - spec-readiness 中的设计评审自动接受后进入任务拆分 / issue planning
   - issue planning 自动接受后派发当前 round 的 issue
   - 单个 issue 自动接受并 merge/commit 后进入下一个 issue 或 change acceptance
+  - 所有 issues 完成后先运行 change-level `/review`
   - change acceptance 自动接受后进入 verify
   - verify 通过后自动 archive
 - coordinator 仍然存在，只是不再需要在每个 review gate 之间人工点下一步或人工签字
@@ -339,6 +351,7 @@ python3 scripts/install_openspec_extensions.py \
 ```text
 .worktree/
 openspec/changes/*/runs/CHANGE-VERIFY.json
+openspec/changes/*/runs/CHANGE-REVIEW.json
 ```
 
 ## 当前状态

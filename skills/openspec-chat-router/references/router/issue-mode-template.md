@@ -4,20 +4,21 @@
 
 说明：
 
-- 简单任务通常不需要进入这里，直接在 OpenSpec 主链完成 proposal / design / tasks -> apply -> verify / archive 更合适
+- 简单任务通常不需要进入这里，直接在 OpenSpec 主链完成 proposal / design / tasks -> apply -> review -> verify / archive 更合适
 - 这里主要用于复杂任务，也就是需要拆 issue、跑 subagent-team、并按完整生命周期推进的 change
 
 推荐方式：
 
-1. 主会话先补齐 proposal / design，并做 change 级 design review；这里的审查组固定是 3 个 review subagent。如果 `auto_accept_spec_readiness=true`，这一关不需要人工签字
+1. 主会话先补齐 proposal / design，并做 change 级 design review；这里使用 1 个设计作者 subagent 和 2 个设计评审 subagent。设计作者使用 `reasoning_effort=xhigh`，设计评审使用 `reasoning_effort=medium`。如果 `auto_accept_spec_readiness=true`，这一关不需要人工签字
 2. design review 通过后，再把复杂实现拆成 `tasks.md` 和多个 issue，并对任务拆分边界做一轮 review；如果 `auto_accept_issue_planning=true`，这一关不需要人工签字
 3. 主会话维护 change 级 backlog / round report，不把门禁判断只留在聊天里
 4. 主会话只为当前 round 已批准的 issue 创建或复用 worker worktree，并渲染 subagent-team lifecycle packet / `ISSUE-*.team.dispatch.md`
-5. 默认用 subagent team 驱动开发 / 检查 / 修复 / 审查小组，作为整个 complex change 的协调入口
+5. 默认用 subagent team 驱动开发 / 检查 / 修复 / 审查小组，作为整个 complex change 的协调入口；任何编码 subagent 使用 `reasoning_effort=xhigh`，其余规划/检查/审查 subagent 使用 `reasoning_effort=medium`
 6. 只有在显式收窄到单个实现 worker 时，才让一个 issue 开一个 subagent，并且只在该 worktree 内工作
 7. worker 只写 issue-local progress 和 run 工件，不直接合并、不直接提交
 8. 主会话用 reconcile 收敛状态；如果 `auto_accept_issue_review=true` 且 issue-local validation 通过，主会话应直接自动 merge/commit 并继续下一轮
-9. 所有 issue 都被主会话接受后，再做一轮 change 级 acceptance；如果 `auto_accept_change_acceptance=true`，这一关不需要人工签字，然后进入 verify / archive
+9. 所有 issue 都被主会话接受后，先对当前 change 修改的代码运行一次 `/review`，把结果落成 `runs/CHANGE-REVIEW.json`
+10. change-level `/review` 通过后，再做一轮 change 级 acceptance；如果 `auto_accept_change_acceptance=true`，这一关不需要人工签字，然后进入 verify / archive
 
 如果你要的是“从进入 OpenSpec 模式开始”的复杂任务完整链路，直接复制下面这一套：
 
@@ -44,6 +45,8 @@
 ```text
 按当前 openspec/issue-mode.json 配置继续当前 change。
 默认入口使用 subagent-team，按全自动方式推进整个生命周期。
+设计文档编写 subagent 和编码 subagent 使用 xhigh，其他 subagent 使用 Medium。
+在所有 issues 完成后，先对当前 change 修改的代码执行 /review，通过后再进入 verify。
 对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
 ```
 

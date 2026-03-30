@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+REVIEW_ARTIFACT_FILE_NAME = "CHANGE-REVIEW.json"
 VERIFY_ARTIFACT_FILE_NAME = "CHANGE-VERIFY.json"
 TASK_ID_PATTERN = r"\d+(?:\.\d+)+"
 
@@ -41,6 +42,10 @@ def change_dir_path(repo_root: Path, change: str) -> Path:
 
 def verify_artifact_path(repo_root: Path, change: str) -> Path:
     return change_dir_path(repo_root, change) / "runs" / VERIFY_ARTIFACT_FILE_NAME
+
+
+def review_artifact_path(repo_root: Path, change: str) -> Path:
+    return change_dir_path(repo_root, change) / "runs" / REVIEW_ARTIFACT_FILE_NAME
 
 
 def issue_task_mapping(change_dir: Path) -> dict[str, list[str]]:
@@ -162,7 +167,7 @@ def latest_issue_updated_at(issues: list[dict[str, Any]]) -> datetime | None:
     return latest
 
 
-def verification_artifact_is_current(issues: list[dict[str, Any]], artifact: dict[str, Any]) -> bool:
+def artifact_is_current(issues: list[dict[str, Any]], artifact: dict[str, Any]) -> bool:
     verified_at = parse_iso8601(str(artifact.get("updated_at", "")))
     if verified_at is None:
         return False
@@ -170,3 +175,11 @@ def verification_artifact_is_current(issues: list[dict[str, Any]], artifact: dic
     if latest_issue_at is None:
         return True
     return verified_at >= latest_issue_at
+
+
+def review_artifact_is_current(issues: list[dict[str, Any]], artifact: dict[str, Any]) -> bool:
+    return artifact_is_current(issues, artifact)
+
+
+def verification_artifact_is_current(issues: list[dict[str, Any]], artifact: dict[str, Any]) -> bool:
+    return artifact_is_current(issues, artifact)

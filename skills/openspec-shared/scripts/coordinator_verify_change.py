@@ -17,6 +17,8 @@ from coordinator_change_common import (  # noqa: E402
     incomplete_tasks,
     now_iso,
     read_json,
+    review_artifact_is_current,
+    review_artifact_path,
     sync_tasks_for_issues,
     verify_artifact_path,
     write_json,
@@ -97,22 +99,35 @@ def main() -> None:
     tasks_sync = sync_tasks_for_issues(repo_root, args.change, completed_issue_ids, dry_run=args.dry_run)
     tasks_path = change_dir / "tasks.md"
     remaining_tasks = incomplete_tasks(tasks_path)
+    review_payload = read_json(review_artifact_path(repo_root, args.change))
+    review_current = bool(review_payload) and review_artifact_is_current(issues, review_payload)
+    review_status = str(review_payload.get("status", "")).strip() if review_payload else ""
+    review_passed = review_current and review_status == "passed"
+    has_incomplete_issues = bool(incomplete_issue_ids)
 
     config = load_issue_mode_config(repo_root)
     validation_commands = list(config["validation_commands"])
     validation_results: list[dict[str, Any]] = []
-    if not args.dry_run:
+    if not args.dry_run and not has_incomplete_issues and review_passed:
         validation_results = [run_validation_command(command, repo_root) for command in validation_commands]
 
     validation_failed = any(item["status"] != "passed" for item in validation_results)
     has_incomplete_tasks = bool(remaining_tasks)
-    has_incomplete_issues = bool(incomplete_issue_ids)
 
     status = "passed"
     summary = f"Change {args.change} passed coordinator verify."
     if has_incomplete_issues:
         status = "failed"
         summary = f"Change {args.change} cannot verify: {len(incomplete_issue_ids)} issue(s) not completed."
+    elif not review_payload:
+        status = "failed"
+        summary = f"Change {args.change} cannot verify: change-level /review has not been run."
+    elif not review_current:
+        status = "failed"
+        summary = f"Change {args.change} cannot verify: change-level /review is stale."
+    elif review_status != "passed":
+        status = "failed"
+        summary = f"Change {args.change} cannot verify: change-level /review did not pass."
     elif has_incomplete_tasks:
         status = "failed"
         summary = f"Change {args.change} verify failed: tasks.md still has unchecked tasks."
@@ -130,6 +145,12 @@ def main() -> None:
         "dry_run": args.dry_run,
         "completed_issue_ids": completed_issue_ids,
         "incomplete_issue_ids": incomplete_issue_ids,
+        "change_review": {
+            "path": str(review_artifact_path(repo_root, args.change).relative_to(repo_root)),
+            "current": review_current,
+            "status": review_status,
+            "summary": str(review_payload.get("summary", "")).strip() if review_payload else "",
+        },
         "tasks_sync": tasks_sync,
         "remaining_tasks": remaining_tasks,
         "validation": validation_results,

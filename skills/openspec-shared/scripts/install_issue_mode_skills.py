@@ -18,6 +18,7 @@ SKILL_DIRECTORIES = [
 CONFIG_PATH = Path("openspec/issue-mode.json")
 GITIGNORE_ENTRIES = [
     ".worktree/",
+    "openspec/changes/*/runs/CHANGE-REVIEW.json",
     "openspec/changes/*/runs/CHANGE-VERIFY.json",
 ]
 LEGACY_RUNTIME_PATHS = [

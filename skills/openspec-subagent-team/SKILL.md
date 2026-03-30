@@ -51,18 +51,22 @@ Read these first:
    - dedupe findings into one normalized backlog
    - decide stop / continue
    - when an enabled `auto_accept_*` gate becomes eligible, continue immediately instead of asking the user to review first
-7. Use a fixed topology by default:
-   - development group: 3 subagents
-   - check group: 3 subagents
-   - review group: 3 subagents
-8. Run the loop:
+7. Use a phase-specific topology:
+   - `spec_readiness`: 1 design author (`reasoning_effort=xhigh`) + 2 design reviewers (`reasoning_effort=medium`)
+   - `issue_planning`: development/check/review all `reasoning_effort=medium`
+   - `issue_execution`: code-writing development group `reasoning_effort=xhigh`, check/review `reasoning_effort=medium`
+   - `change_acceptance` / `ready_for_archive`: development/check/review all `reasoning_effort=medium`
+   - `change_verify`: code-fix development group `reasoning_effort=xhigh`, check/review `reasoning_effort=medium`
+8. When spawning subagents, explicitly set `reasoning_effort` instead of inheriting the session default.
+9. Run the loop:
    - development
    - check
    - repair
    - review
    - if review fails, go back to development
-9. Developers that implement code for the issue must follow `openspec-execute-issue` and write issue progress/run artifacts.
-10. Coordinator keeps merge, commit, verify, archive, and change-level control artifacts.
+10. Developers that implement code for the issue must follow `openspec-execute-issue` and write issue progress/run artifacts.
+11. After all issues are complete, run a change-level `/review` and write `runs/CHANGE-REVIEW.json` before verify.
+12. Coordinator keeps merge, commit, verify, archive, and change-level control artifacts.
 
 ## Rules
 
@@ -70,17 +74,21 @@ Read these first:
 - Use the single-worker issue path only when the user explicitly narrows execution to one bounded issue worker, or the current step clearly only needs one issue-local implementation context.
 - `subagent_team.*` now controls full-process auto-accept and continuation, not just the design-review checkpoint.
 - `semi_auto` means the lifecycle pauses after each review gate; `full_auto` means the lifecycle auto-continues across `spec_readiness -> issue_planning -> issue_execution -> change_acceptance -> change_verify -> archive` while still respecting RRA gates.
-- `spec_readiness` is the design-review gate in the complex-change path: proposal/design are prepared first, then 3 review subagents must pass it before task splitting begins.
+- `spec_readiness` is the design-review gate in the complex-change path: proposal/design are prepared first, then a dedicated `1` author + `2` reviewers subagent team must pass it before task splitting begins.
 - `issue_planning` starts after design review passes, and is where coordinator-owned `tasks.md` plus `issues/INDEX.md` and `ISSUE-*.md` are produced/reviewed.
-- `auto_accept_spec_readiness=true` means spec-readiness does not wait for human sign-off once proposal/design have passed the 3-subagent design review.
+- design-author subagents use `reasoning_effort=xhigh`.
+- code-writing subagents use `reasoning_effort=xhigh`.
+- design reviewers, planning authors, checkers, reviewers, and closeout-only subagents use `reasoning_effort=medium`.
+- `auto_accept_spec_readiness=true` means spec-readiness does not wait for human sign-off once proposal/design have passed the `1` author + `2` reviewers design review.
 - `auto_accept_issue_planning=true` means issue planning does not wait for human sign-off once tasks.md plus INDEX/ISSUE docs are dispatch-ready.
 - `auto_accept_issue_review=true` means eligible `review_required` issues are coordinator-accepted, merged, and committed automatically once issue-local validation passes.
-- `auto_accept_change_acceptance=true` means change acceptance does not wait for human sign-off once verify is allowed.
+- `auto_accept_change_acceptance=true` means change acceptance does not wait for human sign-off once a passed change-level `/review` has already made verify allowed.
 - One issue stays one bounded execution unit even when multiple subagents participate in the round.
 - Do not pass raw checker notes directly to developers; normalize first.
 - Reject style-only churn unless it affects correctness, delivery risk, or acceptance.
 - If the loop stalls after two or three rounds, shrink scope or tighten the review target instead of expanding the backlog.
 - Do not replace coordinator-owned merge/commit/verify/archive with worker self-management.
+- Do not skip the change-level `/review` step between "all issues completed" and `verify`.
 - Keep `worker_worktree` as the issue boundary; it is part of the active contract, not legacy baggage.
 
 ## Output

@@ -62,6 +62,7 @@ openspec/changes/<change-name>/
 │   ├── ISSUE-001.progress.json
 │   └── ISSUE-002.progress.json
 └── runs/
+    ├── CHANGE-REVIEW.json
     ├── RUN-20260325T103000-ISSUE-001.json
     └── RUN-20260325T111500-ISSUE-002.json
 ```
@@ -84,7 +85,7 @@ Worker worktrees should normally live under the project root:
    - any `blocked` -> stop and resolve blocker
    - any `review_required` -> if `subagent_team.auto_accept_issue_review=true` and issue-local validation passed, accept/merge/commit it automatically; otherwise review it in the coordinator session first
    - any issue doc without progress -> dispatch that next issue
-   - all issues `completed` -> run a change-level acceptance round before moving to `verify`
+   - all issues `completed` -> run a change-level acceptance round plus a change-level `/review` before moving to `verify`
    - if the latest verify artifact is current and passed -> move to `ready_for_archive`
    - if the latest verify artifact is current and failed -> stop and resolve verify failure
 
@@ -131,4 +132,5 @@ Issue progress files are the execution state.
 Control backlog and round reports are the acceptance state.
 Team dispatch artifacts are the coordinator handoff state for the default subagent-team rounds in issue mode.
 In issue mode, accepted code lands through coordinator review plus coordinator-owned merge and commit, not through worker self-merge.
+Before verify, the coordinator must also write a current `runs/CHANGE-REVIEW.json` artifact from a change-level `/review` of the current change diff.
 When `subagent_team.auto_accept_*` is enabled, the gate is still coordinator-owned; it simply no longer waits for human chat confirmation before the coordinator accepts it.

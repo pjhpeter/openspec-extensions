@@ -38,7 +38,7 @@ If this file is missing, the helpers fall back to these defaults:
 - `worker_worktree.base_ref`: base ref passed to `git worktree add`.
 - `worker_worktree.branch_prefix`: prefix used when `mode=branch`.
 - `rra.gate_mode`: `advisory` or `enforce`.
-- `subagent_team.auto_accept_spec_readiness`: automatically accept the spec-readiness gate once proposal/design have passed the 3-subagent design review, then continue into task splitting / issue planning without waiting for human sign-off.
+- `subagent_team.auto_accept_spec_readiness`: automatically accept the spec-readiness gate once proposal/design have passed the dedicated `1` author + `2` reviewers design review, then continue into task splitting / issue planning without waiting for human sign-off.
 - `subagent_team.auto_accept_issue_planning`: automatically accept the issue-planning gate once `tasks.md` plus INDEX/ISSUE docs are dispatch-ready, then dispatch the approved issue set without waiting for human sign-off.
 - `subagent_team.auto_accept_issue_review`: automatically accept an eligible `review_required` issue after its issue-local validation passes, then merge/commit it and continue to the next issue or change acceptance.
 - `subagent_team.auto_accept_change_acceptance`: automatically accept the change-acceptance gate and continue into change-level verify.
@@ -60,6 +60,12 @@ Important:
 - `subagent_team.*` controls auto-advance behavior after the coordinator has already entered the subagent-team flow
 - it does not choose the default coordinator entry topology
 - in issue mode, the default coordinator entry is `openspec-subagent-team` regardless of whether the active automation profile is `semi_auto`, `full_auto`, or `custom`
+- even when `auto_accept_change_acceptance=true`, a passed change-level `/review` is still required before verify
+- role-based `reasoning_effort` is currently a skill/dispatch contract, not an `issue-mode.json` field:
+  - design-author subagent: `xhigh`
+  - any code-writing implementation or verify-fix subagent: `xhigh`
+  - design reviewers, planning authors, checkers, reviewers, and closeout-only subagents: `medium`
+  - coordinator should pass these values explicitly when spawning, because many runtimes otherwise inherit the session-wide default
 
 ## Automation Profiles
 
@@ -104,9 +110,10 @@ Use this when a human should still inspect design readiness, issue planning, iss
 
 Behavior:
 
-- spec-readiness waits for human acceptance after the 3-subagent design review, then issue planning can start task splitting
+- spec-readiness waits for human acceptance after the `1` author + `2` reviewers design review, then issue planning can start task splitting
 - issue planning waits for human acceptance before first dispatch
 - issue review waits for human acceptance before dispatching the next issue
+- after all issues are done, coordinator must first run a passed change-level `/review`
 - change acceptance waits for human acceptance before verify
 - verify pass pauses before archive
 - RRA keeps emitting guidance, but does not hard-block progression
@@ -142,7 +149,8 @@ Behavior:
 - spec-readiness is auto-accepted after design review and immediately enters task splitting / issue planning
 - issue planning is auto-accepted and immediately dispatches approved issues
 - eligible issue review is auto-accepted and immediately merges/continues
-- change acceptance is auto-accepted and immediately enters verify
+- after all issues are done, coordinator still runs change-level `/review`; only a passed review can auto-advance into verify
+- change acceptance is auto-accepted and immediately enters verify once that review has passed
 - verify pass automatically advances into archive
 
 ## Lifecycle Switch Map

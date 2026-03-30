@@ -1,4 +1,4 @@
 interface:
   display_name: "OpenSpec Subagent Team"
   short_description: "Default coordinator entry for complex issue-mode work"
-  default_prompt: "Use $openspec-subagent-team as the default coordinator path for this OpenSpec complex change, running development, check, repair, and review rounds through the lifecycle."
+  default_prompt: "Use $openspec-subagent-team as the default coordinator path for this OpenSpec complex change, running development, check, repair, and review rounds through the lifecycle. Launch the design-author subagent and any code-writing subagent with reasoning_effort=xhigh, and launch all other planning/check/review subagents with reasoning_effort=medium."

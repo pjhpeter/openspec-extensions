@@ -51,6 +51,7 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - Workers must write issue-local progress and run artifacts. They must not directly update `tasks.md`, self-merge, or create the final git commit.
 - Before a coordinator continues a change that already has issue artifacts, reconcile worker state from disk first and read change-level control artifacts if present instead of trusting chat memory.
 - Use `openspec/issue-mode.json` only for active repo defaults: worktree location, validation commands, worktree creation mode, RRA gate mode, and subagent-team auto-accept switches.
+- When delegation is used, explicitly launch the design-author subagent and any code-writing subagent with `reasoning_effort=xhigh`; all other design/planning/check/review/closeout-only subagents should use `reasoning_effort=medium`.
 - If the intent is still ambiguous after doing all non-blocked work, ask exactly one short targeted question.
 
 ## Intent Routing
@@ -79,8 +80,8 @@ Prefer the project-local companion skill first when the route becomes concrete:
 ## Default Heuristics
 
 - “没想清楚 / 先聊聊 / 先梳理一下” -> `explore`
-- Small task -> `propose` -> `apply` -> `archive`
-- Large task -> `new` -> `ff` -> `apply` -> `verify` -> `archive`
+- Small task -> `propose` -> `apply` -> review current code -> `verify` -> `archive`
+- Large task -> `new` -> `ff` -> `apply` -> review current code -> `verify` -> `archive`
 - “继续刚才那个 / 继续这个 change / 下一个文档” -> `continue`
 - “开始做 / 开始实现 / 直接落地” -> `apply`
 - “拆成 issue / 给出 issue 边界 / 生成 issue 文档” -> `plan-issues`
@@ -97,14 +98,14 @@ Prefer the project-local companion skill first when the route becomes concrete:
 Preferred flow:
 
 1. Use the main session to get the change to proposal/design-ready state.
-2. Run a change-level spec-readiness design review with 3 review subagents and keep a normalized backlog for that gate.
+2. Run a change-level spec-readiness design review with a dedicated `1` design-author subagent plus `2` design-review subagents, and keep a normalized backlog for that gate.
 3. Only after design review passes, split implementation into coordinator-owned `tasks.md` plus issue-sized units with clear boundaries.
 4. Review the issue plan before dispatching issue work.
 5. For each approved issue, create or reuse the worker git worktree before handoff.
 6. By default, render the subagent-team lifecycle packet and use it as the coordinator control packet for the current phase.
 7. Use one worker subagent for one approved issue only when the user explicitly narrows execution to that one issue, or the current step is already a bounded issue-worker handoff.
 8. After the worker reports `review_required`, either let the coordinator review it manually or, when `subagent_team.auto_accept_issue_review=true` and issue-local validation passed, auto-accept/merge/commit it immediately.
-9. Repeat for the next approved issue, then run a change-level acceptance round before `verify` and `archive`.
+9. Repeat for the next approved issue, then run a change-level `/review` plus a change-level acceptance round before `verify` and `archive`.
 
 ## Special Path: `mode`
 
@@ -149,6 +150,7 @@ Summary rule:
 - treat `subagent-team` as the default issue-mode coordinator entry
 - keep the main agent as control plane owner
 - use subagent teams only for the approved round scope
+- use role-based launch settings: design-author and code-writing subagents `xhigh`, all other subagents `medium`
 
 ## Special Path: `reconcile`
 

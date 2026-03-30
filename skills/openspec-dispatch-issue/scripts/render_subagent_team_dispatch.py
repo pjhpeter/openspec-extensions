@@ -149,18 +149,25 @@ def render_dispatch(
   - Developer 1: core implementation owner
   - Developer 2: dependent module or integration owner
   - Developer 3: tests, fixtures, cleanup owner
+  - Launch with `reasoning_effort=xhigh`
+  - Why: 当前 issue round 预期会修改 repo 代码、测试或集成实现。
 - Check group: 3 subagents
   - Checker 1: functional correctness, main path, edge cases
   - Checker 2: regression risk, tests, validation evidence gaps
   - Checker 3: scope leak, integration and operational evidence gaps
+  - Launch with `reasoning_effort=medium`
+  - Why: checker 只负责缺口识别、证据核对和最小修复建议。
 - Review group: 3 subagents
   - Reviewer 1: requested scope pass / fail
   - Reviewer 2: architecture and delivery risk pass / fail
   - Reviewer 3: evidence completeness and closeout readiness pass / fail
+  - Launch with `reasoning_effort=medium`
+  - Why: reviewer 只负责裁决、风险判断和收尾准备度检查。
 
 ## Coordinator Responsibilities
 
 - 主代理负责 orchestration、scope control、issue dedupe、normalized backlog、stop decision。
+- 拉起 subagent 时必须显式设置 `reasoning_effort`，不要直接继承当前会话的全局默认值。
 - 标准循环是：开发 -> 检查 -> 修复 -> 审查。
 - 检查组结果必须先统一归并，再交给开发组修复；不要把原始检查碎片直接下发。
 - 审查组负责最终通过/不通过判断；审查不通过就回到开发组开始下一轮。
@@ -184,6 +191,7 @@ def render_dispatch(
 ## Check Packet Rules
 
 - 所有 checker 都读同一份 round contract 和 issue contract。
+- checker subagent 启动时显式使用 `reasoning_effort=medium`。
 - 只输出：
   - defect / gap 或 none
   - 为什么它会阻塞当前 `{target_mode}` 目标
@@ -195,6 +203,7 @@ def render_dispatch(
 
 - 先完成当前 issue 范围内的开发，再只处理 coordinator 批准进入本轮 backlog 的问题。
 - 尽量按文件/模块 ownership 分配，减少写集重叠。
+- 负责实现或修复 repo 代码的 development subagent 必须显式使用 `reasoning_effort=xhigh`。
 - 执行代码实现的 subagent 必须先写：
   - `python3 .codex/skills/openspec-execute-issue/scripts/update_issue_progress.py start --repo-root "{repo_root}" --change "{change}" --issue-id "{issue_id}" --status in_progress --boundary-status working --next-action continue_issue --summary "已进入 subagent team repair round。"`
 - 停止前必须写：
@@ -203,6 +212,7 @@ def render_dispatch(
 
 ## Review Packet Rules
 
+- reviewer subagent 启动时显式使用 `reasoning_effort=medium`。
 - 审查组只回答：
   - verdict: `pass` / `pass with noted debt` / `fail`
   - evidence
@@ -295,6 +305,11 @@ def main() -> None:
         "validation_source": validation_source,
         "control_gate": dispatch_gate,
         "control_state": control_state,
+        "reasoning_policy": {
+            "development_group": "xhigh",
+            "check_group": "medium",
+            "review_group": "medium",
+        },
         "config_path": config["config_path"],
         "dry_run": args.dry_run,
     }

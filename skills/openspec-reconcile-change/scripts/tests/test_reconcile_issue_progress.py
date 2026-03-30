@@ -69,6 +69,26 @@ def write_issue_mode_config(repo_root: Path, payload: dict[str, object]) -> None
     config_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
+def write_change_review_artifact(
+    repo_root: Path,
+    change: str,
+    *,
+    status: str = "passed",
+    updated_at: str = "2026-03-30T10:05:00+08:00",
+) -> None:
+    review_path = repo_root / "openspec" / "changes" / change / "runs" / "CHANGE-REVIEW.json"
+    review_path.parent.mkdir(parents=True, exist_ok=True)
+    review_path.write_text(json.dumps(
+        {
+            "change": change,
+            "status": status,
+            "updated_at": updated_at,
+        },
+        ensure_ascii=False,
+        indent=2,
+    ))
+
+
 class ReconcileIssueProgressTest(unittest.TestCase):
     def run_script(self, repo_root: Path, change: str = "demo-change") -> dict[str, object]:
         process = subprocess.run(
@@ -151,6 +171,7 @@ class ReconcileIssueProgressTest(unittest.TestCase):
             repo_root = Path(tmpdir)
             write_issue_doc(repo_root, "demo-change")
             write_issue_progress(repo_root, "demo-change", status="completed")
+            write_change_review_artifact(repo_root, "demo-change")
 
             manual_payload = self.run_script(repo_root)
 
@@ -175,6 +196,7 @@ class ReconcileIssueProgressTest(unittest.TestCase):
             runs_dir = change_dir / "runs"
             write_issue_doc(repo_root, "demo-change")
             write_issue_progress(repo_root, "demo-change", status="completed", updated_at="2026-03-30T10:00:00+08:00")
+            write_change_review_artifact(repo_root, "demo-change", updated_at="2026-03-30T10:03:00+08:00")
             runs_dir.mkdir(parents=True, exist_ok=True)
             (runs_dir / "CHANGE-VERIFY.json").write_text(json.dumps(
                 {
@@ -197,6 +219,17 @@ class ReconcileIssueProgressTest(unittest.TestCase):
 
         self.assertEqual(payload["next_action"], "archive_change")
         self.assertTrue(payload["automation"]["archive_after_verify"])
+
+    def test_all_completed_requires_change_review_before_verify(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            write_issue_doc(repo_root, "demo-change")
+            write_issue_progress(repo_root, "demo-change", status="completed")
+
+            payload = self.run_script(repo_root)
+
+        self.assertEqual(payload["next_action"], "review_change_code")
+        self.assertIn("需先运行 change-level /review", payload["reason"])
 
 
 if __name__ == "__main__":

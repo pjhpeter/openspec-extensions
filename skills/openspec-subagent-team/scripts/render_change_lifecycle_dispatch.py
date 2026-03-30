@@ -12,7 +12,13 @@ SHARED_SCRIPTS = Path(__file__).resolve().parents[2] / "openspec-shared" / "scri
 if str(SHARED_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SHARED_SCRIPTS))
 
-from coordinator_change_common import read_json, verification_artifact_is_current, verify_artifact_path  # noqa: E402
+from coordinator_change_common import (  # noqa: E402
+    read_json,
+    review_artifact_is_current,
+    review_artifact_path,
+    verification_artifact_is_current,
+    verify_artifact_path,
+)
 from issue_mode_common import (  # noqa: E402
     automation_profile,
     display_path,
@@ -114,6 +120,19 @@ def current_verify_state(repo_root: Path, change: str, issues: list[dict[str, An
     }
 
 
+def current_review_state(repo_root: Path, change: str, issues: list[dict[str, Any]]) -> dict[str, Any]:
+    review_payload = read_json(review_artifact_path(repo_root, change))
+    current = bool(review_payload) and review_artifact_is_current(issues, review_payload)
+    status = str(review_payload.get("status", "")).strip() if review_payload else ""
+    return {
+        "artifact": review_payload,
+        "current": current,
+        "status": status,
+        "passed": current and status == "passed",
+        "failed": current and status == "failed",
+    }
+
+
 def focus_issue_id(issues: list[dict[str, Any]]) -> str:
     def choose(predicate: Any) -> str:
         for issue in issues:
@@ -153,7 +172,7 @@ def determine_phase(
     if missing_core:
         return "spec_readiness", "", f"变更基础文档未齐全：{', '.join(missing_core)}。"
     if not tasks_path.exists():
-        return "spec_readiness", "", "设计文档已齐全，但必须先经过 3 个 review subagent 评审；评审通过后才能进行任务拆分。"
+        return "spec_readiness", "", "设计文档已齐全，但必须先经过 1 个设计作者和 2 个设计评审组成的 subagent team；评审通过后才能进行任务拆分。"
 
     issue_docs = [issue for issue in issues if issue.get("issue_path")]
     if not issues_index_path.exists() or not issue_docs:
@@ -163,6 +182,14 @@ def determine_phase(
     incomplete = [issue for issue in issues if str(issue.get("status", "")).strip() != "completed"]
     if incomplete:
         return "issue_execution", selected_issue_id, "仍有 issue 未完成，继续执行当前 issue 回合。"
+
+    review_state = current_review_state(repo_root, change, issues)
+    if review_state["failed"]:
+        return "change_acceptance", "", "全部 issue 已完成，但最近一次 change-level /review 未通过，需要先修复 review findings。"
+    if not review_state["passed"]:
+        if review_state["artifact"]:
+            return "change_acceptance", "", "全部 issue 已完成，但 change-level /review 工件已过期，需要重新运行后再决定是否 verify。"
+        return "change_acceptance", "", "全部 issue 已完成，需先对当前 change 修改的代码运行 /review，然后才能进入 verify。"
 
     verify_state = current_verify_state(repo_root, change, issues)
     latest_round = control_state.get("latest_round", {})
@@ -202,9 +229,9 @@ def phase_goal(phase: str, change: str, issue_id: str, control_state: dict[str, 
     if phase == "issue_execution":
         return f"推进 {issue_id or '当前 issue'} 完成开发、检查、修复、审查回合。"
     if phase == "change_acceptance":
-        return f"确认 {change} 已达到 verify / archive 前的 change 级通过条件。"
+        return f"先对 {change} 当前代码运行 /review，再确认它已达到 verify / archive 前的 change 级通过条件。"
     if phase == "change_verify":
-        return f"对 {change} 运行 change 级 verify，并处理验证失败或遗漏项。"
+        return f"在已通过 change-level /review 后，对 {change} 运行 change 级 verify，并处理验证失败或遗漏项。"
     return f"{change} 已满足归档前条件，执行最终收尾。"
 
 
@@ -213,7 +240,7 @@ def phase_acceptance_criteria(phase: str, issue_id: str, issues: list[dict[str, 
         return [
             "proposal / design 齐全且相互一致",
             "范围、约束、非目标足够清楚，足以进入任务拆分",
-            "3 个 review subagent 对设计给出通过结论，允许进入 plan-issues",
+            "2 个 design review subagent 都给出通过结论，允许进入 plan-issues",
         ]
     if phase == "issue_planning":
         return [
@@ -232,11 +259,13 @@ def phase_acceptance_criteria(phase: str, issue_id: str, issues: list[dict[str, 
         completed_count = sum(1 for issue in issues if str(issue.get("status", "")).strip() == "completed")
         return [
             f"已接受 issue 数量与计划一致，目前 completed={completed_count}",
+            "CHANGE-REVIEW.json 为当前 issue 集合的最新 review 结果，且 verdict=pass",
             "change 级 Must fix now 已清空",
             "可以放行 verify",
         ]
     if phase == "change_verify":
         return [
+            "CHANGE-REVIEW.json 为当前 issue 集合的最新 review 结果，且 verdict=pass",
             "repository validation commands 全部通过",
             "tasks.md 不再包含未勾选项",
             "CHANGE-VERIFY.json 为当前 issue 集合的最新验证结果",
@@ -263,11 +292,23 @@ def phase_scope_items(phase: str, change_dir: Path, issue_id: str, issues: list[
     if phase == "issue_execution":
         return [issue_id] if issue_id else [issue.get("issue_id", "") for issue in issues if issue.get("issue_id")]
     if phase == "change_verify":
-        return ["control/BACKLOG.md", "tasks.md", "runs/CHANGE-VERIFY.json", "repo validation commands"]
+        return [
+            "control/BACKLOG.md",
+            "tasks.md",
+            "runs/CHANGE-REVIEW.json",
+            "runs/CHANGE-VERIFY.json",
+            "repo validation commands",
+        ]
+    if phase == "change_acceptance":
+        return ["control/BACKLOG.md", "runs/CHANGE-REVIEW.json", "current change diff for /review"]
     return ["change-level accepted issues", "control/BACKLOG.md", "latest control/ROUND-*.md"]
 
 
 def phase_command_hints(repo_root: Path, change: str, phase: str) -> list[str]:
+    if phase == "change_acceptance":
+        return [
+            f'python3 .codex/skills/openspec-shared/scripts/coordinator_review_change.py --repo-root "{repo_root}" --change "{change}"'
+        ]
     if phase == "change_verify":
         return [
             f'python3 .codex/skills/openspec-shared/scripts/coordinator_verify_change.py --repo-root "{repo_root}" --change "{change}"'
@@ -281,6 +322,171 @@ def bullet_list(items: list[str]) -> str:
     if not items:
         return "  - none"
     return "\n".join(f"  - {item}" for item in items if item)
+
+
+def phase_team_topology(phase: str) -> list[dict[str, Any]]:
+    if phase == "spec_readiness":
+        return [
+            {
+                "key": "design_author",
+                "label": "Design author",
+                "count": 1,
+                "responsibility": "负责起草或修订 proposal / design，吸收反馈并提交可评审版本。",
+                "reasoning_effort": "xhigh",
+                "reasoning_note": "设计文档编写需要更强的上下文整合、方案权衡和风险推敲。",
+            },
+            {
+                "key": "design_review",
+                "label": "Design review",
+                "count": 2,
+                "responsibility": "负责从需求边界、技术可行性和交付风险角度做通过 / 不通过评审。",
+                "reasoning_effort": "medium",
+                "reasoning_note": "设计评审只做判定与阻塞缺口定位，不承担编写或编码。",
+            },
+        ]
+    if phase == "issue_planning":
+        return [
+            {
+                "key": "development_group",
+                "label": "Development group",
+                "count": 3,
+                "responsibility": "负责创建或修订当前 phase 所需产物。",
+                "reasoning_effort": "medium",
+                "reasoning_note": "当前 phase 主要产出 tasks / issue 文档和规划工件，不以写 repo 代码为主。",
+            },
+            {
+                "key": "check_group",
+                "label": "Check group",
+                "count": 3,
+                "responsibility": "负责找 defect / gap / evidence 缺口。",
+                "reasoning_effort": "medium",
+                "reasoning_note": "检查工作是缺口识别与证据核对，不承担编码。",
+            },
+            {
+                "key": "review_group",
+                "label": "Review group",
+                "count": 3,
+                "responsibility": "负责最终通过 / 不通过裁决。",
+                "reasoning_effort": "medium",
+                "reasoning_note": "审查工作是裁决和风险判断，不承担编码。",
+            },
+        ]
+    if phase == "issue_execution":
+        return [
+            {
+                "key": "development_group",
+                "label": "Development group",
+                "count": 3,
+                "responsibility": "负责创建或修订当前 phase 所需产物。",
+                "reasoning_effort": "xhigh",
+                "reasoning_note": "当前 phase 预期会修改 repo 代码、测试或集成实现。",
+            },
+            {
+                "key": "check_group",
+                "label": "Check group",
+                "count": 3,
+                "responsibility": "负责找 defect / gap / evidence 缺口。",
+                "reasoning_effort": "medium",
+                "reasoning_note": "检查工作是缺口识别与证据核对，不承担编码。",
+            },
+            {
+                "key": "review_group",
+                "label": "Review group",
+                "count": 3,
+                "responsibility": "负责最终通过 / 不通过裁决。",
+                "reasoning_effort": "medium",
+                "reasoning_note": "审查工作是裁决和风险判断，不承担编码。",
+            },
+        ]
+    if phase == "change_verify":
+        return [
+            {
+                "key": "development_group",
+                "label": "Development group",
+                "count": 3,
+                "responsibility": "负责创建或修订当前 phase 所需产物。",
+                "reasoning_effort": "xhigh",
+                "reasoning_note": "verify 暴露出的仓库代码或测试缺口通常仍需要高强度实现推理。",
+            },
+            {
+                "key": "check_group",
+                "label": "Check group",
+                "count": 3,
+                "responsibility": "负责找 defect / gap / evidence 缺口。",
+                "reasoning_effort": "medium",
+                "reasoning_note": "检查工作是缺口识别与证据核对，不承担编码。",
+            },
+            {
+                "key": "review_group",
+                "label": "Review group",
+                "count": 3,
+                "responsibility": "负责最终通过 / 不通过裁决。",
+                "reasoning_effort": "medium",
+                "reasoning_note": "审查工作是裁决和风险判断，不承担编码。",
+            },
+        ]
+    return [
+        {
+            "key": "development_group",
+            "label": "Development group",
+            "count": 3,
+            "responsibility": "负责创建或修订当前 phase 所需产物。",
+            "reasoning_effort": "medium",
+            "reasoning_note": "当前 phase 主要是验收、放行或归档收尾，不以写 repo 代码为主。",
+        },
+        {
+            "key": "check_group",
+            "label": "Check group",
+            "count": 3,
+            "responsibility": "负责找 defect / gap / evidence 缺口。",
+            "reasoning_effort": "medium",
+            "reasoning_note": "检查工作是缺口识别与证据核对，不承担编码。",
+        },
+        {
+            "key": "review_group",
+            "label": "Review group",
+            "count": 3,
+            "responsibility": "负责最终通过 / 不通过裁决。",
+            "reasoning_effort": "medium",
+            "reasoning_note": "审查工作是裁决和风险判断，不承担编码。",
+        },
+    ]
+
+
+def render_team_topology(items: list[dict[str, Any]]) -> str:
+    lines: list[str] = []
+    for item in items:
+        lines.append(f"- {item['label']}: {item['count']} subagent{'s' if int(item['count']) != 1 else ''}")
+        lines.append(f"  - {item['responsibility']}")
+        lines.append(f"  - Launch with `reasoning_effort={item['reasoning_effort']}`")
+        lines.append(f"  - Why: {item['reasoning_note']}")
+    return "\n".join(lines)
+
+
+def phase_round_loop(phase: str) -> str:
+    if phase == "spec_readiness":
+        return "设计编写 -> 双评审 -> 修订 -> 双评审"
+    return "开发 -> 检查 -> 修复 -> 审查"
+
+
+def phase_required_output(phase: str) -> list[str]:
+    if phase == "spec_readiness":
+        return [
+            "Phase target",
+            "Design author changes completed",
+            "Reviewer 1 verdict",
+            "Reviewer 2 verdict",
+            "Normalized review gaps",
+            "Next action",
+        ]
+    return [
+        "Phase target",
+        "Normalized backlog",
+        "Development changes completed",
+        "Check result",
+        "Review verdict",
+        "Next action",
+    ]
 
 
 def render_phase_packet(
@@ -306,6 +512,9 @@ def render_phase_packet(
     must_fix_now = backlog.get("must_fix_now", {}).get("open_items", [])
     should_fix_if_cheap = backlog.get("should_fix_if_cheap", {}).get("open_items", [])
     deferred_items = backlog.get("defer", {}).get("open_items", [])
+    team_topology = phase_team_topology(phase)
+    round_loop = phase_round_loop(phase)
+    required_output = phase_required_output(phase)
     subagent_team = config.get("subagent_team", {})
     auto_accept_spec_readiness = bool(subagent_team.get("auto_accept_spec_readiness", False))
     auto_accept_issue_planning = bool(subagent_team.get("auto_accept_issue_planning", False))
@@ -322,7 +531,7 @@ def render_phase_packet(
         "spec_readiness": (
             "coordinator 自动通过 design review，并进入任务拆分 / issue planning"
             if auto_accept_spec_readiness
-            else "3 个 review subagent 评审通过后暂停，等待人工确认后再进入任务拆分 / issue planning"
+            else "1 个设计作者和 2 个设计评审全部通过后暂停，等待人工确认后再进入任务拆分 / issue planning"
         ),
         "issue_planning": (
             "coordinator 自动通过 issue planning 评审并派发当前 round 已批准的 issue"
@@ -353,9 +562,11 @@ def render_phase_packet(
 
     phase_specific_rules = {
         "spec_readiness": [
-            "开发组负责补 proposal / design，不在 design review 通过前做任务拆分。",
-            "检查组只指出会阻塞设计评审或后续任务拆分的缺口。",
-            "审查组固定为 3 个 review subagent；只有评审通过，才允许进入 plan-issues / 任务拆分。",
+            "spec_readiness 使用专用拓扑，不复用通用的 3-3-3 team shape。",
+            "Design author 负责补 proposal / design，不在 design review 通过前做任务拆分。",
+            "Design author 启动时使用 `reasoning_effort=xhigh`；2 个 design review subagent 使用 `reasoning_effort=medium`。",
+            "2 个 design review subagent 直接给出 pass / fail 和 blocking gap，不单独再设 check group。",
+            "只有 2 个 reviewer 都通过，才允许进入 plan-issues / 任务拆分。",
             (
                 "当 `auto_accept_spec_readiness=true` 时，coordinator 不等待人工签字，直接把 design review 视为通过并进入 plan-issues。"
                 if auto_accept_spec_readiness
@@ -364,6 +575,7 @@ def render_phase_packet(
         ],
         "issue_planning": [
             "开发组负责基于已通过的设计评审产出或修订 tasks.md、INDEX 和 ISSUE 文档。",
+            "issue planning 不以写 repo 代码为目标，本 phase 的开发/检查/审查 subagent 全部使用 `reasoning_effort=medium`。",
             "检查组确认 allowed_scope / out_of_scope / done_when / validation 可执行。",
             (
                 "当 `auto_accept_issue_planning=true` 时，coordinator 不等待人工签字，直接把 issue planning 视为通过并派发当前 round 已批准的 issue。"
@@ -373,6 +585,7 @@ def render_phase_packet(
         ],
         "issue_execution": [
             "开发组可以按 issue team dispatch 调起实现型 subagent。",
+            "编码型开发 subagent 使用 `reasoning_effort=xhigh`；检查组和审查组使用 `reasoning_effort=medium`。",
             "检查组优先看回归、范围泄漏、证据缺口。",
             (
                 "当 `auto_accept_issue_review=true` 时，coordinator 会在 issue-local validation 全部通过后自动接受并 merge 当前 issue，再继续后续 phase。"
@@ -382,16 +595,21 @@ def render_phase_packet(
             "审查组不通过则回到开发组下一轮。",
         ],
         "change_acceptance": [
-            "开发组只补 change-level 收尾，不再随意扩 issue scope。",
+            "change acceptance 先要求 coordinator 对当前 change 修改的代码运行 change-level /review，并落盘 `runs/CHANGE-REVIEW.json`。",
+            "开发组只补 change-level review 或 acceptance 暴露出的缺口，不再随意扩 issue scope。",
+            "change acceptance 默认不是编码 phase；开发/检查/审查 subagent 使用 `reasoning_effort=medium`。",
             "检查组确认已接受 issue 能覆盖请求范围。",
+            "只有 change-level /review 通过后，才允许继续进入 verify。",
             (
-                "当 `auto_accept_change_acceptance=true` 时，coordinator 不等待人工签字，直接把 change acceptance 视为通过并切到 verify。"
+                "当 `auto_accept_change_acceptance=true` 时，coordinator 在 change-level /review 通过后不等待人工签字，直接把 change acceptance 视为通过并切到 verify。"
                 if auto_accept_change_acceptance
                 else "审查组通过后默认停住，让 coordinator 先确认是否运行 verify。"
             ),
         ],
         "change_verify": [
+            "进入 verify 前，change-level /review 必须已经通过；不要跳过这一步直接运行 verify。",
             "开发组只处理 verify 失败所暴露的缺口，不再随意新增 issue。",
+            "如果 verify 暴露出代码/测试缺口，开发组 subagent 使用 `reasoning_effort=xhigh`；检查组和审查组使用 `reasoning_effort=medium`。",
             "检查组负责运行并检查 repo validation、tasks completion、verify artifact。",
             (
                 "verify 通过后自动进入 archive 阶段。"
@@ -401,6 +619,7 @@ def render_phase_packet(
         ],
         "ready_for_archive": [
             "不再新增 issue。",
+            "archive 收尾阶段不需要编码时，所有 subagent 默认使用 `reasoning_effort=medium`。",
             "仅允许 closeout / archive 所需收尾。",
             "若发现 blocker，重新回到 change_acceptance。",
         ],
@@ -438,17 +657,13 @@ def render_phase_packet(
 
 ## Team Topology
 
-- Development group: 3 subagents
-  - 负责创建或修订当前 phase 所需产物
-- Check group: 3 subagents
-  - 负责找 defect / gap / evidence 缺口
-- Review group: 3 subagents
-  - 负责最终通过 / 不通过裁决
+{render_team_topology(team_topology)}
 
 ## Coordinator Rules
 
 - 主代理负责整个 change 的 lifecycle orchestration，不只负责单个 issue。
-- 标准循环是：开发 -> 检查 -> 修复 -> 审查。
+- 当前 phase 的标准循环是：{round_loop}。
+- 拉起 subagent 时必须显式设置 `reasoning_effort`，不要直接继承当前会话的全局默认值。
 - 审查通过才允许进入下一 phase。
 - 审查不通过则回到开发组下一轮。
 - backlog / round / stop decision 必须落盘，不留在聊天里。
@@ -474,12 +689,7 @@ def render_phase_packet(
 
 {coordinator_commands_section}{issue_team_section}## Required Output
 
-1. Phase target
-2. Normalized backlog
-3. Development changes completed
-4. Check result
-5. Review verdict
-6. Next action
+{chr(10).join(f"{index}. {item}" for index, item in enumerate(required_output, start=1))}
 
 ## Exit Condition
 
@@ -589,6 +799,7 @@ def main() -> None:
             "archive_after_verify": bool(config.get("subagent_team", {}).get("auto_archive_after_verify", False)),
         },
         "automation_profile": automation_profile(config),
+        "team_topology": phase_team_topology(phase),
         "control_state": control_state,
         "issue_count": len(issues),
         "dry_run": args.dry_run,
