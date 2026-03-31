@@ -8,7 +8,7 @@ This is the normal flow when the runtime supports delegation and the user wants 
 ## Default Flow
 
 1. Get the change to proposal/design-ready state, then run a spec-readiness design review for the current target mode. In this gate, the topology is 1 design author plus 2 design reviewers, and task splitting must not start before both reviewers pass. If `auto_accept_spec_readiness=true`, do not pause for human sign-off once the gate is satisfied.
-2. After spec-readiness passes, run `plan-issues` to create or refresh `tasks.md` plus the issue breakdown, then review that task-splitting result before dispatching work. If `auto_accept_issue_planning=true`, do not pause for human sign-off once `tasks.md` and the issue docs are dispatch-ready.
+2. After spec-readiness passes, run `plan-issues` to create or refresh `tasks.md` plus the issue breakdown, then review that task-splitting result before dispatching work. If `auto_accept_issue_planning=true`, do not pause for human sign-off once `tasks.md` and the issue docs are dispatch-ready, and do not stop at a "control-plane ready" summary; immediately dispatch the first approved issue.
 3. Dispatch only issues that are approved for the active round.
 4. By default, render the subagent-team lifecycle packet and use it as the round control packet.
 5. Explicitly set `reasoning_effort` when spawning subagents:
@@ -42,6 +42,7 @@ This is the normal flow when the runtime supports delegation and the user wants 
 - use subagent-team rounds as the default issue-mode coordinator topology
 - do not let subagents inherit the session-wide reasoning default blindly; set role-based `reasoning_effort` explicitly
 - `auto_accept_*` only removes human sign-off after gate-bearing subagents have all finished and their verdicts are in hand
+- if reconcile emits `dispatch_next_issue`, the next approved issue should be rendered and dispatched immediately; this is not a terminal checkpoint
 - do not pass a gate while any required reviewer/checker for that gate is still running
 - do not close unfinished gate-bearing subagents early
 - gate-bearing review/check subagents must not be treated as `explorer` sidecars

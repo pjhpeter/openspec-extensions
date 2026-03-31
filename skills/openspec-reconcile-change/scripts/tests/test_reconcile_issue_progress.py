@@ -116,6 +116,8 @@ class ReconcileIssueProgressTest(unittest.TestCase):
         self.assertEqual(payload["automation_profile"], "semi_auto")
         self.assertEqual(payload["next_action"], "await_issue_dispatch_confirmation")
         self.assertEqual(payload["recommended_issue_id"], "ISSUE-001")
+        self.assertEqual(payload["continuation_policy"]["mode"], "await_human_confirmation")
+        self.assertTrue(payload["continuation_policy"]["pause_allowed"])
 
     def test_auto_issue_planning_dispatches_first_issue(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -135,6 +137,10 @@ class ReconcileIssueProgressTest(unittest.TestCase):
         self.assertEqual(payload["next_action"], "dispatch_next_issue")
         self.assertEqual(payload["recommended_issue_id"], "ISSUE-001")
         self.assertTrue(payload["automation"]["accept_issue_planning"])
+        self.assertEqual(payload["continuation_policy"]["mode"], "continue_immediately")
+        self.assertFalse(payload["continuation_policy"]["pause_allowed"])
+        self.assertTrue(payload["continuation_policy"]["must_not_stop_at_checkpoint"])
+        self.assertIn("不是 terminal checkpoint", payload["continuation_policy"]["instruction"])
 
     def test_auto_issue_review_can_auto_accept_when_validation_passed(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -165,6 +171,8 @@ class ReconcileIssueProgressTest(unittest.TestCase):
         self.assertEqual(payload["next_action"], "auto_accept_issue")
         self.assertEqual(payload["recommended_issue_id"], "ISSUE-001")
         self.assertTrue(payload["automation"]["accept_issue_review"])
+        self.assertEqual(payload["continuation_policy"]["mode"], "continue_immediately")
+        self.assertFalse(payload["continuation_policy"]["pause_allowed"])
 
     def test_verify_step_can_pause_or_auto_run_based_on_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -188,6 +196,9 @@ class ReconcileIssueProgressTest(unittest.TestCase):
         self.assertEqual(manual_payload["next_action"], "await_verify_confirmation")
         self.assertEqual(auto_payload["next_action"], "verify_change")
         self.assertTrue(auto_payload["automation"]["accept_change_acceptance"])
+        self.assertEqual(manual_payload["continuation_policy"]["mode"], "await_human_confirmation")
+        self.assertEqual(auto_payload["continuation_policy"]["mode"], "continue_immediately")
+        self.assertTrue(auto_payload["continuation_policy"]["must_not_stop_at_checkpoint"])
 
     def test_verify_pass_can_auto_archive_when_enabled(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -219,6 +230,7 @@ class ReconcileIssueProgressTest(unittest.TestCase):
 
         self.assertEqual(payload["next_action"], "archive_change")
         self.assertTrue(payload["automation"]["archive_after_verify"])
+        self.assertEqual(payload["continuation_policy"]["mode"], "continue_immediately")
 
     def test_all_completed_requires_change_review_before_verify(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -230,6 +242,7 @@ class ReconcileIssueProgressTest(unittest.TestCase):
 
         self.assertEqual(payload["next_action"], "review_change_code")
         self.assertIn("需先运行 change-level /review", payload["reason"])
+        self.assertEqual(payload["continuation_policy"]["mode"], "resolve_or_inspect")
 
 
 if __name__ == "__main__":

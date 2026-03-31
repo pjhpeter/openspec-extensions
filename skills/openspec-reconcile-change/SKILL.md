@@ -44,7 +44,7 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
    - `auto_accept_issue` -> run `coordinator_merge_issue.py` immediately, then rerun reconcile and keep advancing without waiting for user confirmation
    - `coordinator_review` -> review the issue, then either accept it with `coordinator_merge_issue.py` or create `Must fix now` backlog items and send it back to repair
    - `await_issue_dispatch_confirmation` -> semi-auto pause before the first issue dispatch after issue planning
-   - `dispatch_next_issue` -> prepare the next approved issue and, in the default path, continue through subagent-team
+   - `dispatch_next_issue` -> prepare the next approved issue and, in the default path, continue through subagent-team; this is not a terminal checkpoint
    - `await_next_issue_confirmation` -> semi-auto pause before dispatching the next pending issue
    - `verify_change` -> run change-level verify now
    - `await_verify_confirmation` -> semi-auto pause before running verify
@@ -57,17 +57,20 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
 - Do not treat issue-execution chat output as the source of truth when artifacts exist; prefer issue progress artifacts over run artifacts.
 - Do not let issue execution subagents update `tasks.md`, self-merge, or create the final git commit for an issue.
 - Use issue docs to discover pending work that has not started yet.
-- `coordinator_merge_issue.py` expects the coordinator worktree to start clean before it imports the worker diff and creates the acceptance commit.
-- If artifacts are stale or suspicious, inspect the issue worktree and run artifacts directly before redispatching.
+- `coordinator_merge_issue.py` expects a clean coordinator worktree only when the issue uses an isolated worker worktree; shared workspace mode commits the current repo-root issue diff directly.
+- If artifacts are stale or suspicious, inspect the issue workspace and run artifacts directly before redispatching.
 - In subagent-first flows, prefer artifact-based reconcile and coordinator review over any process-liveness heuristics.
 - For complex changes, keep the active normalized backlog and round verdict on disk instead of in chat only.
 - Do not dispatch, verify, or archive while unresolved `Must fix now` items remain in the active change-level backlog.
 - If the helper finds no issue artifacts, fall back to normal OpenSpec routing.
+- Read `continuation_policy` from the helper output before deciding whether a pause is intentional.
+- If `continuation_policy.mode=continue_immediately`, do not stop at `control-plane ready`, `checkpoint`, or a chat summary; continue the action now.
 - If `automation_profile=full_auto` and the helper emits `dispatch_next_issue`, do not stop to ask the user; render the next team dispatch or continue the subagent-team loop immediately.
 - If `auto_accept_issue_review=true` and the helper emits `auto_accept_issue`, do not stop to ask the user; merge/commit the issue immediately and continue.
+- `dispatch_next_issue` means the first approved issue after issue planning, or the next pending issue after an accepted issue, should be dispatched immediately; it must not be reframed as a terminal control-plane checkpoint.
 - If coordinator review accepts an issue, merge and commit it before dispatching the next dependent issue or moving to `verify`.
 - Do not move from "all issues completed" to `verify` until `runs/CHANGE-REVIEW.json` exists, is current, and has `status=passed`.
-- Read `automation_profile` and `automation` from the helper output before deciding whether a pause is intentional or indicates a stuck flow.
+- Read `automation_profile`, `automation`, and `continuation_policy` from the helper output before deciding whether a pause is intentional or indicates a stuck flow.
 
 ## Output Style
 

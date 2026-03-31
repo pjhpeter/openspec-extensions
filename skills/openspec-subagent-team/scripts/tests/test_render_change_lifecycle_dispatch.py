@@ -169,9 +169,10 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
 
         self.assertEqual(payload["phase"], "issue_planning")
         self.assertTrue(payload["automation"]["accept_issue_planning"])
-        self.assertIn("当前 phase 的 gate-bearing subagent 全部完成且 verdict 满足条件后，coordinator 自动通过 issue planning 评审并派发当前 round 已批准的 issue", dispatch_text)
+        self.assertIn("当前 phase 的 gate-bearing subagent 全部完成且 verdict 满足条件后，coordinator 自动通过 issue planning 评审并立即派发当前 round 已批准的 issue，不要停在 control-plane ready", dispatch_text)
         self.assertIn("subagent_team.auto_accept_issue_planning=true", dispatch_text)
         self.assertIn("tasks.md、INDEX 和 ISSUE 文档齐全且相互一致", dispatch_text)
+        self.assertIn("如果 issue planning 通过后 reconcile 给出 `dispatch_next_issue`，那表示必须立即继续派发，不要把 `control-plane ready` 当作 terminal checkpoint。", dispatch_text)
 
     def test_detects_issue_execution_and_renders_issue_packet(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

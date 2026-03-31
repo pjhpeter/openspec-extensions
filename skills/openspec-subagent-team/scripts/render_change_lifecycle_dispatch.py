@@ -572,7 +572,7 @@ def render_phase_packet(
             else "1 个设计作者和 2 个设计评审全部完成并收齐通过结论后暂停，等待人工确认后再进入任务拆分 / issue planning"
         ),
         "issue_planning": (
-            "当前 phase 的 gate-bearing subagent 全部完成且 verdict 满足条件后，coordinator 自动通过 issue planning 评审并派发当前 round 已批准的 issue"
+            "当前 phase 的 gate-bearing subagent 全部完成且 verdict 满足条件后，coordinator 自动通过 issue planning 评审并立即派发当前 round 已批准的 issue，不要停在 control-plane ready"
             if auto_accept_issue_planning
             else "审查组 verdict 全部收齐并通过后暂停，等待人工确认后再进入 issue execution"
         ),
@@ -616,8 +616,9 @@ def render_phase_packet(
             "issue planning 不以写 repo 代码为目标，本 phase 默认使用 2 个开发 seat + 1 个 checker + 1 个 reviewer 的快路径，全部使用 `reasoning_effort=medium`。",
             "检查组确认 allowed_scope / out_of_scope / done_when / validation 可执行。",
             "planning check/review 默认只看 tasks.md、INDEX、ISSUE frontmatter 和当前 round contract，不做无关扩展阅读。",
+            "如果 issue planning 通过后 reconcile 给出 `dispatch_next_issue`，那表示必须立即继续派发，不要把 `control-plane ready` 当作 terminal checkpoint。",
             (
-                "当 `auto_accept_issue_planning=true` 时，coordinator 在当前 phase 的 gate-bearing planning/check/review subagent 全部完成并收齐 verdict 后，不等待人工签字，直接把 issue planning 视为通过并派发当前 round 已批准的 issue。"
+                "当 `auto_accept_issue_planning=true` 时，coordinator 在当前 phase 的 gate-bearing planning/check/review subagent 全部完成并收齐 verdict 后，不等待人工签字，直接把 issue planning 视为通过并派发当前 round 已批准的 issue；不要停在 `control-plane ready`。"
                 if auto_accept_issue_planning
                 else "审查组通过后默认停住，先让 coordinator 人工确认，再 dispatch issue。"
             ),

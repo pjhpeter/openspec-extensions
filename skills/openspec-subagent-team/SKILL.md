@@ -51,6 +51,7 @@ Read these first:
    - dedupe findings into one normalized backlog
    - decide stop / continue
    - when an enabled `auto_accept_*` gate becomes eligible, continue immediately instead of asking the user to review first
+   - if reconcile emits `dispatch_next_issue`, treat it as a continuation command, not a terminal control-plane checkpoint
 7. Use a phase-specific topology:
    - `spec_readiness`: 1 design author (`reasoning_effort=xhigh`) + 2 design reviewers (`reasoning_effort=medium`)
    - `issue_planning`: fast path is `2 development + 1 check + 1 review`, all `reasoning_effort=medium`
@@ -85,6 +86,7 @@ Read these first:
 - `semi_auto` means the lifecycle pauses after each review gate; `full_auto` means the lifecycle auto-continues across `spec_readiness -> issue_planning -> issue_execution -> change_acceptance -> change_verify -> archive` while still respecting RRA gates.
 - `spec_readiness` is the design-review gate in the complex-change path: proposal/design are prepared first, then a dedicated `1` author + `2` reviewers subagent team must pass it before task splitting begins.
 - `issue_planning` starts after design review passes, and is where coordinator-owned `tasks.md` plus `issues/INDEX.md` and `ISSUE-*.md` are produced/reviewed.
+- When `issue_planning` is auto-accepted and reconcile emits `dispatch_next_issue`, the coordinator must immediately render the next `ISSUE-*.team.dispatch.md` and enter issue execution; do not stop at `control-plane ready` or another informational checkpoint.
 - `issue_planning` and `issue_execution` should start with the lighter fast path first; only escalate more check/review seats when the current round surfaces cross-boundary risk or unresolved evidence gaps.
 - Gate-bearing phase subagents are part of the acceptance barrier for that phase, not informational helpers.
 - `auto_accept_*` means "skip human sign-off after the gate team has finished and passed", not "advance immediately after spawn".
@@ -102,6 +104,7 @@ Read these first:
 - design reviewers, planning authors, checkers, reviewers, and closeout-only subagents use `reasoning_effort=medium`.
 - `auto_accept_spec_readiness=true` means spec-readiness does not wait for human sign-off once proposal/design have passed the `1` author + `2` reviewers design review.
 - `auto_accept_issue_planning=true` means issue planning does not wait for human sign-off once tasks.md plus INDEX/ISSUE docs are dispatch-ready.
+- `dispatch_next_issue` means "continue now"; it is not a pause point, not a terminal checkpoint, and not a prompt to wait for another user instruction.
 - `auto_accept_issue_review=true` means eligible `review_required` issues are coordinator-accepted, merged, and committed automatically once issue-local validation passes.
 - `auto_accept_change_acceptance=true` means change acceptance does not wait for human sign-off once a passed change-level `/review` has already made verify allowed.
 - unattended progression should use long blocking waits for gate-bearing subagents, typically up to 1 hour
@@ -111,7 +114,7 @@ Read these first:
 - If the loop stalls after two or three rounds, shrink scope or tighten the review target instead of expanding the backlog.
 - Do not replace coordinator-owned merge/commit/verify/archive with worker self-management.
 - Do not skip the change-level `/review` step between "all issues completed" and `verify`.
-- Keep `worker_worktree` as the issue boundary; it is part of the active contract, not legacy baggage.
+- Keep `worker_worktree` as the issue workspace field. The default is shared workspace (`.`); isolated worktrees are opt-in when a repo truly needs per-issue isolation.
 
 ## Output
 

@@ -241,6 +241,84 @@ def determine_control_gate(
     return None
 
 
+def continuation_policy(next_action: str, recommended_issue_id: str) -> dict[str, Any]:
+    if next_action == "dispatch_next_issue":
+        issue_suffix = f" `{recommended_issue_id}`" if recommended_issue_id else ""
+        return {
+            "mode": "continue_immediately",
+            "pause_allowed": False,
+            "human_confirmation_required": False,
+            "must_not_stop_at_checkpoint": True,
+            "summary": "当前阶段已经放行，coordinator 必须继续派发下一 issue。",
+            "instruction": (
+                f"`dispatch_next_issue` 不是 terminal checkpoint；不要只停在 control-plane ready。"
+                f" 立即为{issue_suffix} 渲染 team dispatch，并继续 subagent-team 主链。"
+            ),
+        }
+    if next_action == "auto_accept_issue":
+        issue_suffix = f" `{recommended_issue_id}`" if recommended_issue_id else ""
+        return {
+            "mode": "continue_immediately",
+            "pause_allowed": False,
+            "human_confirmation_required": False,
+            "must_not_stop_at_checkpoint": True,
+            "summary": "当前 issue 已满足自动接受条件，coordinator 必须立即收敛并继续。",
+            "instruction": (
+                f"`auto_accept_issue` 不是 terminal checkpoint；不要停在 control-plane ready。"
+                f" 立即接受并 merge{issue_suffix}，然后重新 reconcile 并继续主链。"
+            ),
+        }
+    if next_action == "verify_change":
+        return {
+            "mode": "continue_immediately",
+            "pause_allowed": False,
+            "human_confirmation_required": False,
+            "must_not_stop_at_checkpoint": True,
+            "summary": "当前 change 已满足自动 verify 条件，coordinator 必须继续执行 verify。",
+            "instruction": "`verify_change` 不是 terminal checkpoint；立即运行 verify，不要停在 control-plane ready。",
+        }
+    if next_action == "archive_change":
+        return {
+            "mode": "continue_immediately",
+            "pause_allowed": False,
+            "human_confirmation_required": False,
+            "must_not_stop_at_checkpoint": True,
+            "summary": "当前 change 已满足自动 archive 条件，coordinator 必须继续归档。",
+            "instruction": "`archive_change` 不是 terminal checkpoint；立即执行 archive，不要停在 control-plane ready。",
+        }
+    if next_action in {
+        "await_issue_dispatch_confirmation",
+        "await_next_issue_confirmation",
+        "await_verify_confirmation",
+        "ready_for_archive",
+    }:
+        return {
+            "mode": "await_human_confirmation",
+            "pause_allowed": True,
+            "human_confirmation_required": True,
+            "must_not_stop_at_checkpoint": False,
+            "summary": "当前状态允许暂停，等待人工确认。",
+            "instruction": "当前 next_action 需要人工确认，暂停是预期行为。",
+        }
+    if next_action == "wait_for_active_issue":
+        return {
+            "mode": "wait_for_active_subagent",
+            "pause_allowed": False,
+            "human_confirmation_required": False,
+            "must_not_stop_at_checkpoint": False,
+            "summary": "当前 issue 仍在运行，应继续等待活跃 subagent。",
+            "instruction": "当前 next_action 是等待活跃 issue 完成，不应改成新的人工 checkpoint。",
+        }
+    return {
+        "mode": "resolve_or_inspect",
+        "pause_allowed": False,
+        "human_confirmation_required": False,
+        "must_not_stop_at_checkpoint": False,
+        "summary": "当前状态需要 coordinator 处理 blocker、review 或控制面缺口。",
+        "instruction": "按 next_action 先解决当前阻塞或收敛动作，再决定是否继续。",
+    }
+
+
 def main() -> None:
     args = parse_args()
     repo_root = Path(args.repo_root).resolve()
@@ -280,6 +358,7 @@ def main() -> None:
         "next_action": next_action,
         "recommended_issue_id": recommended_issue_id,
         "reason": reason,
+        "continuation_policy": continuation_policy(next_action, recommended_issue_id),
         "base_next_action": {
             "action": base_next_action,
             "recommended_issue_id": base_recommended_issue_id,
