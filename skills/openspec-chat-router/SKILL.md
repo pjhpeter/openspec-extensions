@@ -108,7 +108,7 @@ Preferred flow:
 5. For each approved issue, create or reuse the issue workspace (`worker_worktree`) before handoff.
 6. By default, render the subagent-team lifecycle packet and use it as the coordinator control packet for the current phase.
 7. Use one issue-only execution subagent for one approved issue only when the user explicitly narrows execution to that one issue, or the current step is already a bounded single-issue handoff.
-8. After the issue execution subagent reports `review_required`, either let the coordinator review it manually or, when `subagent_team.auto_accept_issue_review=true` and issue-local validation passed, auto-accept/merge/commit it immediately.
+8. After the issue execution subagent reports `review_required`, either let the coordinator review it manually or, when `subagent_team.auto_accept_issue_review=true` and issue-local validation passed, auto-accept/merge/commit it immediately. The shipped default enables this so each validated issue lands as its own commit before the next issue starts.
 9. In every gate-bearing phase, record launched seat ids, wait for completion, normalize the verdicts, and do not advance while any required gate subagent is still running.
 10. Repeat for the next approved issue, then run a change-level `/review` plus a change-level acceptance round before `verify` and `archive`.
 

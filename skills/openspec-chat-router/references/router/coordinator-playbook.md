@@ -32,7 +32,7 @@ This is the normal flow when the runtime supports delegation and the user wants 
 11. Pass the generated dispatch content or file to the issue execution subagent or team as the source of truth.
 12. Have code-writing subagents follow `openspec-execute-issue`, including issue-local progress and run artifacts.
 13. Reconcile from disk, normalize any findings into the change-level backlog, and decide whether the issue passes the round.
-14. If `auto_accept_issue_review=true` and the issue-local validation passed, accept/merge/commit it immediately from the coordinator session. Otherwise review it manually in the coordinator session first.
+14. If `auto_accept_issue_review=true` and the issue-local validation passed, accept/merge/commit it immediately from the coordinator session. The shipped default turns this on so each validated issue lands as its own coordinator commit before the next issue starts. Otherwise review it manually in the coordinator session first.
 15. After all approved issues are completed, run a change-level `/review` against the current change diff and write `runs/CHANGE-REVIEW.json`.
 16. Only after that review passes, run the change-level acceptance decision and then `verify` / `archive`.
 

@@ -164,7 +164,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "subagent_team": {
         "auto_accept_spec_readiness": False,
         "auto_accept_issue_planning": False,
-        "auto_accept_issue_review": False,
+        "auto_accept_issue_review": True,
         "auto_accept_change_acceptance": False,
         "auto_archive_after_verify": False,
     },
@@ -456,7 +456,15 @@ def automation_profile(config: dict[str, Any]) -> str:
     subagent_team = config.get("subagent_team", {})
     if all(bool(subagent_team.get(field, False)) for field in SUBAGENT_TEAM_AUTOMATION_FIELDS) and gate_mode == "enforce":
         return "full_auto"
-    if not any(bool(subagent_team.get(field, False)) for field in SUBAGENT_TEAM_AUTOMATION_FIELDS) and gate_mode == "advisory":
+    if gate_mode == "advisory" and not any(
+        bool(subagent_team.get(field, False))
+        for field in (
+            "auto_accept_spec_readiness",
+            "auto_accept_issue_planning",
+            "auto_accept_change_acceptance",
+            "auto_archive_after_verify",
+        )
+    ):
         return "semi_auto"
     return "custom"
 

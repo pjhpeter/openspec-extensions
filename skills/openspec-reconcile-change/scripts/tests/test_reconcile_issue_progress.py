@@ -114,10 +114,34 @@ class ReconcileIssueProgressTest(unittest.TestCase):
             payload = self.run_script(repo_root)
 
         self.assertEqual(payload["automation_profile"], "semi_auto")
+        self.assertTrue(payload["automation"]["accept_issue_review"])
         self.assertEqual(payload["next_action"], "await_issue_dispatch_confirmation")
         self.assertEqual(payload["recommended_issue_id"], "ISSUE-001")
         self.assertEqual(payload["continuation_policy"]["mode"], "await_human_confirmation")
         self.assertTrue(payload["continuation_policy"]["pause_allowed"])
+
+    def test_default_issue_review_auto_accepts_validated_issue(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            change = "demo-change"
+            write_issue_doc(repo_root, change, issue_id="ISSUE-001")
+            write_issue_progress(
+                repo_root,
+                change,
+                issue_id="ISSUE-001",
+                status="completed",
+                boundary_status="review_required",
+                next_action="coordinator_review",
+                validation={"pnpm lint": "passed", "pnpm type-check": "passed"},
+            )
+
+            payload = self.run_script(repo_root, change=change)
+
+        self.assertEqual(payload["automation_profile"], "semi_auto")
+        self.assertTrue(payload["automation"]["accept_issue_review"])
+        self.assertEqual(payload["next_action"], "auto_accept_issue")
+        self.assertEqual(payload["recommended_issue_id"], "ISSUE-001")
+        self.assertEqual(payload["continuation_policy"]["mode"], "continue_immediately")
 
     def test_auto_issue_planning_dispatches_first_issue(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

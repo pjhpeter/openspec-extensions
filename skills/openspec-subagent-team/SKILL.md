@@ -83,7 +83,7 @@ Read these first:
 - This is the default entry path for complex issue-mode execution.
 - Use the single-worker issue path only when the user explicitly narrows execution to one bounded issue worker, or the current step clearly only needs one issue-local implementation context.
 - `subagent_team.*` now controls full-process auto-accept and continuation, not just the design-review checkpoint.
-- `semi_auto` means the lifecycle pauses after each review gate; `full_auto` means the lifecycle auto-continues across `spec_readiness -> issue_planning -> issue_execution -> change_acceptance -> change_verify -> archive` while still respecting RRA gates.
+- `semi_auto` means the lifecycle still keeps manual gates for design / planning / change acceptance / archive. It may still auto-accept validated issues one by one so each issue lands as its own commit. `full_auto` means the lifecycle auto-continues across `spec_readiness -> issue_planning -> issue_execution -> change_acceptance -> change_verify -> archive` while still respecting RRA gates.
 - `spec_readiness` is the design-review gate in the complex-change path: proposal/design are prepared first, then a dedicated `1` author + `2` reviewers subagent team must pass it before task splitting begins.
 - `issue_planning` starts after design review passes, and is where coordinator-owned `tasks.md` plus `issues/INDEX.md` and `ISSUE-*.md` are produced/reviewed.
 - When `issue_planning` is auto-accepted and reconcile emits `dispatch_next_issue`, the coordinator must immediately render the next `ISSUE-*.team.dispatch.md` and enter issue execution; do not stop at `control-plane ready` or another informational checkpoint.

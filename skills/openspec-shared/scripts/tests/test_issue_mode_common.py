@@ -12,6 +12,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from issue_mode_common import (  # noqa: E402
+    automation_profile,
     extract_open_work_items,
     issue_worker_worktree_setting,
     load_issue_mode_config,
@@ -138,6 +139,8 @@ class LoadIssueModeConfigTest(unittest.TestCase):
             worker_worktree, source = issue_worker_worktree_setting(repo_root, "demo-change", "ISSUE-001", config)
 
         self.assertFalse(config["worker_worktree"]["enabled"])
+        self.assertTrue(config["subagent_team"]["auto_accept_issue_review"])
+        self.assertEqual(automation_profile(config), "semi_auto")
         self.assertEqual(worker_worktree, ".")
         self.assertEqual(source, "config_default")
 

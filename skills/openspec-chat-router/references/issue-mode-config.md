@@ -24,7 +24,7 @@ If this file is missing, the helpers fall back to these defaults:
   "subagent_team": {
     "auto_accept_spec_readiness": false,
     "auto_accept_issue_planning": false,
-    "auto_accept_issue_review": false,
+    "auto_accept_issue_review": true,
     "auto_accept_change_acceptance": false,
     "auto_archive_after_verify": false
   }
@@ -42,7 +42,7 @@ If this file is missing, the helpers fall back to these defaults:
 - `rra.gate_mode`: `advisory` or `enforce`.
 - `subagent_team.auto_accept_spec_readiness`: automatically accept the spec-readiness gate once proposal/design have passed the dedicated `1` author + `2` reviewers design review, then continue into task splitting / issue planning without waiting for human sign-off.
 - `subagent_team.auto_accept_issue_planning`: automatically accept the issue-planning gate once `tasks.md` plus INDEX/ISSUE docs are dispatch-ready, then dispatch the approved issue set without waiting for human sign-off.
-- `subagent_team.auto_accept_issue_review`: automatically accept an eligible `review_required` issue after its issue-local validation passes, then merge/commit it and continue to the next issue or change acceptance.
+- `subagent_team.auto_accept_issue_review`: automatically accept an eligible `review_required` issue after its issue-local validation passes, then merge/commit it and continue to the next issue or change acceptance. This is enabled in the shipped default config so each accepted issue lands as its own coordinator commit.
 - `subagent_team.auto_accept_change_acceptance`: automatically accept the change-acceptance gate and continue into change-level verify.
 - `subagent_team.auto_archive_after_verify`: continue from a passed verify result into archive automatically.
 
@@ -82,9 +82,9 @@ Important:
 
 ## Automation Profiles
 
-The runtime derives a profile from `rra.gate_mode` plus the five `subagent_team.*` switches:
+The runtime derives a profile from `rra.gate_mode` plus the `subagent_team.*` switches:
 
-- `semi_auto`: `rra.gate_mode=advisory` and all five `subagent_team` switches are `false`
+- `semi_auto`: `rra.gate_mode=advisory`, while `spec_readiness`, `issue_planning`, `change_acceptance`, and `archive` still wait for manual confirmation. `auto_accept_issue_review` may be `false` or `true`; when it is `true`, issue execution still auto-commits each validated issue.
 - `full_auto`: `rra.gate_mode=enforce` and all five `subagent_team` switches are `true`
 - `custom`: any mixed combination
 
@@ -133,6 +133,7 @@ Behavior:
 - each phase still has to wait for its gate-bearing subagents to finish; the pause here refers to human sign-off, not subagent completion
 - RRA keeps emitting guidance, but does not hard-block progression
 - issues run in the shared repo workspace by default (`worker_worktree: .`)
+- if you also want every validated issue to land as its own commit without changing the rest of the gate behavior, keep this profile and set `auto_accept_issue_review=true`
 
 ### Full-Automatic
 

@@ -86,6 +86,7 @@ If shared workspace mode is enabled, `worker_worktree` materializes as `.` and t
    - unresolved `Must fix now` items in the active control backlog -> stop and resolve them before dispatch, verify, or archive
    - any `blocked` -> stop and resolve blocker
    - any `review_required` -> if `subagent_team.auto_accept_issue_review=true` and issue-local validation passed, accept/commit it automatically; otherwise review it in the coordinator session first
+   - after an issue is accepted, its code should already be captured in exactly one coordinator-owned commit before the next issue dispatch or change-level verify
    - any issue doc without progress -> dispatch that next issue
    - all issues `completed` -> run a change-level acceptance round plus a change-level `/review` before moving to `verify`
    - if the latest verify artifact is current and passed -> move to `ready_for_archive`
