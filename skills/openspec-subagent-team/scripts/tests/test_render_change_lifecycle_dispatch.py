@@ -12,6 +12,21 @@ from pathlib import Path
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "render_change_lifecycle_dispatch.py"
 
 
+def run(cmd: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True, check=True)
+
+
+def init_git_repo(repo_root: Path) -> None:
+    run(["git", "init"], cwd=repo_root)
+    run(["git", "config", "user.name", "Test User"], cwd=repo_root)
+    run(["git", "config", "user.email", "test@example.com"], cwd=repo_root)
+
+
+def commit_all(repo_root: Path, message: str) -> None:
+    run(["git", "add", "."], cwd=repo_root)
+    run(["git", "commit", "-m", message], cwd=repo_root)
+
+
 class RenderChangeLifecycleDispatchTest(unittest.TestCase):
     def test_detects_spec_readiness_when_core_docs_are_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -169,10 +184,10 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
 
         self.assertEqual(payload["phase"], "issue_planning")
         self.assertTrue(payload["automation"]["accept_issue_planning"])
-        self.assertIn("当前 phase 的 gate-bearing subagent 全部完成且 verdict 满足条件后，coordinator 自动通过 issue planning 评审并立即派发当前 round 已批准的 issue，不要停在 control-plane ready", dispatch_text)
+        self.assertIn("当前 phase 的 gate-bearing subagent 全部完成且 verdict 满足条件后，coordinator 自动通过 issue planning 评审，先提交 proposal / design / tasks / issue 文档，再立即派发当前 round 已批准的 issue，不要停在 control-plane ready", dispatch_text)
         self.assertIn("subagent_team.auto_accept_issue_planning=true", dispatch_text)
         self.assertIn("tasks.md、INDEX 和 ISSUE 文档齐全且相互一致", dispatch_text)
-        self.assertIn("如果 issue planning 通过后 reconcile 给出 `dispatch_next_issue`，那表示必须立即继续派发，不要把 `control-plane ready` 当作 terminal checkpoint。", dispatch_text)
+        self.assertIn("如果 reconcile 先给出 `commit_planning_docs`，那表示必须先提交规划文档；只有提交完成后，后续 `dispatch_next_issue` 才表示立即继续派发，不要把 `control-plane ready` 当作 terminal checkpoint。", dispatch_text)
 
     def test_detects_issue_execution_and_renders_issue_packet(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -236,8 +251,10 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
                 - 继续 ISSUE-001
                 """
             ))
+            init_git_repo(repo_root)
+            commit_all(repo_root, "commit planning docs")
 
-            process = subprocess.run(
+            process = run(
                 [
                     sys.executable,
                     str(SCRIPT_PATH),
@@ -246,9 +263,7 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
                     "--change",
                     "demo-change",
                 ],
-                capture_output=True,
-                text=True,
-                check=True,
+                cwd=repo_root,
             )
 
             payload = json.loads(process.stdout)
@@ -279,6 +294,56 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
         self.assertEqual(payload["team_topology"][2]["count"], 1)
         self.assertIn("Launch with `reasoning_effort=xhigh`", issue_team_text)
         self.assertIn("Launch with `reasoning_effort=medium`", issue_team_text)
+
+    def test_issue_planning_blocks_issue_execution_until_docs_are_committed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            change_dir = repo_root / "openspec" / "changes" / "demo-change"
+            issues_dir = change_dir / "issues"
+            issues_dir.mkdir(parents=True)
+
+            (change_dir / "proposal.md").write_text("# proposal\n")
+            (change_dir / "design.md").write_text("# design\n")
+            (change_dir / "tasks.md").write_text("- [ ] 1.1 ship issue flow\n")
+            (issues_dir / "INDEX.md").write_text("- `ISSUE-001` `1.1`\n")
+            (issues_dir / "ISSUE-001.md").write_text(textwrap.dedent(
+                """\
+                ---
+                issue_id: ISSUE-001
+                title: 生命周期执行
+                worker_worktree: .
+                allowed_scope:
+                  - src/demo.ts
+                out_of_scope:
+                  - electron/
+                done_when:
+                  - 输出 issue team packet
+                validation:
+                  - pnpm lint
+                ---
+                """
+            ))
+            init_git_repo(repo_root)
+
+            process = run(
+                [
+                    sys.executable,
+                    str(SCRIPT_PATH),
+                    "--repo-root",
+                    str(repo_root),
+                    "--change",
+                    "demo-change",
+                ],
+                cwd=repo_root,
+            )
+
+            payload = json.loads(process.stdout)
+            dispatch_text = (repo_root / payload["lifecycle_dispatch_path"]).read_text()
+
+        self.assertEqual(payload["phase"], "issue_planning")
+        self.assertIn("尚未提交", payload["phase_reason"])
+        self.assertIn("先把 proposal / design / tasks / issue 文档提交成一次独立 commit", dispatch_text)
+        self.assertIn("提交 proposal / design / tasks / issue 文档", dispatch_text)
 
     def test_enters_change_verify_phase_when_auto_verify_enabled(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

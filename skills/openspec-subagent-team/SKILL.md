@@ -51,6 +51,7 @@ Read these first:
    - dedupe findings into one normalized backlog
    - decide stop / continue
    - when an enabled `auto_accept_*` gate becomes eligible, continue immediately instead of asking the user to review first
+   - if reconcile emits `commit_planning_docs`, run the coordinator-owned planning-doc commit immediately before any first issue dispatch
    - if reconcile emits `dispatch_next_issue`, treat it as a continuation command, not a terminal control-plane checkpoint
 7. Use a phase-specific topology:
    - `spec_readiness`: 1 design author (`reasoning_effort=xhigh`) + 2 design reviewers (`reasoning_effort=medium`)
@@ -86,7 +87,8 @@ Read these first:
 - `semi_auto` means the lifecycle still keeps manual gates for design / planning / change acceptance / archive. It may still auto-accept validated issues one by one so each issue lands as its own commit. `full_auto` means the lifecycle auto-continues across `spec_readiness -> issue_planning -> issue_execution -> change_acceptance -> change_verify -> archive` while still respecting RRA gates.
 - `spec_readiness` is the design-review gate in the complex-change path: proposal/design are prepared first, then a dedicated `1` author + `2` reviewers subagent team must pass it before task splitting begins.
 - `issue_planning` starts after design review passes, and is where coordinator-owned `tasks.md` plus `issues/INDEX.md` and `ISSUE-*.md` are produced/reviewed.
-- When `issue_planning` is auto-accepted and reconcile emits `dispatch_next_issue`, the coordinator must immediately render the next `ISSUE-*.team.dispatch.md` and enter issue execution; do not stop at `control-plane ready` or another informational checkpoint.
+- Before the first issue dispatch, the coordinator must first commit `proposal.md`, `design.md`, `tasks.md`, `issues/INDEX.md`, and `ISSUE-*.md` as a dedicated planning-doc commit.
+- When `issue_planning` is auto-accepted and reconcile emits `commit_planning_docs`, the coordinator must commit those planning docs immediately, rerun reconcile, and then honor `dispatch_next_issue`.
 - `issue_planning` and `issue_execution` should start with the lighter fast path first; only escalate more check/review seats when the current round surfaces cross-boundary risk or unresolved evidence gaps.
 - Gate-bearing phase subagents are part of the acceptance barrier for that phase, not informational helpers.
 - `auto_accept_*` means "skip human sign-off after the gate team has finished and passed", not "advance immediately after spawn".
@@ -103,7 +105,7 @@ Read these first:
 - code-writing subagents use `reasoning_effort=xhigh`.
 - design reviewers, planning authors, checkers, reviewers, and closeout-only subagents use `reasoning_effort=medium`.
 - `auto_accept_spec_readiness=true` means spec-readiness does not wait for human sign-off once proposal/design have passed the `1` author + `2` reviewers design review.
-- `auto_accept_issue_planning=true` means issue planning does not wait for human sign-off once tasks.md plus INDEX/ISSUE docs are dispatch-ready.
+- `auto_accept_issue_planning=true` means issue planning does not wait for human sign-off once tasks.md plus INDEX/ISSUE docs are dispatch-ready; the coordinator still commits the planning docs before the first issue dispatch.
 - `dispatch_next_issue` means "continue now"; it is not a pause point, not a terminal checkpoint, and not a prompt to wait for another user instruction.
 - `auto_accept_issue_review=true` means eligible `review_required` issues are coordinator-accepted, merged, and committed automatically once issue-local validation passes.
 - `auto_accept_change_acceptance=true` means change acceptance does not wait for human sign-off once a passed change-level `/review` has already made verify allowed.

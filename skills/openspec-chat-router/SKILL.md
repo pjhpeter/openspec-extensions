@@ -104,7 +104,7 @@ Preferred flow:
 1. Use the main session to get the change to proposal/design-ready state.
 2. Run a change-level spec-readiness design review with a dedicated `1` design-author subagent plus `2` design-review subagents, and keep a normalized backlog for that gate.
 3. Only after design review passes, split implementation into coordinator-owned `tasks.md` plus issue-sized units with clear boundaries.
-4. Review the issue plan before dispatching issue work.
+4. Review the issue plan, then commit `proposal.md` / `design.md` / `tasks.md` / `issues/INDEX.md` / `ISSUE-*.md` as a coordinator-owned planning-doc commit before the first issue dispatch.
 5. For each approved issue, create or reuse the issue workspace (`worker_worktree`) before handoff.
 6. By default, render the subagent-team lifecycle packet and use it as the coordinator control packet for the current phase.
 7. Use one issue-only execution subagent for one approved issue only when the user explicitly narrows execution to that one issue, or the current step is already a bounded single-issue handoff.

@@ -28,6 +28,7 @@ Helper scripts may fall back to the repo config when those fields are missing.
 
 - Coordinator owns:
   - `tasks.md`
+  - the planning-doc commit that snapshots `proposal.md` / `design.md` / `tasks.md` / `issues/INDEX.md` / `ISSUE-*.md` before the first issue dispatch
   - change-level backlog and round reports
   - change-level progress summaries
   - review of completed issues
@@ -87,7 +88,8 @@ If shared workspace mode is enabled, `worker_worktree` materializes as `.` and t
    - any `blocked` -> stop and resolve blocker
    - any `review_required` -> if `subagent_team.auto_accept_issue_review=true` and issue-local validation passed, accept/commit it automatically; otherwise review it in the coordinator session first
    - after an issue is accepted, its code should already be captured in exactly one coordinator-owned commit before the next issue dispatch or change-level verify
-   - any issue doc without progress -> dispatch that next issue
+   - if the first issue has not started yet and planning docs are still dirty in git -> create the coordinator-owned planning-doc commit first
+   - any issue doc without progress -> dispatch that next issue only after the planning-doc commit already exists
    - all issues `completed` -> run a change-level acceptance round plus a change-level `/review` before moving to `verify`
    - if the latest verify artifact is current and passed -> move to `ready_for_archive`
    - if the latest verify artifact is current and failed -> stop and resolve verify failure
@@ -98,6 +100,7 @@ If shared workspace mode is enabled, `worker_worktree` materializes as `.` and t
 - The coordinator must record seat ownership, agent ids, and running/completed status for those gate-bearing subagents.
 - `auto_accept_*` only skips human chat confirmation after the required gate-bearing subagents have all completed and their verdicts have been normalized.
 - When reconcile emits `dispatch_next_issue`, the coordinator must continue immediately; this is not a terminal checkpoint and must not be rewritten as "control-plane ready, waiting for instruction".
+- When reconcile emits `commit_planning_docs`, the coordinator must commit the planning docs first and rerun reconcile before starting the first issue execution.
 - A phase must not pass while any required gate-bearing subagent for that phase is still running.
 - Gate-bearing subagents must not be closed early before their completion state and verdict are collected.
 - Gate-bearing design-review / check / review seats must not be treated as `explorer` sidecars.
@@ -147,6 +150,7 @@ Issue progress files are the execution state.
 Control backlog and round reports are the acceptance state.
 Team dispatch artifacts are the coordinator handoff state for the default subagent-team rounds in issue mode.
 In issue mode, accepted code lands through coordinator review plus coordinator-owned acceptance commit, not through worker self-management.
+The first issue execution also depends on a prior coordinator-owned planning-doc commit for `proposal.md` / `design.md` / `tasks.md` / `issues/INDEX.md` / `ISSUE-*.md`.
 Before verify, the coordinator must also write a current `runs/CHANGE-REVIEW.json` artifact from a change-level `/review` of the current change diff.
 When `subagent_team.auto_accept_*` is enabled, the gate is still coordinator-owned; it simply no longer waits for human chat confirmation before the coordinator accepts it.
 It still requires the gate-bearing subagents for that phase to finish, and it does not authorize early phase completion or early subagent closure.

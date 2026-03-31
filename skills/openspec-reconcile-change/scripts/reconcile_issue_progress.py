@@ -12,6 +12,7 @@ if str(SHARED_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SHARED_SCRIPTS))
 
 from coordinator_change_common import (  # noqa: E402
+    planning_doc_status,
     read_json,
     review_artifact_is_current,
     review_artifact_path,
@@ -129,6 +130,7 @@ def determine_base_next_action(
     auto_accept_issue_review = bool(subagent_team.get("auto_accept_issue_review", False))
     auto_accept_change_acceptance = bool(subagent_team.get("auto_accept_change_acceptance", False))
     auto_archive_after_verify = bool(subagent_team.get("auto_archive_after_verify", False))
+    planning_docs = planning_doc_status(repo_root, change)
 
     if not issues:
         return "no_issue_artifacts", "", "未找到 issue 工件。"
@@ -170,6 +172,18 @@ def determine_base_next_action(
             if auto_accept_issue_review:
                 return "dispatch_next_issue", pending[0]["issue_id"], f"{len(pending)} 个 issue 尚未开始，配置允许自动进入下一 issue。"
             return "await_next_issue_confirmation", pending[0]["issue_id"], f"{len(pending)} 个 issue 尚未开始，等待人工确认是否继续派发。"
+        if planning_docs["git_available"] and planning_docs["needs_commit"]:
+            if auto_accept_issue_planning:
+                return (
+                    "commit_planning_docs",
+                    pending[0]["issue_id"],
+                    "issue planning 已通过，但 proposal / design / tasks / issue 文档尚未提交；配置允许 coordinator 先自动提交规划文档。",
+                )
+            return (
+                "await_planning_docs_commit_confirmation",
+                pending[0]["issue_id"],
+                "issue planning 已通过，但 proposal / design / tasks / issue 文档尚未提交；需先提交规划文档后再开始首个 issue execution。",
+            )
         if auto_accept_issue_planning:
             return "dispatch_next_issue", pending[0]["issue_id"], f"{len(pending)} 个 issue 尚未开始，配置允许 issue planning 通过后自动派发。"
         return "await_issue_dispatch_confirmation", pending[0]["issue_id"], f"{len(pending)} 个 issue 尚未开始，等待人工确认是否开始 issue execution。"
@@ -255,6 +269,18 @@ def continuation_policy(next_action: str, recommended_issue_id: str) -> dict[str
                 f" 立即为{issue_suffix} 渲染 team dispatch，并继续 subagent-team 主链。"
             ),
         }
+    if next_action == "commit_planning_docs":
+        return {
+            "mode": "continue_immediately",
+            "pause_allowed": False,
+            "human_confirmation_required": False,
+            "must_not_stop_at_checkpoint": True,
+            "summary": "当前 change 已完成 issue planning，coordinator 必须先提交规划文档再开始首个 issue。",
+            "instruction": (
+                "`commit_planning_docs` 不是 terminal checkpoint；立即提交 proposal / design / tasks / issue 文档，"
+                " 然后重新 reconcile 并继续主链。"
+            ),
+        }
     if next_action == "auto_accept_issue":
         issue_suffix = f" `{recommended_issue_id}`" if recommended_issue_id else ""
         return {
@@ -288,6 +314,7 @@ def continuation_policy(next_action: str, recommended_issue_id: str) -> dict[str
         }
     if next_action in {
         "await_issue_dispatch_confirmation",
+        "await_planning_docs_commit_confirmation",
         "await_next_issue_confirmation",
         "await_verify_confirmation",
         "ready_for_archive",
@@ -326,6 +353,7 @@ def main() -> None:
     issues = collect_issues(repo_root, args.change)
     control_state = read_change_control_state(repo_root, args.change)
     gate_mode = str(config.get("rra", {}).get("gate_mode", "advisory"))
+    planning_docs = planning_doc_status(repo_root, args.change)
 
     counts = count_statuses(issues)
     base_next_action, base_recommended_issue_id, base_reason = determine_base_next_action(repo_root, args.change, issues, config)
@@ -378,6 +406,7 @@ def main() -> None:
             ),
             "archive_after_verify": bool(config.get("subagent_team", {}).get("auto_archive_after_verify", False)),
         },
+        "planning_docs": planning_docs,
         "issues": issues,
     }
     print(json.dumps(result, ensure_ascii=False, indent=2))

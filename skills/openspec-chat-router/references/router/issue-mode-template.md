@@ -10,7 +10,7 @@
 推荐方式：
 
 1. 主会话先补齐 proposal / design，并做 change 级 design review；这里使用 1 个设计作者 subagent 和 2 个设计评审 subagent。设计作者使用 `reasoning_effort=xhigh`，设计评审使用 `reasoning_effort=medium`。如果 `auto_accept_spec_readiness=true`，这一关不需要人工签字
-2. design review 通过后，再把复杂实现拆成 `tasks.md` 和多个 issue，并对任务拆分边界做一轮 review；如果 `auto_accept_issue_planning=true`，这一关不需要人工签字，而且应立即派发首个已批准 issue，不要停在 `control-plane ready`
+2. design review 通过后，再把复杂实现拆成 `tasks.md` 和多个 issue，并对任务拆分边界做一轮 review；在开始首个 issue execution 前，主会话必须先把 `proposal.md`、`design.md`、`tasks.md`、`issues/INDEX.md`、`ISSUE-*.md` 提交成一次独立 commit。如果 `auto_accept_issue_planning=true`，这一关不需要人工签字，但仍要先提交这些文档，再立即派发首个已批准 issue，不要停在 `control-plane ready`
 3. 主会话维护 change 级 backlog / round report，不把门禁判断只留在聊天里
 4. 主会话只为当前 round 已批准的 issue 创建或复用 issue workspace（`worker_worktree`），并渲染 subagent-team lifecycle packet / `ISSUE-*.team.dispatch.md`
 5. 默认用 subagent team 驱动开发 / 检查 / 修复 / 审查小组，作为整个 complex change 的协调入口；issue planning 默认走 `2 development + 1 check + 1 review`，issue execution 默认走 `3 development + 2 check + 1 review` 的快路径。任何编码 subagent 使用 `reasoning_effort=xhigh`，其余规划/检查/审查 subagent 使用 `reasoning_effort=medium`
@@ -71,5 +71,6 @@
 继续当前 change，保持 subagent-team 主链推进。
 如果需要等待 subagent，使用 1 小时阻塞等待，直到 subagent 完成再返回。
 如果当前 phase 还有 review/check subagent 在运行，先等它们全部完成并收齐 verdict，再决定是否进入下一阶段。
-如果 reconcile 的 next_action 是 dispatch_next_issue，不要停在 control-plane ready，立即渲染并派发下一 issue 的 team dispatch。
+如果 reconcile 的 next_action 是 `commit_planning_docs`，先提交规划文档，再重新 reconcile。
+如果后续 next_action 是 `dispatch_next_issue`，不要停在 control-plane ready，立即渲染并派发下一 issue 的 team dispatch。
 ```

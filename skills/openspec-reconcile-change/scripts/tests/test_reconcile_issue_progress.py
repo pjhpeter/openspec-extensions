@@ -12,6 +12,21 @@ from pathlib import Path
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "reconcile_issue_progress.py"
 
 
+def run(cmd: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True, check=True)
+
+
+def init_git_repo(repo_root: Path) -> None:
+    run(["git", "init"], cwd=repo_root)
+    run(["git", "config", "user.name", "Test User"], cwd=repo_root)
+    run(["git", "config", "user.email", "test@example.com"], cwd=repo_root)
+
+
+def commit_all(repo_root: Path, message: str) -> None:
+    run(["git", "add", "."], cwd=repo_root)
+    run(["git", "commit", "-m", message], cwd=repo_root)
+
+
 def write_issue_doc(repo_root: Path, change: str, issue_id: str = "ISSUE-001") -> Path:
     issue_path = repo_root / "openspec" / "changes" / change / "issues" / f"{issue_id}.md"
     issue_path.parent.mkdir(parents=True, exist_ok=True)
@@ -110,6 +125,8 @@ class ReconcileIssueProgressTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)
             write_issue_doc(repo_root, "demo-change")
+            init_git_repo(repo_root)
+            commit_all(repo_root, "commit planning docs")
 
             payload = self.run_script(repo_root)
 
@@ -155,6 +172,8 @@ class ReconcileIssueProgressTest(unittest.TestCase):
                     }
                 },
             )
+            init_git_repo(repo_root)
+            commit_all(repo_root, "commit planning docs")
 
             payload = self.run_script(repo_root)
 
@@ -165,6 +184,42 @@ class ReconcileIssueProgressTest(unittest.TestCase):
         self.assertFalse(payload["continuation_policy"]["pause_allowed"])
         self.assertTrue(payload["continuation_policy"]["must_not_stop_at_checkpoint"])
         self.assertIn("不是 terminal checkpoint", payload["continuation_policy"]["instruction"])
+
+    def test_first_issue_requires_planning_doc_commit_before_dispatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            write_issue_doc(repo_root, "demo-change")
+            init_git_repo(repo_root)
+
+            payload = self.run_script(repo_root)
+
+        self.assertEqual(payload["next_action"], "await_planning_docs_commit_confirmation")
+        self.assertEqual(payload["recommended_issue_id"], "ISSUE-001")
+        self.assertEqual(payload["continuation_policy"]["mode"], "await_human_confirmation")
+        self.assertTrue(payload["planning_docs"]["needs_commit"])
+        self.assertIn("需先提交规划文档", payload["reason"])
+
+    def test_auto_issue_planning_commits_docs_before_first_dispatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            write_issue_doc(repo_root, "demo-change")
+            write_issue_mode_config(
+                repo_root,
+                {
+                    "subagent_team": {
+                        "auto_accept_issue_planning": True,
+                    }
+                },
+            )
+            init_git_repo(repo_root)
+
+            payload = self.run_script(repo_root)
+
+        self.assertEqual(payload["next_action"], "commit_planning_docs")
+        self.assertEqual(payload["recommended_issue_id"], "ISSUE-001")
+        self.assertEqual(payload["continuation_policy"]["mode"], "continue_immediately")
+        self.assertTrue(payload["planning_docs"]["needs_commit"])
+        self.assertIn("先自动提交规划文档", payload["reason"])
 
     def test_auto_issue_review_can_auto_accept_when_validation_passed(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,98 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def change_dir_path(repo_root: Path, change: str) -> Path:
     return repo_root / "openspec" / "changes" / change
+
+
+def planning_doc_paths(repo_root: Path, change: str) -> list[Path]:
+    change_dir = change_dir_path(repo_root, change)
+    issues_dir = change_dir / "issues"
+    paths = [
+        change_dir / "proposal.md",
+        change_dir / "design.md",
+        change_dir / "tasks.md",
+        issues_dir / "INDEX.md",
+    ]
+    issue_docs = [
+        path
+        for path in sorted(issues_dir.glob("ISSUE-*.md"))
+        if not path.name.endswith(".dispatch.md") and not path.name.endswith(".team.dispatch.md")
+    ]
+    result: list[Path] = []
+    for path in [*paths, *issue_docs]:
+        if path.exists() and path not in result:
+            result.append(path)
+    return result
+
+
+def decode_command_output(data: bytes) -> str:
+    return data.decode("utf-8", errors="replace").strip()
+
+
+def run_command(
+    cmd: list[str],
+    *,
+    cwd: Path,
+    check: bool = True,
+) -> subprocess.CompletedProcess[bytes]:
+    process = subprocess.run(
+        cmd,
+        cwd=str(cwd),
+        capture_output=True,
+    )
+    if check and process.returncode != 0:
+        message = decode_command_output(process.stderr) or decode_command_output(process.stdout) or "command failed"
+        raise RuntimeError(message)
+    return process
+
+
+def extract_status_paths(line: str) -> list[str]:
+    payload = line[3:].strip()
+    if not payload:
+        return []
+    if " -> " in payload:
+        return [part.strip() for part in payload.split(" -> ") if part.strip()]
+    return [payload]
+
+
+def planning_doc_status(repo_root: Path, change: str) -> dict[str, Any]:
+    paths = planning_doc_paths(repo_root, change)
+    repo_relative_paths = [str(path.relative_to(repo_root)) for path in paths]
+
+    result: dict[str, Any] = {
+        "git_available": False,
+        "paths": repo_relative_paths,
+        "status_lines": [],
+        "dirty_paths": [],
+        "needs_commit": False,
+        "ready": False,
+    }
+    if not repo_relative_paths:
+        return result
+
+    process = run_command(
+        ["git", "rev-parse", "--is-inside-work-tree"],
+        cwd=repo_root,
+        check=False,
+    )
+    if process.returncode != 0:
+        return result
+
+    result["git_available"] = True
+    status_process = run_command(
+        ["git", "status", "--short", "--untracked-files=all", "--", *repo_relative_paths],
+        cwd=repo_root,
+    )
+    status_lines = [line for line in decode_command_output(status_process.stdout).splitlines() if line.strip()]
+    dirty_paths: list[str] = []
+    for line in status_lines:
+        for path in extract_status_paths(line):
+            if path not in dirty_paths:
+                dirty_paths.append(path)
+    result["status_lines"] = status_lines
+    result["dirty_paths"] = dirty_paths
+    result["needs_commit"] = bool(status_lines)
+    result["ready"] = not status_lines
+    return result
 
 
 def verify_artifact_path(repo_root: Path, change: str) -> Path:
