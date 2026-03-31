@@ -164,13 +164,31 @@ def render_dispatch(
   - Launch with `reasoning_effort=medium`
   - Why: reviewer 只负责验收裁决、风险判断和证据充分性检查。
 
+## Gate Barrier
+
+- Gate-bearing seats for this round:
+  - Development group: launched seats must complete or explicitly report no-op before round close
+  - Check group: all launched checker seats must complete and be normalized before repair / review decisions
+  - Review group: all launched reviewer seats must complete and be collected before the round can pass
+- Barrier rules:
+  - 记录当前 round gate-bearing subagent 的 seat、`agent_id` 和状态。
+  - 对 gate-bearing subagent 使用最长 1 小时的 blocking wait，不要 30 秒短轮询。
+  - 任一 required gate-bearing subagent 仍在运行时，不允许提前通过当前 round。
+  - 任一 required gate-bearing subagent 仍在运行时，不允许提前关闭它。
+  - gate-bearing check/review subagent 不要当作 `explorer` sidecar。
+  - `auto_accept_issue_review=true` 只跳过人工签字，不跳过 gate-bearing subagent 的完成等待。
+
 ## Coordinator Responsibilities
 
 - 主代理负责 orchestration、scope control、issue dedupe、normalized backlog、stop decision。
 - 拉起 subagent 时必须显式设置 `reasoning_effort`，不要直接继承当前会话的全局默认值。
 - 标准循环是：开发 -> 检查 -> 修复 -> 审查。
+- gate-bearing subagent 的 seat、`agent_id` 和完成状态必须写进 round 输出或控制工件，不能只留在聊天里。
+- 对 gate-bearing subagent 使用最长 1 小时的 blocking wait，不要短轮询后提前返回。
+- 当前 round 的 gate-bearing check/review subagent 不要当作 `explorer` sidecar。
 - 检查组结果必须先统一归并，再交给开发组修复；不要把原始检查碎片直接下发。
 - 审查组负责最终通过/不通过判断；审查不通过就回到开发组开始下一轮。
+- 任一 required gate-bearing subagent 仍在运行时，不允许 accept 当前 round，也不允许关闭这些 subagent。
 - coordinator 继续拥有：
   - `control/BACKLOG.md`
   - latest `control/ROUND-*.md`
@@ -198,6 +216,7 @@ def render_dispatch(
   - 证据
   - 最小修复建议
 - 不要输出纯风格建议，不要扩展需求。
+- checker 的输出属于当前 round 的硬门禁输入；在主控 agent 收齐所有 checker 结论前，不能提前通过当前 round。
 
 ## Development Packet Rules
 
@@ -218,6 +237,7 @@ def render_dispatch(
   - evidence
   - blocking gap 或 `none`
 - `pass` 才允许结束本轮；`fail` 则回到开发组开始下一轮。
+- 在主控 agent 收齐所有 reviewer verdict 前，不允许提前通过当前 round，也不允许提前关闭 reviewer subagent。
 - 如果两三轮后仍停滞，优先缩 scope 或收紧目标，不要默认扩 backlog。
 
 ## Latest Round Signals
@@ -234,11 +254,12 @@ def render_dispatch(
 ## Required Round Output
 
 1. Round target
-2. Normalized backlog
-3. Fixes completed
-4. Re-review result
-5. Acceptance verdict
-6. Next action
+2. Gate-bearing subagent roster with seat / agent_id / status
+3. Normalized backlog
+4. Fixes completed
+5. Re-review result
+6. Acceptance verdict
+7. Next action
 """
 
 

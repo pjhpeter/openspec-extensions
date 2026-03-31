@@ -463,6 +463,15 @@ def render_team_topology(items: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def render_gate_bearing_seats(items: list[dict[str, Any]]) -> str:
+    lines: list[str] = []
+    for item in items:
+        label = str(item["label"]).strip()
+        count = int(item["count"])
+        lines.append(f"- {label}: {count} required completion{'s' if count != 1 else ''}")
+    return "\n".join(lines)
+
+
 def phase_round_loop(phase: str) -> str:
     if phase == "spec_readiness":
         return "设计编写 -> 双评审 -> 修订 -> 双评审"
@@ -473,6 +482,7 @@ def phase_required_output(phase: str) -> list[str]:
     if phase == "spec_readiness":
         return [
             "Phase target",
+            "Gate-bearing subagent roster with seat / agent_id / status",
             "Design author changes completed",
             "Reviewer 1 verdict",
             "Reviewer 2 verdict",
@@ -481,6 +491,7 @@ def phase_required_output(phase: str) -> list[str]:
         ]
     return [
         "Phase target",
+        "Gate-bearing subagent roster with seat / agent_id / status",
         "Normalized backlog",
         "Development changes completed",
         "Check result",
@@ -529,24 +540,24 @@ def render_phase_packet(
 
     phase_next_step = {
         "spec_readiness": (
-            "coordinator 自动通过 design review，并进入任务拆分 / issue planning"
+            "当前 phase 的 gate-bearing subagent 全部完成且 verdict 满足条件后，coordinator 自动通过 design review，并进入任务拆分 / issue planning"
             if auto_accept_spec_readiness
-            else "1 个设计作者和 2 个设计评审全部通过后暂停，等待人工确认后再进入任务拆分 / issue planning"
+            else "1 个设计作者和 2 个设计评审全部完成并收齐通过结论后暂停，等待人工确认后再进入任务拆分 / issue planning"
         ),
         "issue_planning": (
-            "coordinator 自动通过 issue planning 评审并派发当前 round 已批准的 issue"
+            "当前 phase 的 gate-bearing subagent 全部完成且 verdict 满足条件后，coordinator 自动通过 issue planning 评审并派发当前 round 已批准的 issue"
             if auto_accept_issue_planning
-            else "审查通过后暂停，等待人工确认后再进入 issue execution"
+            else "审查组 verdict 全部收齐并通过后暂停，等待人工确认后再进入 issue execution"
         ),
         "issue_execution": (
-            "issue 完成且校验通过后，coordinator 自动接受并合并该 issue，然后进入下一个 issue 或 change acceptance"
+            "当前 round 的 gate-bearing subagent 全部完成、issue 校验通过且审查 verdict 满足条件后，coordinator 自动接受并合并该 issue，然后进入下一个 issue 或 change acceptance"
             if auto_accept_issue_review
-            else "审查通过后暂停，等待人工确认是否继续派发下一个 issue"
+            else "审查组 verdict 全部收齐并通过后暂停，等待人工确认是否继续派发下一个 issue"
         ),
         "change_acceptance": (
-            "coordinator 自动通过 change acceptance 并运行 verify"
+            "当前 phase 的 gate-bearing subagent 全部完成、change-level /review 已通过后，coordinator 自动通过 change acceptance 并运行 verify"
             if auto_accept_change_acceptance
-            else "审查通过后暂停，等待人工确认后再运行 verify"
+            else "审查组 verdict 全部收齐并通过后暂停，等待人工确认后再运行 verify"
         ),
         "change_verify": (
             "verify 通过后自动进入 archive"
@@ -568,7 +579,7 @@ def render_phase_packet(
             "2 个 design review subagent 直接给出 pass / fail 和 blocking gap，不单独再设 check group。",
             "只有 2 个 reviewer 都通过，才允许进入 plan-issues / 任务拆分。",
             (
-                "当 `auto_accept_spec_readiness=true` 时，coordinator 不等待人工签字，直接把 design review 视为通过并进入 plan-issues。"
+                "当 `auto_accept_spec_readiness=true` 时，coordinator 在 gate-bearing 设计评审 subagent 全部完成并收齐通过结论后，不等待人工签字，直接把 design review 视为通过并进入 plan-issues。"
                 if auto_accept_spec_readiness
                 else "审查组通过后默认停住，先让人看 design，再决定是否进入 plan-issues。"
             ),
@@ -578,7 +589,7 @@ def render_phase_packet(
             "issue planning 不以写 repo 代码为目标，本 phase 的开发/检查/审查 subagent 全部使用 `reasoning_effort=medium`。",
             "检查组确认 allowed_scope / out_of_scope / done_when / validation 可执行。",
             (
-                "当 `auto_accept_issue_planning=true` 时，coordinator 不等待人工签字，直接把 issue planning 视为通过并派发当前 round 已批准的 issue。"
+                "当 `auto_accept_issue_planning=true` 时，coordinator 在当前 phase 的 gate-bearing planning/check/review subagent 全部完成并收齐 verdict 后，不等待人工签字，直接把 issue planning 视为通过并派发当前 round 已批准的 issue。"
                 if auto_accept_issue_planning
                 else "审查组通过后默认停住，先让 coordinator 人工确认，再 dispatch issue。"
             ),
@@ -588,7 +599,7 @@ def render_phase_packet(
             "编码型开发 subagent 使用 `reasoning_effort=xhigh`；检查组和审查组使用 `reasoning_effort=medium`。",
             "检查组优先看回归、范围泄漏、证据缺口。",
             (
-                "当 `auto_accept_issue_review=true` 时，coordinator 会在 issue-local validation 全部通过后自动接受并 merge 当前 issue，再继续后续 phase。"
+                "当 `auto_accept_issue_review=true` 时，coordinator 会在 gate-bearing check/review subagent 全部完成且 issue-local validation 全部通过后自动接受并 merge 当前 issue，再继续后续 phase。"
                 if auto_accept_issue_review
                 else "审查组通过后默认停住，让 coordinator 先确认是否派发下一个 issue。"
             ),
@@ -601,7 +612,7 @@ def render_phase_packet(
             "检查组确认已接受 issue 能覆盖请求范围。",
             "只有 change-level /review 通过后，才允许继续进入 verify。",
             (
-                "当 `auto_accept_change_acceptance=true` 时，coordinator 在 change-level /review 通过后不等待人工签字，直接把 change acceptance 视为通过并切到 verify。"
+                "当 `auto_accept_change_acceptance=true` 时，coordinator 在 gate-bearing 审查 subagent 全部完成且 change-level /review 通过后不等待人工签字，直接把 change acceptance 视为通过并切到 verify。"
                 if auto_accept_change_acceptance
                 else "审查组通过后默认停住，让 coordinator 先确认是否运行 verify。"
             ),
@@ -659,13 +670,29 @@ def render_phase_packet(
 
 {render_team_topology(team_topology)}
 
+## Gate Barrier
+
+- Gate-bearing seats for this phase:
+{render_gate_bearing_seats(team_topology)}
+- Barrier rules:
+  - 当前 phase 里真正拉起的这些 gate-bearing subagent 必须记录 seat、`agent_id` 和状态。
+  - 对 gate-bearing subagent 使用最长 1 小时的 blocking wait，不要 30 秒短轮询。
+  - 任一 required gate-bearing subagent 仍在运行时，不允许提前通过当前 phase。
+  - 任一 required gate-bearing subagent 仍在运行时，不允许提前关闭它。
+  - design review / check / review 这类 gate-bearing seat 不要当作 `explorer` sidecar。
+  - `auto_accept_*` 只跳过人工签字，不跳过 gate-bearing subagent 的完成等待。
+
 ## Coordinator Rules
 
 - 主代理负责整个 change 的 lifecycle orchestration，不只负责单个 issue。
 - 当前 phase 的标准循环是：{round_loop}。
 - 拉起 subagent 时必须显式设置 `reasoning_effort`，不要直接继承当前会话的全局默认值。
+- gate-bearing subagent 的 `agent_id`、seat 和完成状态必须落盘或写入 round 输出，不能只留在聊天里。
+- 对当前 phase 的 gate-bearing subagent 使用最长 1 小时的 blocking wait，不要短轮询后提前返回。
+- 不要把当前 phase 的 gate-bearing review/check seat 当成 `explorer` sidecar。
 - 审查通过才允许进入下一 phase。
 - 审查不通过则回到开发组下一轮。
+- 任一 required gate-bearing subagent 仍在运行时，不允许 accept 当前 phase，也不允许关闭这些 subagent。
 - backlog / round / stop decision 必须落盘，不留在聊天里。
 - 当前自动推进开关：
   - `subagent_team.auto_accept_spec_readiness={str(auto_accept_spec_readiness).lower()}`

@@ -54,7 +54,12 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
         self.assertIn("Launch with `reasoning_effort=xhigh`", dispatch_text)
         self.assertIn("Launch with `reasoning_effort=medium`", dispatch_text)
         self.assertIn("当前 phase 的标准循环是：设计编写 -> 双评审 -> 修订 -> 双评审", dispatch_text)
-        self.assertIn("1 个设计作者和 2 个设计评审全部通过后暂停，等待人工确认后再进入任务拆分 / issue planning", dispatch_text)
+        self.assertIn("## Gate Barrier", dispatch_text)
+        self.assertIn("Design author: 1 required completion", dispatch_text)
+        self.assertIn("Design review: 2 required completions", dispatch_text)
+        self.assertIn("最长 1 小时的 blocking wait", dispatch_text)
+        self.assertIn("不要当作 `explorer` sidecar", dispatch_text)
+        self.assertIn("1 个设计作者和 2 个设计评审全部完成并收齐通过结论后暂停，等待人工确认后再进入任务拆分 / issue planning", dispatch_text)
         self.assertIn("subagent_team.auto_accept_spec_readiness=false", dispatch_text)
 
     def test_allows_auto_accept_spec_readiness_when_config_enabled(self) -> None:
@@ -94,7 +99,7 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
 
         self.assertEqual(payload["phase"], "spec_readiness")
         self.assertTrue(payload["automation"]["accept_spec_readiness"])
-        self.assertIn("coordinator 自动通过 design review，并进入任务拆分 / issue planning", dispatch_text)
+        self.assertIn("当前 phase 的 gate-bearing subagent 全部完成且 verdict 满足条件后，coordinator 自动通过 design review，并进入任务拆分 / issue planning", dispatch_text)
         self.assertIn("subagent_team.auto_accept_spec_readiness=true", dispatch_text)
 
     def test_design_review_still_blocks_issue_planning_until_tasks_are_split(self) -> None:
@@ -164,7 +169,7 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
 
         self.assertEqual(payload["phase"], "issue_planning")
         self.assertTrue(payload["automation"]["accept_issue_planning"])
-        self.assertIn("coordinator 自动通过 issue planning 评审并派发当前 round 已批准的 issue", dispatch_text)
+        self.assertIn("当前 phase 的 gate-bearing subagent 全部完成且 verdict 满足条件后，coordinator 自动通过 issue planning 评审并派发当前 round 已批准的 issue", dispatch_text)
         self.assertIn("subagent_team.auto_accept_issue_planning=true", dispatch_text)
         self.assertIn("tasks.md、INDEX 和 ISSUE 文档齐全且相互一致", dispatch_text)
 
@@ -241,6 +246,7 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
         self.assertTrue(payload["issue_team_dispatch_path"].endswith("ISSUE-001.team.dispatch.md"))
         self.assertIn("Current issue packet", lifecycle_text)
         self.assertIn("ISSUE-001.team.dispatch.md", lifecycle_text)
+        self.assertIn("Gate-bearing seats for this phase", lifecycle_text)
         self.assertIn("Development group: 3 subagents", issue_team_text)
         self.assertIn("Check group: 3 subagents", issue_team_text)
         self.assertIn("Review group: 3 subagents", issue_team_text)
@@ -513,6 +519,7 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
         self.assertIn("需先对当前 change 修改的代码运行 /review", payload["phase_reason"])
         self.assertIn("coordinator_review_change.py", dispatch_text)
         self.assertIn("只有 change-level /review 通过后，才允许继续进入 verify", dispatch_text)
+        self.assertIn("任一 required gate-bearing subagent 仍在运行时，不允许提前通过当前 phase", dispatch_text)
 
 
 if __name__ == "__main__":

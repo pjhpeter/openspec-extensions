@@ -58,9 +58,11 @@ The repo config is a reusable default layer, not a replacement for clear issue d
 Important:
 
 - `subagent_team.*` controls auto-advance behavior after the coordinator has already entered the subagent-team flow
+- `subagent_team.*` only skips human sign-off; it does not skip waiting for the current phase's gate-bearing subagents to finish
 - it does not choose the default coordinator entry topology
 - in issue mode, the default coordinator entry is `openspec-subagent-team` regardless of whether the active automation profile is `semi_auto`, `full_auto`, or `custom`
 - even when `auto_accept_change_acceptance=true`, a passed change-level `/review` is still required before verify
+- gate-bearing design-review / check / review seats should not be launched as `explorer`, and should use up to 1 hour blocking waits when unattended progression matters
 - role-based `reasoning_effort` is currently a skill/dispatch contract, not an `issue-mode.json` field:
   - design-author subagent: `xhigh`
   - any code-writing implementation or verify-fix subagent: `xhigh`
@@ -116,6 +118,7 @@ Behavior:
 - after all issues are done, coordinator must first run a passed change-level `/review`
 - change acceptance waits for human acceptance before verify
 - verify pass pauses before archive
+- each phase still has to wait for its gate-bearing subagents to finish; the pause here refers to human sign-off, not subagent completion
 - RRA keeps emitting guidance, but does not hard-block progression
 
 ### Full-Automatic
@@ -152,6 +155,7 @@ Behavior:
 - after all issues are done, coordinator still runs change-level `/review`; only a passed review can auto-advance into verify
 - change acceptance is auto-accepted and immediately enters verify once that review has passed
 - verify pass automatically advances into archive
+- each auto-advance still waits for the phase's gate-bearing subagents to finish and for their verdicts to be collected
 
 ## Lifecycle Switch Map
 

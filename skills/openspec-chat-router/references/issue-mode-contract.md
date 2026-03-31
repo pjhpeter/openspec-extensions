@@ -89,6 +89,16 @@ Worker worktrees should normally live under the project root:
    - if the latest verify artifact is current and passed -> move to `ready_for_archive`
    - if the latest verify artifact is current and failed -> stop and resolve verify failure
 
+## Gate-Bearing Subagent Barrier
+
+- In subagent-team flow, launched design-review, check, and review seats are gate-bearing participants for the current phase.
+- The coordinator must record seat ownership, agent ids, and running/completed status for those gate-bearing subagents.
+- `auto_accept_*` only skips human chat confirmation after the required gate-bearing subagents have all completed and their verdicts have been normalized.
+- A phase must not pass while any required gate-bearing subagent for that phase is still running.
+- Gate-bearing subagents must not be closed early before their completion state and verdict are collected.
+- Gate-bearing design-review / check / review seats must not be treated as `explorer` sidecars.
+- For unattended progression, prefer up to 1 hour blocking waits for gate-bearing subagents instead of short polling.
+
 ## Worker Rules
 
 1. Read change artifacts and the assigned issue boundary.
@@ -134,3 +144,4 @@ Team dispatch artifacts are the coordinator handoff state for the default subage
 In issue mode, accepted code lands through coordinator review plus coordinator-owned merge and commit, not through worker self-merge.
 Before verify, the coordinator must also write a current `runs/CHANGE-REVIEW.json` artifact from a change-level `/review` of the current change diff.
 When `subagent_team.auto_accept_*` is enabled, the gate is still coordinator-owned; it simply no longer waits for human chat confirmation before the coordinator accepts it.
+It still requires the gate-bearing subagents for that phase to finish, and it does not authorize early phase completion or early subagent closure.

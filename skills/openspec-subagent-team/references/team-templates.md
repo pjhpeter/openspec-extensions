@@ -9,6 +9,15 @@ Launch policy:
 - 设计评审、任务拆分、检查组、审查组、归档收尾等非编码 subagent 使用 `reasoning_effort=medium`
 - 启动时要显式传 `reasoning_effort`，不要直接继承当前会话默认值
 
+Gate barrier policy:
+
+- 当前 phase 里被真正拉起的 seat 都属于 gate-bearing subagent
+- 这些 gate-bearing subagent 要记录 `agent_id`、seat 和完成状态
+- 对 gate-bearing subagent 使用最长 1 小时的 blocking wait，不要 30 秒短轮询
+- 任一 required gate-bearing subagent 仍在运行时，不允许提前通过当前 phase
+- 任一 required gate-bearing subagent 仍在运行时，不允许提前关闭它
+- gate-bearing design review / check / review subagent 不要用 `explorer` 身份启动
+
 ## Short Kickoff
 
 ```text
@@ -21,6 +30,7 @@ Issue：<issue-id>
 
 按 development -> check -> repair -> review 的轮次推进。
 主控 agent 负责统一 backlog、scope control 和 stop decision。
+当前 phase 的 gate-bearing subagent 都必须等待完成并收齐 verdict；如果任务会跑很久，使用 1 小时 blocking wait。
 ```
 
 ## Issue Seat Lenses
@@ -63,6 +73,7 @@ Issue：<issue-id>
 3. blocking gap 或 none
 
 不要直接改任务拆分，不要输出实现细节清单。
+不要把自己当成可提前忽略的 sidecar；你的 verdict 是当前 phase 的硬门禁输入。
 ```
 
 ## Check Prompt
@@ -84,6 +95,7 @@ Issue：<issue-id>
 4. 最小修复建议
 
 不要输出纯风格建议，不要扩展需求。
+不要把自己当成可提前忽略的 sidecar；你的输出必须被主控 agent 收敛后才能进入下一轮。
 ```
 
 ## Development Prompt
@@ -120,15 +132,18 @@ Issue：<issue-id>
 1. verdict: pass / pass with noted debt / fail
 2. evidence
 3. blocking gap 或 none
+
+不要把自己当成可提前忽略的 sidecar；在主控 agent 明确收齐审查结论前，当前 round 不得通过。
 ```
 
 ## Round Output Template
 
 ```text
 1. Round target
-2. Normalized backlog
-3. Fixes completed
-4. Check result
-5. Review verdict
-6. Next action
+2. Gate-bearing subagent roster with seat / agent_id / status
+3. Normalized backlog
+4. Fixes completed
+5. Check result
+6. Review verdict
+7. Next action
 ```

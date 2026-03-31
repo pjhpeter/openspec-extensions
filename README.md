@@ -65,6 +65,17 @@
 9. 主会话 review、merge、commit。
 10. 所有必要 issue 都 accept 后，先对当前 change 修改的代码运行一次 `/review`，再做 change 级 acceptance，然后进入 `verify` / `archive`。
 
+## Gate Barrier 约束
+
+- 当前 phase 里真正拉起的 design review / check / review seat 都属于 gate-bearing subagent
+- 这些 gate-bearing subagent 不是信息型 sidecar，而是当前 phase 的硬门禁参与者
+- coordinator 必须记录这些 subagent 的 `agent_id`、seat 和完成状态
+- `auto_accept_*` 的含义是“收齐当前 gate 所需 subagent verdict 后，跳过人工签字继续推进”，不是“子代理刚启动就能直接过 gate”
+- 任一 required gate-bearing subagent 仍在运行时，不允许提前通过当前 phase
+- 任一 required gate-bearing subagent 仍在运行时，不允许提前关闭它
+- gate-bearing design review / check / review subagent 不应以 `explorer` 身份启动
+- 如果要真正无人值守，建议对 gate-bearing subagent 使用最长 1 小时的阻塞等待，而不是 30 秒短轮询
+
 ## 运行时注意点
 
 - skill 契约层面，issue-mode 的默认 coordinator 入口是 `openspec-subagent-team`
@@ -72,6 +83,7 @@
 - 这类 runtime 可能仍要求用户在当前会话里显式表达“启用 subagent / subagent-team / 多 agent 编排”
 - 对长时间运行的 subagent 任务，如果当前 runtime / session 没有默认长等待策略，还需要显式要求 coordinator 对 subagent 使用长阻塞等待，否则可能在 subagent 完成前就提前返回
 - 某些 runtime 还会让 spawned subagent 继承当前会话的全局 `reasoning_effort`；如果你希望非编码 subagent 不要都跑成 `xhigh`，必须在 spawn 时显式覆写
+- 对 gate-bearing design review / check / review subagent，除了长等待之外，还需要明确要求“全部完成并收齐 verdict 前不得通过 phase，也不得提前关闭 subagent”
 - 所以你可能会看到两层语义同时存在：
   - skill 认为默认入口应该是 `subagent-team`
   - runtime 仍因为缺少显式授权而退回本地 coordinator 执行路径
@@ -83,6 +95,8 @@
 - 如果当前 change 会跑很久，最稳的用户话术再加一句：
   - `长时间等待 subagent 完成，使用 1 小时阻塞等待，不要 30 秒短轮询`
   - `对当前 subagent team 使用长等待，直到 subagent 完成再返回`
+- 如果你还想防止 gate 提前通过，再加一句：
+  - `当前 gate 的 review/check subagent 必须等待全部完成并收齐 verdict，禁止提前关闭或提前通过 phase`
 
 ## 从进入 OpenSpec 模式开始的完整链路话术
 
@@ -152,6 +166,7 @@
 设计文档编写 subagent 和编码 subagent 使用 xhigh，其他 subagent 使用 Medium。
 在所有 issues 完成后，先对当前 change 修改的代码执行 /review，通过后再进入 verify。
 对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
+当前 gate 的 review/check subagent 必须等待全部完成并收齐 verdict，禁止提前关闭或提前通过 phase。
 ```
 
 5. 如果你想先看设计文档和任务拆分，再人工决定是否继续
@@ -166,6 +181,7 @@
 ```text
 继续当前 change，保持 subagent-team 主链推进。
 如果需要等待 subagent，使用 1 小时阻塞等待，直到 subagent 完成再返回。
+如果当前 phase 还有 review/check subagent 在运行，先等它们全部完成并收齐 verdict，再决定是否进入下一阶段。
 ```
 
 ## 配置契约
@@ -213,11 +229,12 @@
     - `advisory` = 红灯会提示，但不会强制拦车
     - `enforce` = 红灯就是红灯，不满足条件就不能继续
 - `subagent_team.*` 控制 subagent team 是否自动接受当前 gate 并跨 phase 推进：
-  - `auto_accept_spec_readiness`：proposal / design 经过 1 个设计作者和 2 个设计评审组成的 design review 后，自动接受 spec-readiness，不再等待人工评审签字，直接进入任务拆分 / issue planning
-  - `auto_accept_issue_planning`：`tasks.md` 以及 INDEX / ISSUE 文档达到可派发状态后，自动接受 issue planning，不再等待人工评审签字，直接派发当前 round 的 issue
-  - `auto_accept_issue_review`：issue 进入 `review_required` 且 issue-local validation 全部通过后，coordinator 自动接受并 merge/commit，然后进入下一个 issue 或 change acceptance
-  - `auto_accept_change_acceptance`：change acceptance 满足放行条件后自动接受该 gate 并进入 verify；但前提仍然是 change-level `/review` 已通过
+  - `auto_accept_spec_readiness`：proposal / design 经过 1 个设计作者和 2 个设计评审组成的 design review，并且 gate-bearing 设计评审 subagent 全部完成后，自动接受 spec-readiness，不再等待人工评审签字，直接进入任务拆分 / issue planning
+  - `auto_accept_issue_planning`：`tasks.md` 以及 INDEX / ISSUE 文档达到可派发状态，并且当前 phase 的 gate-bearing planning/check/review subagent 全部完成后，自动接受 issue planning，不再等待人工评审签字，直接派发当前 round 的 issue
+  - `auto_accept_issue_review`：issue 进入 `review_required` 且 issue-local validation 全部通过，并且当前 round 的 gate-bearing check/review subagent 全部完成后，coordinator 自动接受并 merge/commit，然后进入下一个 issue 或 change acceptance
+  - `auto_accept_change_acceptance`：change acceptance 满足放行条件、gate-bearing review subagent 全部完成后自动接受该 gate 并进入 verify；但前提仍然是 change-level `/review` 已通过
   - `auto_archive_after_verify`：verify 通过后自动进入 archive
+- `auto_accept_*` 只跳过人工签字，不跳过 gate-bearing subagent 的完成等待，也不允许提前关闭这些 subagent
 - `subagent_team.*` 不负责决定默认入口拓扑：
   - issue-mode 下，coordinator 默认入口就是 `openspec-subagent-team`
   - 单 worker issue path 只在显式收窄到一个 issue worker 时使用
@@ -262,6 +279,7 @@
 - 单个 issue 达到 review_required 后仍会暂停，等待 coordinator 人工接受并决定是否派发下一 issue
 - change acceptance 达标后仍会暂停，等待 coordinator 决定是否运行 verify
 - verify 通过后会暂停，等待 coordinator 决定是否 archive
+- 上面这些“暂停”只针对人工签字；gate-bearing subagent 的完成等待始终是硬前置条件
 - RRA gate 会持续给出 round backlog / round scope / verify 放行建议，但不会硬性阻断流程
 - `worker_worktree` 继续保留，作为 issue 隔离边界和 coordinator merge 的收敛目录
 
@@ -301,6 +319,7 @@
   - 所有 issues 完成后先运行 change-level `/review`
   - change acceptance 自动接受后进入 verify
   - verify 通过后自动 archive
+- 上面这些“自动接受”仍然要求当前 phase 的 gate-bearing subagent 已全部完成并收齐 verdict
 - coordinator 仍然存在，只是不再需要在每个 review gate 之间人工点下一步或人工签字
 - 如果 RRA gate 不允许继续，流程会回到 change-level control，而不是盲目前推
 

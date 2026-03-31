@@ -52,6 +52,10 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - Before a coordinator continues a change that already has issue artifacts, reconcile worker state from disk first and read change-level control artifacts if present instead of trusting chat memory.
 - Use `openspec/issue-mode.json` only for active repo defaults: worktree location, validation commands, worktree creation mode, RRA gate mode, and subagent-team auto-accept switches.
 - When delegation is used, explicitly launch the design-author subagent and any code-writing subagent with `reasoning_effort=xhigh`; all other design/planning/check/review/closeout-only subagents should use `reasoning_effort=medium`.
+- In subagent-team flow, treat gate-bearing design review / check / review seats as hard barrier participants, not sidecar helpers.
+- `auto_accept_*` only skips human chat sign-off after those gate-bearing subagents have finished and their verdicts have been normalized.
+- For long-running gate-bearing subagents, prefer blocking waits up to 1 hour instead of short polling.
+- Do not launch gate-bearing review/check seats as `explorer`, and do not close them while their phase still depends on their verdicts.
 - If the intent is still ambiguous after doing all non-blocked work, ask exactly one short targeted question.
 
 ## Intent Routing
@@ -105,7 +109,8 @@ Preferred flow:
 6. By default, render the subagent-team lifecycle packet and use it as the coordinator control packet for the current phase.
 7. Use one worker subagent for one approved issue only when the user explicitly narrows execution to that one issue, or the current step is already a bounded issue-worker handoff.
 8. After the worker reports `review_required`, either let the coordinator review it manually or, when `subagent_team.auto_accept_issue_review=true` and issue-local validation passed, auto-accept/merge/commit it immediately.
-9. Repeat for the next approved issue, then run a change-level `/review` plus a change-level acceptance round before `verify` and `archive`.
+9. In every gate-bearing phase, record launched seat ids, wait for completion, normalize the verdicts, and do not advance while any required gate subagent is still running.
+10. Repeat for the next approved issue, then run a change-level `/review` plus a change-level acceptance round before `verify` and `archive`.
 
 ## Special Path: `mode`
 
@@ -124,6 +129,7 @@ Rules:
 - Default the coordinator execution entry to `openspec-subagent-team`.
 - Remind the user that the coordinator should create or reuse the issue worktree before handing the issue to a worker.
 - Remind the user that subagent-team is the default coordinator topology when delegation is available.
+- Remind the user that gate-bearing subagents should use up to 1 hour blocking waits, and that auto-accept does not skip waiting for those gate subagents to finish.
 - If `subagent_team.auto_accept_*` is enabled, do not describe those phases as waiting for human sign-off.
 - If the task artifacts are not ready yet, route to `new`, `propose`, or `ff` before encouraging worker sessions.
 - If the user is setting up issue-mode for the first time, remind them that workers should not touch `tasks.md`.
@@ -151,6 +157,7 @@ Summary rule:
 - keep the main agent as control plane owner
 - use subagent teams only for the approved round scope
 - use role-based launch settings: design-author and code-writing subagents `xhigh`, all other subagents `medium`
+- keep gate-bearing review/check subagents alive until their completion states and verdicts are explicitly collected
 
 ## Special Path: `reconcile`
 
