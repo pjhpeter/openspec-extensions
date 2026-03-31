@@ -44,7 +44,7 @@ Read `../openspec-chat-router/references/issue-mode-contract.md`, `../openspec-c
 - If a candidate issue needs a long exception list, split it again.
 - Do not let downstream execution subagents invent or rewrite issue boundaries ad hoc.
 - Do not rewrite checked tasks in `tasks.md` unless the user explicitly asks for task remapping or the approved issue plan makes the mapping incomplete.
-- Materialize `worker_worktree` and `validation` into each issue doc frontmatter, using repo defaults from `openspec/issue-mode.json` when present. Shared workspace mode should write `worker_worktree: .`.
+- Materialize `worker_worktree` and `validation` into each issue doc frontmatter, using repo defaults from `openspec/issue-mode.json` when present. Installed config defaults should normally write the same change-level path such as `worker_worktree: .worktree/<change>` into every issue of that change; shared workspace mode should write `worker_worktree: .`.
 - Each issue doc frontmatter must include `issue_id`, `title`, `worker_worktree`, `allowed_scope`, `out_of_scope`, `done_when`, and `validation` so downstream dispatch stays deterministic.
 - For complex changes, the coordinator should update change-level backlog and round artifacts after issue planning instead of leaving approval state only in chat.
 - Do not dispatch issue work while issue-planning `Must fix now` items remain open.

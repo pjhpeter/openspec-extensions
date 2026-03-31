@@ -538,7 +538,7 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
 
         self.assertEqual(payload["phase"], "ready_for_archive")
         self.assertTrue(payload["automation"]["archive_after_verify"])
-        self.assertIn('openspec archive "demo-change"', dispatch_text)
+        self.assertIn("coordinator_archive_change.py", dispatch_text)
         self.assertIn("subagent_team.auto_archive_after_verify=true", dispatch_text)
 
     def test_change_acceptance_requires_change_review_before_verify(self) -> None:

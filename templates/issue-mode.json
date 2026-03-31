@@ -5,7 +5,8 @@
     "pnpm type-check"
   ],
   "worker_worktree": {
-    "enabled": false,
+    "enabled": true,
+    "scope": "change",
     "mode": "detach",
     "base_ref": "HEAD",
     "branch_prefix": "opsx"

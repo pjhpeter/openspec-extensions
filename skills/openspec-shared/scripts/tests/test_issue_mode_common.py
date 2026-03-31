@@ -139,6 +139,7 @@ class LoadIssueModeConfigTest(unittest.TestCase):
             worker_worktree, source = issue_worker_worktree_setting(repo_root, "demo-change", "ISSUE-001", config)
 
         self.assertFalse(config["worker_worktree"]["enabled"])
+        self.assertEqual(config["worker_worktree"]["scope"], "shared")
         self.assertTrue(config["subagent_team"]["auto_accept_issue_review"])
         self.assertEqual(automation_profile(config), "semi_auto")
         self.assertEqual(worker_worktree, ".")
@@ -188,6 +189,7 @@ class LoadIssueModeConfigTest(unittest.TestCase):
         self.assertEqual(config["worktree_root"], ".worktree")
         self.assertEqual(config["validation_commands"], ["pnpm lint"])
         self.assertTrue(config["worker_worktree"]["enabled"])
+        self.assertEqual(config["worker_worktree"]["scope"], "issue")
         self.assertEqual(config["worker_worktree"]["mode"], "branch")
         self.assertEqual(config["worker_worktree"]["base_ref"], "main")
         self.assertEqual(config["worker_worktree"]["branch_prefix"], "demo")
@@ -225,8 +227,40 @@ class LoadIssueModeConfigTest(unittest.TestCase):
             worker_worktree, source = issue_worker_worktree_setting(repo_root, "demo-change", "ISSUE-001", config)
 
         self.assertFalse(config["worker_worktree"]["enabled"])
+        self.assertEqual(config["worker_worktree"]["scope"], "shared")
         self.assertEqual(worker_worktree, ".")
         self.assertEqual(source, "config_default")
+
+    def test_change_scope_config_materializes_one_worktree_per_change(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            openspec_dir = repo_root / "openspec"
+            openspec_dir.mkdir(parents=True)
+            (openspec_dir / "issue-mode.json").write_text(textwrap.dedent(
+                """\
+                {
+                  "worktree_root": ".worktree",
+                  "worker_worktree": {
+                    "enabled": true,
+                    "scope": "change",
+                    "mode": "detach",
+                    "base_ref": "HEAD",
+                    "branch_prefix": "opsx"
+                  }
+                }
+                """
+            ))
+
+            config = load_issue_mode_config(repo_root)
+            first_worktree, first_source = issue_worker_worktree_setting(repo_root, "demo-change", "ISSUE-001", config)
+            second_worktree, second_source = issue_worker_worktree_setting(repo_root, "demo-change", "ISSUE-002", config)
+
+        self.assertTrue(config["worker_worktree"]["enabled"])
+        self.assertEqual(config["worker_worktree"]["scope"], "change")
+        self.assertEqual(first_worktree, ".worktree/demo-change")
+        self.assertEqual(second_worktree, ".worktree/demo-change")
+        self.assertEqual(first_source, "config_default")
+        self.assertEqual(second_source, "config_default")
 
 
 if __name__ == "__main__":

@@ -2,13 +2,13 @@
 
 Use this template for `openspec/changes/<change>/issues/ISSUE-001.md`.
 If the repository has `openspec/issue-mode.json`, fill `worker_worktree` and `validation` from that file.
-If it does not, the default example becomes shared workspace mode (`worker_worktree: .`) plus `pnpm lint` and `pnpm type-check`.
+If it does not, the compatibility fallback example remains shared workspace mode (`worker_worktree: .`) plus `pnpm lint` and `pnpm type-check`.
 
 ```md
 ---
 issue_id: ISSUE-001
 title: 用一句话描述这个 issue
-worker_worktree: .
+worker_worktree: .worktree/<change-name>
 allowed_scope:
   - src/example/path.ts
 out_of_scope:
@@ -45,7 +45,7 @@ depends_on:
 
 - Issue: `ISSUE-001`
 - Issue workspace (`worker_worktree`):
-  - `.`
+  - `.worktree/<change-name>`
 - Allowed scope:
   - `src/example/path.ts`
 - Out of scope:
@@ -62,4 +62,5 @@ Notes:
 - Keep the frontmatter machine-readable.
 - Keep the body concise.
 - Prefer the dominant working language of the repository.
-- Use `.worktree/<change>/<issue>` only when the repo explicitly opts into isolated worktree mode.
+- Prefer `.worktree/<change>` for serial multi-issue work on one change.
+- Use `.worktree/<change>/<issue>` only when the repo explicitly opts into issue-level isolated worktree mode.

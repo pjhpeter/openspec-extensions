@@ -16,6 +16,7 @@ if str(SHARED_SCRIPTS) not in sys.path:
 from coordinator_change_common import sync_tasks_for_issues  # noqa: E402
 from issue_mode_common import (  # noqa: E402
     display_path,
+    infer_worker_worktree_scope,
     is_shared_worker_workspace,
     issue_worker_worktree_path,
     load_issue_mode_config,
@@ -275,6 +276,11 @@ def apply_patch(repo_root: Path, patch: bytes) -> None:
     )
 
 
+def sync_reusable_worker_workspace(worker_worktree: Path, commit_sha: str) -> None:
+    run_command(["git", "reset", "--hard", commit_sha], cwd=worker_worktree)
+    run_command(["git", "clean", "-fd"], cwd=worker_worktree)
+
+
 def main() -> None:
     args = parse_args()
     repo_root = Path(args.repo_root).resolve()
@@ -285,6 +291,7 @@ def main() -> None:
         issue_id=args.issue_id,
         config=config,
     )
+    workspace_scope = infer_worker_worktree_scope(repo_root, worker_worktree, config, args.change, args.issue_id)
     ensure_worker_exists(worker_worktree)
 
     progress_path, _, run_path = progress_and_run_paths(repo_root, args.change, args.issue_id)
@@ -307,6 +314,7 @@ def main() -> None:
         "worker_worktree": str(worker_worktree),
         "worker_worktree_relative": worker_display,
         "worker_worktree_source": worker_source,
+        "workspace_scope": workspace_scope,
         "base_revision": base_revision,
         "changed_files": changed_files,
         "progress_path": display_path(repo_root, progress_path),
@@ -368,6 +376,8 @@ def main() -> None:
     repo_relative_paths = list(changed_files)
     repo_relative_paths.extend(display_path(repo_root, path) for path in extra_paths)
     commit_sha = stage_and_commit(repo_root, commit_message=commit_message, repo_relative_paths=repo_relative_paths)
+    if not shared_workspace and workspace_scope == "change":
+        sync_reusable_worker_workspace(worker_worktree, commit_sha)
 
     result["commit_sha"] = commit_sha
     result["commit_summary"] = summary

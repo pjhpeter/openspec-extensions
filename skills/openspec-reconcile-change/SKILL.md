@@ -67,6 +67,7 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
 - Do not let issue execution subagents update `tasks.md`, self-merge, or create the final git commit for an issue.
 - Use issue docs to discover pending work that has not started yet.
 - `coordinator_merge_issue.py` expects a clean coordinator worktree only when the issue uses an isolated worker worktree; shared workspace mode commits the current repo-root issue diff directly.
+- When multiple issues in the same change share one change-level worktree, `coordinator_merge_issue.py` should resync that worktree to the latest accepted commit before the next issue starts.
 - If artifacts are stale or suspicious, inspect the issue workspace and run artifacts directly before redispatching.
 - In subagent-first flows, prefer artifact-based reconcile and coordinator review over any process-liveness heuristics.
 - For complex changes, keep the active normalized backlog and round verdict on disk instead of in chat only.

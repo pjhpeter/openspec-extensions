@@ -14,6 +14,7 @@ if str(SHARED_SCRIPTS) not in sys.path:
 from issue_mode_common import (  # noqa: E402
     display_path,
     ensure_issue_dispatch_allowed,
+    infer_worker_worktree_scope,
     is_shared_worker_workspace,
     issue_worker_worktree_path,
     load_issue_mode_config,
@@ -56,6 +57,7 @@ def main() -> None:
         issue_id=args.issue_id,
         config=config,
     )
+    workspace_scope = infer_worker_worktree_scope(repo_root, worktree_path, config, args.change, args.issue_id)
 
     mode = args.mode or config["worker_worktree"]["mode"]
     base_ref = args.base_ref or config["worker_worktree"]["base_ref"]
@@ -66,7 +68,7 @@ def main() -> None:
         base_ref = ""
         branch_name = ""
     if mode == "branch" and not branch_name:
-        branch_name = worker_branch_name(config, args.change, args.issue_id)
+        branch_name = worker_branch_name(config, args.change, args.issue_id, scope=workspace_scope)
 
     existed = False
     created = False
@@ -99,6 +101,7 @@ def main() -> None:
         "worktree": str(worktree_path),
         "worktree_relative": display_path(repo_root, worktree_path),
         "worktree_source": worktree_source,
+        "workspace_scope": workspace_scope,
         "control_gate": dispatch_gate,
         "config_path": config["config_path"],
         "config_exists": config["config_exists"],

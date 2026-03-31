@@ -10,31 +10,32 @@ This is the normal flow when the runtime supports delegation and the user wants 
 1. Get the change to proposal/design-ready state, then run a spec-readiness design review for the current target mode. In this gate, the topology is 1 design author plus 2 design reviewers, and task splitting must not start before both reviewers pass. If `auto_accept_spec_readiness=true`, do not pause for human sign-off once the gate is satisfied.
 2. After spec-readiness passes, run `plan-issues` to create or refresh `tasks.md` plus the issue breakdown, then review that task-splitting result. Before the first issue dispatch, commit `proposal.md`, `design.md`, `tasks.md`, `issues/INDEX.md`, and `ISSUE-*.md` as a coordinator-owned planning-doc commit. If `auto_accept_issue_planning=true`, do not pause for human sign-off once those docs are dispatch-ready; commit them first, then immediately dispatch the first approved issue.
 3. Dispatch only issues that are approved for the active round.
-4. By default, render the subagent-team lifecycle packet and use it as the round control packet.
-5. Explicitly set `reasoning_effort` when spawning subagents:
+4. Create or reuse the worker workspace before handoff. The installed template defaults to one change-level `.worktree/<change>` reused across that change's serial issues. Shared workspace remains the compatibility fallback when repo config is missing, and issue-level `.worktree/<change>/<issue>` stays opt-in for truly parallel work.
+5. By default, render the subagent-team lifecycle packet and use it as the round control packet.
+6. Explicitly set `reasoning_effort` when spawning subagents:
    - design author: `xhigh`
    - any code-writing implementation or verify-fix subagent: `xhigh`
    - design reviewers, planning authors, checkers, reviewers, and closeout-only subagents: `medium`
-6. Default to the lighter fast path before escalating more seats:
+7. Default to the lighter fast path before escalating more seats:
    - issue planning: `2 development + 1 check + 1 review`
    - issue execution: `3 development + 2 check + 1 review`
    - change acceptance: `1 development + 1 check + 1 review`
    - change verify: `2 development + 1 check + 1 review`
    - only expand check/review seats when the current round surfaces cross-boundary architecture risk or unresolved evidence gaps
-7. For every phase, treat the launched phase seats as gate-bearing participants:
+8. For every phase, treat the launched phase seats as gate-bearing participants:
    - record agent ids, seat names, and running/completed status
    - use `default` or `worker` style delegation for those gate seats; do not use `explorer` for design-review, check, or review gates
    - if unattended progression matters, wait up to 1 hour for those gate-bearing subagents instead of short polling
    - do not advance, auto-accept, or close the phase while any required gate-bearing subagent is still running
-8. Checker/reviewer should start from `changed_files` in the issue progress artifact when available; otherwise start from `allowed_scope`, issue validation, and the approved round target.
-9. Only expand checker/reviewer reading to direct dependencies or direct call chains when needed to prove a blocker or regression risk; do not default to repo-wide scanning or generated/vendor folders such as `node_modules`, `dist`, `build`, `.next`, or `coverage`.
-10. For bounded implementation slices that are explicitly narrowed to one issue-only execution subagent, spawn exactly one issue-only subagent for one approved issue.
-11. Pass the generated dispatch content or file to the issue execution subagent or team as the source of truth.
-12. Have code-writing subagents follow `openspec-execute-issue`, including issue-local progress and run artifacts.
-13. Reconcile from disk, normalize any findings into the change-level backlog, and decide whether the issue passes the round.
-14. If `auto_accept_issue_review=true` and the issue-local validation passed, accept/merge/commit it immediately from the coordinator session. The shipped default turns this on so each validated issue lands as its own coordinator commit before the next issue starts. Otherwise review it manually in the coordinator session first.
-15. After all approved issues are completed, run a change-level `/review` against the current change diff and write `runs/CHANGE-REVIEW.json`.
-16. Only after that review passes, run the change-level acceptance decision and then `verify` / `archive`.
+9. Checker/reviewer should start from `changed_files` in the issue progress artifact when available; otherwise start from `allowed_scope`, issue validation, and the approved round target.
+10. Only expand checker/reviewer reading to direct dependencies or direct call chains when needed to prove a blocker or regression risk; do not default to repo-wide scanning or generated/vendor folders such as `node_modules`, `dist`, `build`, `.next`, or `coverage`.
+11. For bounded implementation slices that are explicitly narrowed to one issue-only execution subagent, spawn exactly one issue-only subagent for one approved issue.
+12. Pass the generated dispatch content or file to the issue execution subagent or team as the source of truth.
+13. Have code-writing subagents follow `openspec-execute-issue`, including issue-local progress and run artifacts.
+14. Reconcile from disk, normalize any findings into the change-level backlog, and decide whether the issue passes the round.
+15. If `auto_accept_issue_review=true` and the issue-local validation passed, accept/merge/commit it immediately from the coordinator session. The shipped default turns this on so each validated issue lands as its own coordinator commit before the next issue starts. If that issue used a reusable change worktree, sync that worktree to the accepted commit before dispatching the next issue. Otherwise review it manually in the coordinator session first.
+16. After all approved issues are completed, run a change-level `/review` against the current change diff and write `runs/CHANGE-REVIEW.json`.
+17. Only after that review passes, run the change-level acceptance decision and then `verify` / `archive`. If the change used change-scope worktrees, prefer the archive wrapper so successful archive also cleans up the reusable worktree.
 
 ## Rules
 
@@ -52,9 +53,12 @@ This is the normal flow when the runtime supports delegation and the user wants 
 - do not let issue-round checker/reviewer read `node_modules`, `dist`, `build`, `.next`, `coverage`, or other generated/vendor trees unless the issue explicitly scopes them in
 - fall back to the single-issue execution path only when the user explicitly narrows execution to one issue-only subagent or the current step is already a bounded single-issue handoff
 - keep a change-level normalized backlog and round verdict for complex changes
+- installed template default is one change-level worktree per change; shared workspace is only the compatibility fallback when repo config is missing
+- after an accepted issue from a reusable change worktree, sync that worktree to the accepted commit before the next issue starts
 - do not let issue execution subagents update `tasks.md`
 - do not let issue execution subagents self-merge or create the final git commit
 - prefer artifact-based reconcile over chat memory
 - do not dispatch new issue work while `Must fix now` items from the current planning or acceptance round are still open
 - do not move from "all issues completed" to `verify` or `archive` without both a passed change-level `/review` and a change-level acceptance decision
+- after successful archive of a change that used change scope, clean up the reusable change worktree
 - even in unattended mode, coordinator-owned merge/commit boundaries remain in the coordinator session

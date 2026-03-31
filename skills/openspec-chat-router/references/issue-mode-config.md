@@ -14,6 +14,7 @@ If this file is missing, the helpers fall back to these defaults:
   "validation_commands": ["pnpm lint", "pnpm type-check"],
   "worker_worktree": {
     "enabled": false,
+    "scope": "shared",
     "mode": "detach",
     "base_ref": "HEAD",
     "branch_prefix": "opsx"
@@ -35,7 +36,8 @@ If this file is missing, the helpers fall back to these defaults:
 
 - `worktree_root`: repo-relative root for optional issue git worktrees when `worker_worktree.enabled=true`.
 - `validation_commands`: repo-level default validation commands used when an issue doc does not override `validation`.
-- `worker_worktree.enabled`: whether issues default to dedicated git worktrees. `false` means shared workspace mode and materializes `worker_worktree: .`.
+- `worker_worktree.enabled`: whether the repo config defaults to a dedicated git worktree. When `worker_worktree.scope=shared`, helpers normalize this back to `false`.
+- `worker_worktree.scope`: `shared`, `change`, or `issue`.
 - `worker_worktree.mode`: `detach` or `branch`.
 - `worker_worktree.base_ref`: base ref passed to `git worktree add`.
 - `worker_worktree.branch_prefix`: prefix used when `mode=branch`.
@@ -55,15 +57,17 @@ If this file is missing, the helpers fall back to these defaults:
 Issue docs should still materialize `worker_worktree` and `validation` in frontmatter whenever possible.
 The repo config is a reusable default layer, not a replacement for clear issue docs.
 
-`worker_worktree` stays in the contract, but it now supports two steady-state modes:
+`worker_worktree` stays in the contract, and it now supports three steady-state modes:
 
-- shared workspace: `worker_worktree.enabled=false` or `worker_worktree: .` in the issue doc. This is the default. Issue execution happens in the coordinator repo root and acceptance commits are created from the shared workspace.
-- isolated worktree: `worker_worktree.enabled=true` or an explicit `.worktree/<change>/<issue>` path in the issue doc. Use this only when you truly need per-issue isolation or parallel issue execution.
+- shared workspace: `worker_worktree.scope=shared`, `worker_worktree.enabled=false`, or `worker_worktree: .` in the issue doc. Issue execution happens in the coordinator repo root. This remains the compatibility fallback when `openspec/issue-mode.json` is missing.
+- change worktree: `worker_worktree.enabled=true` with `worker_worktree.scope=change`, or an explicit `.worktree/<change>` path in the issue doc. This is the installed template default. All serial issues in the same change reuse one worktree, and after each accepted issue the coordinator syncs that worktree to the latest accepted commit before the next issue starts.
+- issue worktree: `worker_worktree.enabled=true` with `worker_worktree.scope=issue`, or an explicit `.worktree/<change>/<issue>` path in the issue doc. Use this only when you truly need per-issue isolation or parallel issue execution.
 
 Backward compatibility note:
 
+- repos without `openspec/issue-mode.json` still fall back to shared workspace mode
 - older repos that already materialized `worktree_root` / `worker_worktree.mode` without an explicit `enabled` flag continue to be treated as isolated-worktree configs
-- new templates write `worker_worktree.enabled=false` explicitly so the default is unambiguous
+- new templates write `worker_worktree.enabled=true` plus `worker_worktree.scope=change`, so the recommended default is unambiguous
 
 Important:
 
@@ -75,6 +79,7 @@ Important:
 - when reconcile emits `commit_planning_docs`, that result means "commit the planning docs now, then rerun reconcile"
 - when reconcile emits `dispatch_next_issue`, that result means "continue now", not "stop at control-plane ready and wait for another instruction"
 - even when `auto_accept_change_acceptance=true`, a passed change-level `/review` is still required before verify
+- when a change-level worktree is in use, archive should normally run through `python3 .codex/skills/openspec-shared/scripts/coordinator_archive_change.py --repo-root . --change "<change>"` so the successful archive also cleans up the reusable worktree
 - gate-bearing design-review / check / review seats should not be launched as `explorer`, and should use up to 1 hour blocking waits when unattended progression matters
 - role-based `reasoning_effort` is currently a skill/dispatch contract, not an `issue-mode.json` field:
   - design-author subagent: `xhigh`
@@ -106,7 +111,8 @@ Use this when a human should still inspect design readiness, issue planning, iss
   "worktree_root": ".worktree",
   "validation_commands": ["pnpm lint", "pnpm type-check"],
   "worker_worktree": {
-    "enabled": false,
+    "enabled": true,
+    "scope": "change",
     "mode": "detach",
     "base_ref": "HEAD",
     "branch_prefix": "opsx"
@@ -134,7 +140,8 @@ Behavior:
 - verify pass pauses before archive
 - each phase still has to wait for its gate-bearing subagents to finish; the pause here refers to human sign-off, not subagent completion
 - RRA keeps emitting guidance, but does not hard-block progression
-- issues run in the shared repo workspace by default (`worker_worktree: .`)
+- issues reuse one change-level worktree by default (`.worktree/<change>`)
+- after each accepted issue, that change worktree is synced to the latest accepted commit before the next issue starts
 - if you also want every validated issue to land as its own commit without changing the rest of the gate behavior, keep this profile and set `auto_accept_issue_review=true`
 
 ### Full-Automatic
@@ -146,7 +153,8 @@ Use this when subagent-team should own the full lifecycle, not just issue execut
   "worktree_root": ".worktree",
   "validation_commands": ["pnpm lint", "pnpm type-check"],
   "worker_worktree": {
-    "enabled": false,
+    "enabled": true,
+    "scope": "change",
     "mode": "detach",
     "base_ref": "HEAD",
     "branch_prefix": "opsx"
@@ -175,9 +183,44 @@ Behavior:
 - change acceptance is auto-accepted and immediately enters verify once that review has passed
 - verify pass automatically advances into archive
 - each auto-advance still waits for the phase's gate-bearing subagents to finish and for their verdicts to be collected
-- issues run in the shared repo workspace by default; if you need per-issue isolation, opt back into `worker_worktree.enabled=true`
+- issues reuse one change-level worktree by default; if you need per-issue isolation, opt into `worker_worktree.scope=issue`
+- after each accepted issue, the change worktree is synced to the latest accepted commit; successful archive should then clean it up
 
-### Optional Isolated Worktree Mode
+### Optional Shared Workspace Mode
+
+Use this when you explicitly want serial issues to run in the coordinator repo root without any reusable worktree.
+
+```json
+{
+  "worktree_root": ".worktree",
+  "validation_commands": ["pnpm lint", "pnpm type-check"],
+  "worker_worktree": {
+    "enabled": false,
+    "scope": "shared",
+    "mode": "detach",
+    "base_ref": "HEAD",
+    "branch_prefix": "opsx"
+  },
+  "rra": {
+    "gate_mode": "advisory"
+  },
+  "subagent_team": {
+    "auto_accept_spec_readiness": false,
+    "auto_accept_issue_planning": false,
+    "auto_accept_issue_review": false,
+    "auto_accept_change_acceptance": false,
+    "auto_archive_after_verify": false
+  }
+}
+```
+
+Behavior:
+
+- dispatch materializes `worker_worktree: .`
+- issue execution happens directly in the repo root
+- this is still the compatibility fallback when repo config is missing
+
+### Optional Issue-Isolated Worktree Mode
 
 Use this only when you explicitly want per-issue git worktrees, for example to run independent issues in parallel.
 
@@ -187,6 +230,7 @@ Use this only when you explicitly want per-issue git worktrees, for example to r
   "validation_commands": ["pnpm lint", "pnpm type-check"],
   "worker_worktree": {
     "enabled": true,
+    "scope": "issue",
     "mode": "detach",
     "base_ref": "HEAD",
     "branch_prefix": "opsx"

@@ -45,7 +45,10 @@ Read `issue-mode-contract.md`, `issue-mode-config.md`, `issue-mode-rra.md`, and 
 ## Rules
 
 - Dispatch must be generated from the issue doc on disk.
-- Issue workspace defaults come from `worker_worktree` in `openspec/issue-mode.json`. Shared workspace mode materializes `worker_worktree: .`; isolated mode falls back to `.worktree/<change-name>/<issue-id>/`.
+- Issue workspace defaults come from `worker_worktree` in `openspec/issue-mode.json`.
+- Shared workspace mode materializes `worker_worktree: .`.
+- Change worktree mode reuses one `.worktree/<change-name>/` workspace across all issues in the same change; this is the recommended isolated mode for serial issue execution.
+- Issue worktree mode falls back to `.worktree/<change-name>/<issue-id>/` only when a repo truly needs issue-level isolation or parallel issue execution.
 - Do not improvise scope boundaries from memory when an issue doc exists.
 - If the issue doc is missing required frontmatter fields, fix the issue doc first.
 - If the active change-level round still has unresolved `Must fix now` items that block dispatch, do not launch issue execution yet.

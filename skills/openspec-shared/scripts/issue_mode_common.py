@@ -154,6 +154,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     ],
     "worker_worktree": {
         "enabled": False,
+        "scope": "shared",
         "mode": "detach",
         "base_ref": "HEAD",
         "branch_prefix": "opsx",
@@ -176,6 +177,7 @@ SUBAGENT_TEAM_AUTOMATION_FIELDS = (
     "auto_accept_change_acceptance",
     "auto_archive_after_verify",
 )
+WORKTREE_SCOPE_VALUES = {"shared", "change", "issue"}
 
 
 def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -484,6 +486,30 @@ def normalize_worker_worktree_enabled(payload: dict[str, Any]) -> bool:
     return bool(DEFAULT_CONFIG["worker_worktree"]["enabled"])
 
 
+def normalize_worker_worktree_scope(payload: dict[str, Any], *, enabled: bool) -> str:
+    worker_worktree = payload.get("worker_worktree")
+    if not isinstance(worker_worktree, dict):
+        return "issue" if enabled else str(DEFAULT_CONFIG["worker_worktree"]["scope"])
+
+    explicit_scope = str(worker_worktree.get("scope", "")).strip()
+    if explicit_scope:
+        scope = explicit_scope
+    elif "enabled" in worker_worktree:
+        scope = "issue" if enabled else "shared"
+    else:
+        legacy_config_present = any(key in worker_worktree for key in ("mode", "base_ref", "branch_prefix"))
+        if legacy_config_present or "worktree_root" in payload:
+            scope = "issue"
+        else:
+            scope = str(DEFAULT_CONFIG["worker_worktree"]["scope"])
+
+    if scope not in WORKTREE_SCOPE_VALUES:
+        raise SystemExit(
+            f"{CONFIG_RELATIVE_PATH} field `worker_worktree.scope` must be `shared`, `change`, or `issue`."
+        )
+    return scope
+
+
 def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
     config_path = repo_root / CONFIG_RELATIVE_PATH
     config = dict(DEFAULT_CONFIG)
@@ -507,6 +533,11 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
     if not isinstance(worker_worktree, dict):
         worker_worktree = {}
     worktree_enabled = normalize_worker_worktree_enabled(payload)
+    worktree_scope = normalize_worker_worktree_scope(payload, enabled=worktree_enabled)
+    if worktree_scope == "shared":
+        worktree_enabled = False
+    elif not worktree_enabled:
+        worktree_scope = "shared"
     worktree_mode = str(worker_worktree.get("mode", DEFAULT_CONFIG["worker_worktree"]["mode"])).strip() or "detach"
     if worktree_mode not in {"detach", "branch"}:
         raise SystemExit(f"{CONFIG_RELATIVE_PATH} field `worker_worktree.mode` must be `detach` or `branch`.")
@@ -528,6 +559,7 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
         "validation_commands": validation_commands,
         "worker_worktree": {
             "enabled": worktree_enabled,
+            "scope": worktree_scope,
             "mode": worktree_mode,
             "base_ref": base_ref,
             "branch_prefix": branch_prefix,
@@ -542,9 +574,13 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
 
 
 def default_worker_worktree_setting(config: dict[str, Any], change: str, issue_id: str) -> str:
-    if not bool(config["worker_worktree"].get("enabled", True)):
+    scope = str(config["worker_worktree"].get("scope", "shared")).strip() or "shared"
+    if not bool(config["worker_worktree"].get("enabled", True)) or scope == "shared":
         return "."
-    return (Path(config["worktree_root"]) / change / issue_id).as_posix()
+    root = Path(config["worktree_root"])
+    if scope == "change":
+        return (root / change).as_posix()
+    return (root / change / issue_id).as_posix()
 
 
 def ensure_path_within(parent: Path, target: Path) -> None:
@@ -584,6 +620,30 @@ def issue_worker_worktree_setting(
     if isinstance(worker_worktree, str) and worker_worktree.strip():
         return validate_issue_worker_worktree(repo_root, worker_worktree, config), "issue_doc"
     return default_worker_worktree_setting(config, change, issue_id), "config_default"
+
+
+def infer_worker_worktree_scope(
+    repo_root: Path,
+    worktree_path: Path,
+    config: dict[str, Any],
+    change: str,
+    issue_id: str,
+) -> str:
+    if worktree_path.resolve() == repo_root.resolve():
+        return "shared"
+
+    worktree_root = resolve_repo_path(repo_root, str(config["worktree_root"]))
+    try:
+        relative = worktree_path.resolve().relative_to(worktree_root)
+    except ValueError:
+        return "issue"
+
+    parts = relative.parts
+    if len(parts) == 1 and parts[0] == change:
+        return "change"
+    if len(parts) == 2 and parts[0] == change and parts[1] == issue_id:
+        return "issue"
+    return "issue"
 
 
 def resolve_repo_path(repo_root: Path, raw_path: str) -> Path:
@@ -634,12 +694,17 @@ def slugify_branch_fragment(value: str) -> str:
     return slug or "worker"
 
 
-def worker_branch_name(config: dict[str, Any], change: str, issue_id: str) -> str:
+def worker_branch_name(config: dict[str, Any], change: str, issue_id: str, *, scope: str | None = None) -> str:
     prefix = slugify_branch_fragment(config["worker_worktree"]["branch_prefix"]).strip("/")
     change_slug = slugify_branch_fragment(change).replace("/", "-")
+    scope_value = (scope or str(config["worker_worktree"].get("scope", "issue")).strip() or "issue").lower()
     issue_slug = slugify_branch_fragment(issue_id).replace("/", "-")
     if prefix:
+        if scope_value == "change":
+            return f"{prefix}/{change_slug}"
         return f"{prefix}/{change_slug}/{issue_slug}"
+    if scope_value == "change":
+        return change_slug
     return f"{change_slug}/{issue_slug}"
 
 

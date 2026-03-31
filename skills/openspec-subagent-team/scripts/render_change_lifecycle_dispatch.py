@@ -323,7 +323,12 @@ def phase_command_hints(repo_root: Path, change: str, phase: str) -> list[str]:
             f'python3 .codex/skills/openspec-shared/scripts/coordinator_verify_change.py --repo-root "{repo_root}" --change "{change}"'
         ]
     if phase == "ready_for_archive":
-        return [f'openspec archive "{change}"']
+        return [
+            (
+                f'python3 .codex/skills/openspec-shared/scripts/coordinator_archive_change.py '
+                f'--repo-root "{repo_root}" --change "{change}"'
+            )
+        ]
     return []
 
 

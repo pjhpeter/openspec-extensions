@@ -71,10 +71,13 @@ openspec/changes/<change-name>/
 If isolated worktree mode is enabled, worker worktrees should normally live under the project root:
 
 ```text
-<repo-root>/.worktree/<change-name>/<issue-id>/
+shared scope: <repo-root>/
+change scope: <repo-root>/.worktree/<change-name>/
+issue scope: <repo-root>/.worktree/<change-name>/<issue-id>/
 ```
 
-If shared workspace mode is enabled, `worker_worktree` materializes as `.` and the issue executes directly in the repo root.
+The installed template defaults to change scope, so serial issues in one change normally reuse `.worktree/<change-name>/`.
+If repo config is missing, compatibility fallback remains shared workspace mode and `worker_worktree` materializes as `.`.
 
 ## Coordinator Reconcile Rules
 
@@ -88,6 +91,7 @@ If shared workspace mode is enabled, `worker_worktree` materializes as `.` and t
    - any `blocked` -> stop and resolve blocker
    - any `review_required` -> if `subagent_team.auto_accept_issue_review=true` and issue-local validation passed, accept/commit it automatically; otherwise review it in the coordinator session first
    - after an issue is accepted, its code should already be captured in exactly one coordinator-owned commit before the next issue dispatch or change-level verify
+   - if the accepted issue used a reusable change worktree, sync that worktree to the latest accepted commit before dispatching the next issue
    - if the first issue has not started yet and planning docs are still dirty in git -> create the coordinator-owned planning-doc commit first
    - any issue doc without progress -> dispatch that next issue only after the planning-doc commit already exists
    - all issues `completed` -> run a change-level acceptance round plus a change-level `/review` before moving to `verify`
@@ -141,7 +145,9 @@ depends_on:
 
 This is the source of truth for dispatch generation.
 If `worker_worktree` or `validation` is missing, helpers fall back to `openspec/issue-mode.json`.
-`worker_worktree: .` means shared workspace mode. Explicit `.worktree/<change>/<issue>` means isolated worktree mode.
+`worker_worktree: .` means shared workspace mode.
+Explicit `.worktree/<change>` means change worktree mode.
+Explicit `.worktree/<change>/<issue>` means issue-isolated worktree mode.
 
 ## Practical Rule
 
@@ -150,7 +156,9 @@ Issue progress files are the execution state.
 Control backlog and round reports are the acceptance state.
 Team dispatch artifacts are the coordinator handoff state for the default subagent-team rounds in issue mode.
 In issue mode, accepted code lands through coordinator review plus coordinator-owned acceptance commit, not through worker self-management.
+When a change-level worktree is reused across serial issues, that worktree must be synced to the latest accepted commit after each accepted issue so later issues inherit the already-landed code.
 The first issue execution also depends on a prior coordinator-owned planning-doc commit for `proposal.md` / `design.md` / `tasks.md` / `issues/INDEX.md` / `ISSUE-*.md`.
 Before verify, the coordinator must also write a current `runs/CHANGE-REVIEW.json` artifact from a change-level `/review` of the current change diff.
+After successful archive of a change that used change scope, the reusable worktree should be removed as part of archive cleanup.
 When `subagent_team.auto_accept_*` is enabled, the gate is still coordinator-owned; it simply no longer waits for human chat confirmation before the coordinator accepts it.
 It still requires the gate-bearing subagents for that phase to finish, and it does not authorize early phase completion or early subagent closure.

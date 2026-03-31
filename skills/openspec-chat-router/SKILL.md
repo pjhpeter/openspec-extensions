@@ -105,7 +105,7 @@ Preferred flow:
 2. Run a change-level spec-readiness design review with a dedicated `1` design-author subagent plus `2` design-review subagents, and keep a normalized backlog for that gate.
 3. Only after design review passes, split implementation into coordinator-owned `tasks.md` plus issue-sized units with clear boundaries.
 4. Review the issue plan, then commit `proposal.md` / `design.md` / `tasks.md` / `issues/INDEX.md` / `ISSUE-*.md` as a coordinator-owned planning-doc commit before the first issue dispatch.
-5. For each approved issue, create or reuse the issue workspace (`worker_worktree`) before handoff.
+5. For each approved issue, create or reuse the issue workspace (`worker_worktree`) before handoff. The installed template defaults to one change-level `.worktree/<change>` reused across that change's serial issues.
 6. By default, render the subagent-team lifecycle packet and use it as the coordinator control packet for the current phase.
 7. Use one issue-only execution subagent for one approved issue only when the user explicitly narrows execution to that one issue, or the current step is already a bounded single-issue handoff.
 8. After the issue execution subagent reports `review_required`, either let the coordinator review it manually or, when `subagent_team.auto_accept_issue_review=true` and issue-local validation passed, auto-accept/merge/commit it immediately. The shipped default enables this so each validated issue lands as its own commit before the next issue starts.
@@ -128,6 +128,7 @@ Rules:
 - Default the coordinator to the main session.
 - Default the coordinator execution entry to `openspec-subagent-team`.
 - Remind the user that the coordinator should create or reuse the issue workspace before handing the issue to a bounded execution subagent.
+- Remind the user that the installed template defaults to one change-level worktree reused across serial issues; issue-level `.worktree/<change>/<issue>` remains opt-in.
 - Remind the user that subagent-team is the default coordinator topology when delegation is available.
 - Remind the user that gate-bearing subagents should use up to 1 hour blocking waits, and that auto-accept does not skip waiting for those gate subagents to finish.
 - If `subagent_team.auto_accept_*` is enabled, do not describe those phases as waiting for human sign-off.
