@@ -1,5 +1,8 @@
 # OpenSpec Extensions
 
+> [!IMPORTANT]
+> 特别鸣谢！本 skill 基于布吉提供的 rra subagent team 工作流基座。
+
 OpenSpec Extensions 是 OpenSpec 的扩展能力集合，不替代 OpenSpec 本体。使用这些 skills 之前，必须先安装 OpenSpec，再将本仓库提供的扩展内容安装到目标仓库。
 
 这个仓库集中管理 OpenSpec `issue-mode` 扩展 skills。
