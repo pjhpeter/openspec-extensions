@@ -1,5 +1,8 @@
 # OpenSpec Extensions
 
+> [!IMPORTANT]
+> 特别鸣谢！本 skill 基于布吉提供的 rra subagent team 工作流基座。
+
 集中管理 OpenSpec `issue-mode` 扩展 skills 的仓库。
 
 这个仓库的目标很明确：
