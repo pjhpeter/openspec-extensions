@@ -203,6 +203,19 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
                 ---
                 """
             ))
+            (issues_dir / "ISSUE-001.progress.json").write_text(textwrap.dedent(
+                """\
+                {
+                  "changed_files": [
+                    "src/demo.ts",
+                    "node_modules/vue/index.js"
+                  ],
+                  "validation": {
+                    "lint": "passed"
+                  }
+                }
+                """
+            ))
             (control_dir / "BACKLOG.md").write_text("## Must Fix Now\n- none\n")
             (control_dir / "ROUND-01.md").write_text(textwrap.dedent(
                 """\
@@ -247,16 +260,22 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
         self.assertIn("Current issue packet", lifecycle_text)
         self.assertIn("ISSUE-001.team.dispatch.md", lifecycle_text)
         self.assertIn("Gate-bearing seats for this phase", lifecycle_text)
+        self.assertIn("不要读取 `node_modules`、`dist`、`build`、`.next`、`coverage`", lifecycle_text)
         self.assertIn("Development group: 3 subagents", issue_team_text)
-        self.assertIn("Check group: 3 subagents", issue_team_text)
-        self.assertIn("Review group: 3 subagents", issue_team_text)
+        self.assertIn("Check group: 2 subagents", issue_team_text)
+        self.assertIn("Review group: 1 subagent", issue_team_text)
         self.assertIn("Developer 2: dependent module or integration owner", issue_team_text)
-        self.assertIn("Checker 2: architecture, data flow, concurrency, persistence risks", issue_team_text)
-        self.assertIn("Reviewer 2: regression and operational risk pass / fail", issue_team_text)
+        self.assertIn("Checker 2: direct dependency regression risk, tests, evidence gaps", issue_team_text)
+        self.assertIn("Reviewer 1: scope-first target path / direct dependency / evidence pass or fail", issue_team_text)
+        self.assertIn("Excluded incidental paths from review focus:", issue_team_text)
+        self.assertIn("`node_modules/vue/index.js`", issue_team_text)
+        self.assertIn("默认排除 `node_modules`、`dist`、`build`、`.next`、`coverage`", issue_team_text)
         self.assertEqual(payload["team_topology"][0]["label"], "Development group")
         self.assertEqual(payload["team_topology"][0]["count"], 3)
         self.assertEqual(payload["team_topology"][0]["reasoning_effort"], "xhigh")
         self.assertEqual(payload["team_topology"][1]["reasoning_effort"], "medium")
+        self.assertEqual(payload["team_topology"][1]["count"], 2)
+        self.assertEqual(payload["team_topology"][2]["count"], 1)
         self.assertIn("Launch with `reasoning_effort=xhigh`", issue_team_text)
         self.assertIn("Launch with `reasoning_effort=medium`", issue_team_text)
 

@@ -349,26 +349,26 @@ def phase_team_topology(phase: str) -> list[dict[str, Any]]:
             {
                 "key": "development_group",
                 "label": "Development group",
-                "count": 3,
-                "responsibility": "负责创建或修订当前 phase 所需产物。",
+                "count": 2,
+                "responsibility": "负责创建或修订 tasks.md、INDEX 和 ISSUE 文档。",
                 "reasoning_effort": "medium",
-                "reasoning_note": "当前 phase 主要产出 tasks / issue 文档和规划工件，不以写 repo 代码为主。",
+                "reasoning_note": "任务拆分阶段默认使用更轻的快路径，不把 planning review 扩成重型多席位审查。",
             },
             {
                 "key": "check_group",
                 "label": "Check group",
-                "count": 3,
-                "responsibility": "负责找 defect / gap / evidence 缺口。",
+                "count": 1,
+                "responsibility": "负责检查 issue 文档字段、边界和 validation 是否可执行。",
                 "reasoning_effort": "medium",
-                "reasoning_note": "检查工作是缺口识别与证据核对，不承担编码。",
+                "reasoning_note": "planning check 默认只做边界与可执行性校验，避免重型审查拖慢派发。",
             },
             {
                 "key": "review_group",
                 "label": "Review group",
-                "count": 3,
-                "responsibility": "负责最终通过 / 不通过裁决。",
+                "count": 1,
+                "responsibility": "负责裁决任务拆分是否达到可派发状态。",
                 "reasoning_effort": "medium",
-                "reasoning_note": "审查工作是裁决和风险判断，不承担编码。",
+                "reasoning_note": "planning review 默认只保留一个硬门禁 seat，必要时再升级。",
             },
         ]
     if phase == "issue_execution":
@@ -384,18 +384,45 @@ def phase_team_topology(phase: str) -> list[dict[str, Any]]:
             {
                 "key": "check_group",
                 "label": "Check group",
-                "count": 3,
-                "responsibility": "负责找 defect / gap / evidence 缺口。",
+                "count": 2,
+                "responsibility": "负责在 issue 边界内找 defect、回归和证据缺口。",
                 "reasoning_effort": "medium",
-                "reasoning_note": "检查工作是缺口识别与证据核对，不承担编码。",
+                "reasoning_note": "issue round 默认只激活功能/回归两个 checker seat，避免检查扩大成全仓扫描。",
             },
             {
                 "key": "review_group",
                 "label": "Review group",
-                "count": 3,
-                "responsibility": "负责最终通过 / 不通过裁决。",
+                "count": 1,
+                "responsibility": "负责基于 issue 边界、validation 和直接依赖风险做最终通过 / 不通过裁决。",
                 "reasoning_effort": "medium",
-                "reasoning_note": "审查工作是裁决和风险判断，不承担编码。",
+                "reasoning_note": "issue round 默认只保留一个 scope-first reviewer，发现跨边界风险时再升级更多 seat。",
+            },
+        ]
+    if phase == "change_acceptance":
+        return [
+            {
+                "key": "development_group",
+                "label": "Development group",
+                "count": 1,
+                "responsibility": "负责修补当前 acceptance gate 暴露出的最小缺口。",
+                "reasoning_effort": "medium",
+                "reasoning_note": "change acceptance 默认使用轻量 closeout 拓扑，不再重复 issue 级重审。",
+            },
+            {
+                "key": "check_group",
+                "label": "Check group",
+                "count": 1,
+                "responsibility": "负责核对 change-level review、范围覆盖和遗留 blocker。",
+                "reasoning_effort": "medium",
+                "reasoning_note": "acceptance check 默认只保留一个 gate seat，用于快速核对放行条件。",
+            },
+            {
+                "key": "review_group",
+                "label": "Review group",
+                "count": 1,
+                "responsibility": "负责最终确认 change 是否可以进入 verify。",
+                "reasoning_effort": "medium",
+                "reasoning_note": "acceptance review 默认只保留一个硬门禁裁决 seat。",
             },
         ]
     if phase == "change_verify":
@@ -403,52 +430,52 @@ def phase_team_topology(phase: str) -> list[dict[str, Any]]:
             {
                 "key": "development_group",
                 "label": "Development group",
-                "count": 3,
+                "count": 2,
                 "responsibility": "负责创建或修订当前 phase 所需产物。",
                 "reasoning_effort": "xhigh",
-                "reasoning_note": "verify 暴露出的仓库代码或测试缺口通常仍需要高强度实现推理。",
+                "reasoning_note": "verify 修复默认保留实现与测试两个开发 seat，避免重型多席位 closeout。",
             },
             {
                 "key": "check_group",
                 "label": "Check group",
-                "count": 3,
-                "responsibility": "负责找 defect / gap / evidence 缺口。",
+                "count": 1,
+                "responsibility": "负责核对 verify 失败点、validation 结果和任务完成状态。",
                 "reasoning_effort": "medium",
-                "reasoning_note": "检查工作是缺口识别与证据核对，不承担编码。",
+                "reasoning_note": "verify check 默认只保留一个 gate seat，用于快速复核放行条件。",
             },
             {
                 "key": "review_group",
                 "label": "Review group",
-                "count": 3,
-                "responsibility": "负责最终通过 / 不通过裁决。",
+                "count": 1,
+                "responsibility": "负责最终确认 verify 结果是否足以进入 archive。",
                 "reasoning_effort": "medium",
-                "reasoning_note": "审查工作是裁决和风险判断，不承担编码。",
+                "reasoning_note": "verify review 默认只保留一个硬门禁裁决 seat。",
             },
         ]
     return [
         {
             "key": "development_group",
             "label": "Development group",
-            "count": 3,
+            "count": 1,
             "responsibility": "负责创建或修订当前 phase 所需产物。",
             "reasoning_effort": "medium",
-            "reasoning_note": "当前 phase 主要是验收、放行或归档收尾，不以写 repo 代码为主。",
+            "reasoning_note": "closeout phase 默认使用轻量拓扑，不重复 issue 级多人回合。",
         },
         {
             "key": "check_group",
             "label": "Check group",
-            "count": 3,
-            "responsibility": "负责找 defect / gap / evidence 缺口。",
+            "count": 1,
+            "responsibility": "负责核对 closeout 所需证据和收尾条件。",
             "reasoning_effort": "medium",
-            "reasoning_note": "检查工作是缺口识别与证据核对，不承担编码。",
+            "reasoning_note": "closeout check 默认只保留一个 gate seat。",
         },
         {
             "key": "review_group",
             "label": "Review group",
-            "count": 3,
+            "count": 1,
             "responsibility": "负责最终通过 / 不通过裁决。",
             "reasoning_effort": "medium",
-            "reasoning_note": "审查工作是裁决和风险判断，不承担编码。",
+            "reasoning_note": "closeout review 默认只保留一个硬门禁 seat。",
         },
     ]
 
@@ -586,8 +613,9 @@ def render_phase_packet(
         ],
         "issue_planning": [
             "开发组负责基于已通过的设计评审产出或修订 tasks.md、INDEX 和 ISSUE 文档。",
-            "issue planning 不以写 repo 代码为目标，本 phase 的开发/检查/审查 subagent 全部使用 `reasoning_effort=medium`。",
+            "issue planning 不以写 repo 代码为目标，本 phase 默认使用 2 个开发 seat + 1 个 checker + 1 个 reviewer 的快路径，全部使用 `reasoning_effort=medium`。",
             "检查组确认 allowed_scope / out_of_scope / done_when / validation 可执行。",
+            "planning check/review 默认只看 tasks.md、INDEX、ISSUE frontmatter 和当前 round contract，不做无关扩展阅读。",
             (
                 "当 `auto_accept_issue_planning=true` 时，coordinator 在当前 phase 的 gate-bearing planning/check/review subagent 全部完成并收齐 verdict 后，不等待人工签字，直接把 issue planning 视为通过并派发当前 round 已批准的 issue。"
                 if auto_accept_issue_planning
@@ -596,8 +624,10 @@ def render_phase_packet(
         ],
         "issue_execution": [
             "开发组可以按 issue team dispatch 调起实现型 subagent。",
-            "编码型开发 subagent 使用 `reasoning_effort=xhigh`；检查组和审查组使用 `reasoning_effort=medium`。",
-            "检查组优先看回归、范围泄漏、证据缺口。",
+            "issue round 默认使用 3 个开发 seat + 2 个 checker + 1 个 reviewer 的快路径；编码型开发 subagent 使用 `reasoning_effort=xhigh`，检查组和审查组使用 `reasoning_effort=medium`。",
+            "checker / reviewer 必须先看 `changed_files`（若 progress artifact 已记录），没有时先看 `allowed_scope` 和 issue validation，再按需扩到直接依赖面。",
+            "默认不要读取 `node_modules`、`dist`、`build`、`.next`、`coverage` 这类生成/供应商目录；只有当前 issue 明确把这些路径写进 `allowed_scope` 时才允许查看。",
+            "不要把 issue check/review 扩成 repo-wide 扫描；只有出现跨边界架构风险或证据争议时，coordinator 才升级更多 checker / reviewer seat。",
             (
                 "当 `auto_accept_issue_review=true` 时，coordinator 会在 gate-bearing check/review subagent 全部完成且 issue-local validation 全部通过后自动接受并 merge 当前 issue，再继续后续 phase。"
                 if auto_accept_issue_review
@@ -608,7 +638,7 @@ def render_phase_packet(
         "change_acceptance": [
             "change acceptance 先要求 coordinator 对当前 change 修改的代码运行 change-level /review，并落盘 `runs/CHANGE-REVIEW.json`。",
             "开发组只补 change-level review 或 acceptance 暴露出的缺口，不再随意扩 issue scope。",
-            "change acceptance 默认不是编码 phase；开发/检查/审查 subagent 使用 `reasoning_effort=medium`。",
+            "change acceptance 默认不是编码 phase；使用 1 个开发 seat + 1 个 checker + 1 个 reviewer 的轻量 gate，全部使用 `reasoning_effort=medium`。",
             "检查组确认已接受 issue 能覆盖请求范围。",
             "只有 change-level /review 通过后，才允许继续进入 verify。",
             (
@@ -620,7 +650,7 @@ def render_phase_packet(
         "change_verify": [
             "进入 verify 前，change-level /review 必须已经通过；不要跳过这一步直接运行 verify。",
             "开发组只处理 verify 失败所暴露的缺口，不再随意新增 issue。",
-            "如果 verify 暴露出代码/测试缺口，开发组 subagent 使用 `reasoning_effort=xhigh`；检查组和审查组使用 `reasoning_effort=medium`。",
+            "verify 默认使用 2 个开发 seat + 1 个 checker + 1 个 reviewer 的快路径；如果 verify 暴露出代码/测试缺口，开发组 subagent 使用 `reasoning_effort=xhigh`，检查组和审查组使用 `reasoning_effort=medium`。",
             "检查组负责运行并检查 repo validation、tasks completion、verify artifact。",
             (
                 "verify 通过后自动进入 archive 阶段。"
@@ -630,7 +660,7 @@ def render_phase_packet(
         ],
         "ready_for_archive": [
             "不再新增 issue。",
-            "archive 收尾阶段不需要编码时，所有 subagent 默认使用 `reasoning_effort=medium`。",
+            "archive 收尾阶段默认使用 1 个开发 seat + 1 个 checker + 1 个 reviewer 的轻量 closeout 拓扑，全部使用 `reasoning_effort=medium`。",
             "仅允许 closeout / archive 所需收尾。",
             "若发现 blocker，重新回到 change_acceptance。",
         ],

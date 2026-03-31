@@ -60,6 +60,65 @@ def code_bullet_list(items: list[str]) -> str:
     return "\n".join(f"  - `{item}`" for item in items)
 
 
+def read_progress_snapshot(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return {}
+
+
+def normalize_string_list(items: Any) -> list[str]:
+    if not isinstance(items, list):
+        return []
+    return [str(item).strip() for item in items if str(item).strip()]
+
+
+REVIEW_EXCLUDED_DIRS = {"node_modules", "dist", "build", ".next", "coverage"}
+
+
+def path_parts(path: str) -> tuple[str, ...]:
+    return tuple(part for part in Path(path).parts if part not in {"", "."})
+
+
+def path_hits_review_excluded_dir(path: str) -> bool:
+    return any(part in REVIEW_EXCLUDED_DIRS for part in path_parts(path))
+
+
+def scope_matches_path(scope: str, path: str) -> bool:
+    scope_tokens = path_parts(scope)
+    path_tokens = path_parts(path)
+    if not scope_tokens or not path_tokens:
+        return False
+    return path_tokens[: len(scope_tokens)] == scope_tokens or scope_tokens[: len(path_tokens)] == path_tokens
+
+
+def scope_explicitly_allows_review_path(path: str, allowed_scope: list[str]) -> bool:
+    for scope in allowed_scope:
+        if path_hits_review_excluded_dir(scope) and scope_matches_path(scope, path):
+            return True
+    return False
+
+
+def filter_review_focus_paths(paths: list[str], allowed_scope: list[str]) -> tuple[list[str], list[str]]:
+    included: list[str] = []
+    excluded: list[str] = []
+    for path in paths:
+        if path_hits_review_excluded_dir(path) and not scope_explicitly_allows_review_path(path, allowed_scope):
+            excluded.append(path)
+            continue
+        included.append(path)
+    return included, excluded
+
+
+def validation_snapshot_lines(payload: dict[str, Any]) -> list[str]:
+    validation = payload.get("validation")
+    if not isinstance(validation, dict) or not validation:
+        return ["none"]
+    return [f"{key}={value}" for key, value in validation.items() if str(key).strip()]
+
+
 def issue_paths(repo_root: Path, change: str, issue_id: str) -> tuple[Path, Path, Path]:
     change_dir = repo_root / "openspec" / "changes" / change
     issues_dir = change_dir / "issues"
@@ -80,6 +139,7 @@ def render_dispatch(
     worker_worktree: str,
     repo_root: Path,
     progress_path: Path,
+    progress_snapshot: dict[str, Any],
     control_state: dict[str, Any],
     dispatch_gate: dict[str, Any],
     target_mode_override: str,
@@ -102,6 +162,16 @@ def render_dispatch(
     current_backlog = backlog.get("must_fix_now", {}).get("open_items", [])
     should_fix_if_cheap = backlog.get("should_fix_if_cheap", {}).get("open_items", [])
     deferred_items = backlog.get("defer", {}).get("open_items", [])
+    current_changed_files = normalize_string_list(progress_snapshot.get("changed_files"))
+    current_changed_files, excluded_review_paths = filter_review_focus_paths(current_changed_files, allowed_scope)
+    current_validation = validation_snapshot_lines(progress_snapshot)
+    current_focus = current_changed_files or allowed_scope
+    excluded_review_paths_section = ""
+    if excluded_review_paths:
+        excluded_review_paths_section = (
+            "- Excluded incidental paths from review focus:\n"
+            f"{code_bullet_list(excluded_review_paths)}"
+        )
 
     return f"""继续 OpenSpec change `{change}`，以 subagent team 主链推进单个 issue。
 
@@ -134,6 +204,13 @@ def render_dispatch(
   - `{repo_root}`
 - Issue progress artifact:
   - `{display_path(repo_root, progress_path)}`
+- Current changed-file focus:
+{code_bullet_list(current_changed_files)}
+- Current review starting scope:
+{code_bullet_list(current_focus)}
+{excluded_review_paths_section}
+- Latest issue-local validation snapshot:
+{bullet_list(current_validation)}
 - Allowed scope:
 {code_bullet_list(allowed_scope)}
 - Out of scope:
@@ -151,18 +228,15 @@ def render_dispatch(
   - Developer 3: tests, fixtures, cleanup owner
   - Launch with `reasoning_effort=xhigh`
   - Why: 当前 issue round 预期会修改 repo 代码、测试或集成实现。
-- Check group: 3 subagents
-  - Checker 1: functional correctness, main path, edge cases
-  - Checker 2: architecture, data flow, concurrency, persistence risks
-  - Checker 3: regression risk, tests, evidence gaps
+- Check group: 2 subagents
+  - Checker 1: changed files / allowed scope functional correctness, main path, edge cases
+  - Checker 2: direct dependency regression risk, tests, evidence gaps
   - Launch with `reasoning_effort=medium`
-  - Why: checker 只负责缺口识别、证据核对和最小修复建议。
-- Review group: 3 subagents
-  - Reviewer 1: target path pass / fail
-  - Reviewer 2: regression and operational risk pass / fail
-  - Reviewer 3: evidence completeness pass / fail
+  - Why: checker 默认走 scope-first 快路径，只检查当前 issue 变更面及其直接依赖风险。
+- Review group: 1 subagent
+  - Reviewer 1: scope-first target path / direct dependency / evidence pass or fail
   - Launch with `reasoning_effort=medium`
-  - Why: reviewer 只负责验收裁决、风险判断和证据充分性检查。
+  - Why: reviewer 默认只保留一个硬门禁 seat，对当前 issue 做快速裁决；更重审查只在升级时启动。
 
 ## Gate Barrier
 
@@ -177,6 +251,14 @@ def render_dispatch(
   - 任一 required gate-bearing subagent 仍在运行时，不允许提前关闭它。
   - gate-bearing check/review subagent 不要当作 `explorer` sidecar。
   - `auto_accept_issue_review=true` 只跳过人工签字，不跳过 gate-bearing subagent 的完成等待。
+
+## Scope-First Review Focus
+
+- checker / reviewer 先看当前 issue progress 里的 `changed_files`；如果还没有，就从 `allowed_scope` 开始。
+- 默认只审当前 issue 变更面、`allowed_scope`、issue validation 和直接依赖 / 直接调用链。
+- 默认排除 `node_modules`、`dist`、`build`、`.next`、`coverage` 这类生成/供应商目录；只有当前 issue 明确把这些路径写进 `allowed_scope` 时才允许查看。
+- 只有为确认 blocker、回归或直接依赖风险时，才允许扩大阅读范围。
+- 不要做 repo-wide 扫描，不要扩展到与当前 issue 无直接关系的模块。
 
 ## Coordinator Responsibilities
 
@@ -210,12 +292,19 @@ def render_dispatch(
 
 - 所有 checker 都读同一份 round contract 和 issue contract。
 - checker subagent 启动时显式使用 `reasoning_effort=medium`。
+- 先看：
+  - `changed_files`（若 progress artifact 已记录）
+  - 否则看 `allowed_scope`
+  - 再看 issue validation 和当前 round backlog
+- 默认排除 `node_modules`、`dist`、`build`、`.next`、`coverage` 这类目录；只有当前 issue 明确把这些路径写进 `allowed_scope` 时才允许检查。
+- 只有为确认 blocker 或直接依赖回归时，才允许扩到相邻调用链。
 - 只输出：
   - defect / gap 或 none
   - 为什么它会阻塞当前 `{target_mode}` 目标
   - 证据
   - 最小修复建议
 - 不要输出纯风格建议，不要扩展需求。
+- 不要做 repo-wide 扫描，不要对无关目录做泛化检查。
 - checker 的输出属于当前 round 的硬门禁输入；在主控 agent 收齐所有 checker 结论前，不能提前通过当前 round。
 
 ## Development Packet Rules
@@ -232,11 +321,15 @@ def render_dispatch(
 ## Review Packet Rules
 
 - reviewer subagent 启动时显式使用 `reasoning_effort=medium`。
+- reviewer 先看 `changed_files`、`allowed_scope`、issue validation 和 checker 已归并结果。
+- 默认排除 `node_modules`、`dist`、`build`、`.next`、`coverage` 这类目录；只有当前 issue 明确把这些路径写进 `allowed_scope` 时才允许审查。
+- 只有为确认当前 issue 是否会引入直接依赖风险时，才允许扩到直接调用链。
 - 审查组只回答：
   - verdict: `pass` / `pass with noted debt` / `fail`
   - evidence
   - blocking gap 或 `none`
 - `pass` 才允许结束本轮；`fail` 则回到开发组开始下一轮。
+- 不要做 repo-wide 审查，不要把当前 round 扩成整个代码库 review。
 - 在主控 agent 收齐所有 reviewer verdict 前，不允许提前通过当前 round，也不允许提前关闭 reviewer subagent。
 - 如果两三轮后仍停滞，优先缩 scope 或收紧目标，不要默认扩 backlog。
 
@@ -295,6 +388,7 @@ def main() -> None:
         config=config,
     )
     progress_path = issue_progress_path(repo_root, args.change, args.issue_id)
+    progress_snapshot = read_progress_snapshot(progress_path)
     dispatch_text = render_dispatch(
         change=args.change,
         issue_id=args.issue_id,
@@ -306,6 +400,7 @@ def main() -> None:
         worker_worktree=worker_worktree,
         repo_root=repo_root,
         progress_path=progress_path,
+        progress_snapshot=progress_snapshot,
         control_state=control_state,
         dispatch_gate=dispatch_gate,
         target_mode_override=args.target_mode,

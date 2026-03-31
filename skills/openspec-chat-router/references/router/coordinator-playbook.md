@@ -15,18 +15,26 @@ This is the normal flow when the runtime supports delegation and the user wants 
    - design author: `xhigh`
    - any code-writing implementation or verify-fix subagent: `xhigh`
    - design reviewers, planning authors, checkers, reviewers, and closeout-only subagents: `medium`
-6. For every phase, treat the launched phase seats as gate-bearing participants:
+6. Default to the lighter fast path before escalating more seats:
+   - issue planning: `2 development + 1 check + 1 review`
+   - issue execution: `3 development + 2 check + 1 review`
+   - change acceptance: `1 development + 1 check + 1 review`
+   - change verify: `2 development + 1 check + 1 review`
+   - only expand check/review seats when the current round surfaces cross-boundary architecture risk or unresolved evidence gaps
+7. For every phase, treat the launched phase seats as gate-bearing participants:
    - record agent ids, seat names, and running/completed status
    - use `default` or `worker` style delegation for those gate seats; do not use `explorer` for design-review, check, or review gates
    - if unattended progression matters, wait up to 1 hour for those gate-bearing subagents instead of short polling
    - do not advance, auto-accept, or close the phase while any required gate-bearing subagent is still running
-7. For bounded implementation slices that are explicitly narrowed to one issue-only execution subagent, spawn exactly one issue-only subagent for one approved issue.
-8. Pass the generated dispatch content or file to the issue execution subagent or team as the source of truth.
-9. Have code-writing subagents follow `openspec-execute-issue`, including issue-local progress and run artifacts.
-10. Reconcile from disk, normalize any findings into the change-level backlog, and decide whether the issue passes the round.
-11. If `auto_accept_issue_review=true` and the issue-local validation passed, accept/merge/commit it immediately from the coordinator session. Otherwise review it manually in the coordinator session first.
-12. After all approved issues are completed, run a change-level `/review` against the current change diff and write `runs/CHANGE-REVIEW.json`.
-13. Only after that review passes, run the change-level acceptance decision and then `verify` / `archive`.
+8. Checker/reviewer should start from `changed_files` in the issue progress artifact when available; otherwise start from `allowed_scope`, issue validation, and the approved round target.
+9. Only expand checker/reviewer reading to direct dependencies or direct call chains when needed to prove a blocker or regression risk; do not default to repo-wide scanning or generated/vendor folders such as `node_modules`, `dist`, `build`, `.next`, or `coverage`.
+10. For bounded implementation slices that are explicitly narrowed to one issue-only execution subagent, spawn exactly one issue-only subagent for one approved issue.
+11. Pass the generated dispatch content or file to the issue execution subagent or team as the source of truth.
+12. Have code-writing subagents follow `openspec-execute-issue`, including issue-local progress and run artifacts.
+13. Reconcile from disk, normalize any findings into the change-level backlog, and decide whether the issue passes the round.
+14. If `auto_accept_issue_review=true` and the issue-local validation passed, accept/merge/commit it immediately from the coordinator session. Otherwise review it manually in the coordinator session first.
+15. After all approved issues are completed, run a change-level `/review` against the current change diff and write `runs/CHANGE-REVIEW.json`.
+16. Only after that review passes, run the change-level acceptance decision and then `verify` / `archive`.
 
 ## Rules
 
@@ -37,6 +45,9 @@ This is the normal flow when the runtime supports delegation and the user wants 
 - do not pass a gate while any required reviewer/checker for that gate is still running
 - do not close unfinished gate-bearing subagents early
 - gate-bearing review/check subagents must not be treated as `explorer` sidecars
+- checker/reviewer should be scope-first and diff-first; start from `changed_files` or `allowed_scope`, then expand only to direct dependencies when needed
+- do not let issue rounds turn into repo-wide review sweeps by default
+- do not let issue-round checker/reviewer read `node_modules`, `dist`, `build`, `.next`, `coverage`, or other generated/vendor trees unless the issue explicitly scopes them in
 - fall back to the single-issue execution path only when the user explicitly narrows execution to one issue-only subagent or the current step is already a bounded single-issue handoff
 - keep a change-level normalized backlog and round verdict for complex changes
 - do not let issue execution subagents update `tasks.md`

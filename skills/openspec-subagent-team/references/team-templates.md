@@ -31,6 +31,7 @@ Issue：<issue-id>
 按 development -> check -> repair -> review 的轮次推进。
 主控 agent 负责统一 backlog、scope control 和 stop decision。
 当前 phase 的 gate-bearing subagent 都必须等待完成并收齐 verdict；如果任务会跑很久，使用 1 小时 blocking wait。
+checker / reviewer 默认先看 changed files；没有 changed files 时再看 allowed_scope，不要做 repo-wide 扫描。
 ```
 
 ## Issue Seat Lenses
@@ -39,13 +40,21 @@ Issue：<issue-id>
 - Development 2: dependent module or integration owner
 - Development 3: tests, fixtures, cleanup owner
 - Check 1: functional correctness, main path, edge cases
-- Check 2: architecture, data flow, concurrency, persistence risks
-- Check 3: regression risk, tests, evidence gaps
-- Review 1: target path pass / fail
-- Review 2: regression and operational risk pass / fail
-- Review 3: evidence completeness pass / fail
+- Check 2: regression risk, tests, evidence gaps on direct dependencies
+- Check 3: architecture, data flow, concurrency, persistence escalation lens
+- Review 1: scope-first target path / direct dependency / evidence pass or fail
+- Review 2: regression and operational risk escalation lens
+- Review 3: evidence completeness escalation lens
 
-以上 seat lenses 默认与 `rra` 定义保持一致；除非用户显式覆盖，不要自行改写。
+以上 seat lenses 仍与 `rra` 家族保持兼容，但 issue 快路径不再默认把所有 lens 全量拉起。
+
+Fast-path activation:
+
+- issue planning: 默认 `2 development + 1 check + 1 review`
+- issue execution: 默认 `3 development + 2 check + 1 review`
+- change acceptance: 默认 `1 development + 1 check + 1 review`
+- change verify: 默认 `2 development + 1 check + 1 review`
+- 只有当前 round 出现跨边界架构风险、直接依赖争议或证据缺口时，才升级额外的 check / review seat
 
 ## Design Author Prompt
 
@@ -85,8 +94,15 @@ Issue：<issue-id>
 
 按当前 seat lens 工作：
 - Check 1: functional correctness, main path, edge cases
-- Check 2: architecture, data flow, concurrency, persistence risks
-- Check 3: regression risk, tests, evidence gaps
+- Check 2: regression risk, tests, evidence gaps on direct dependencies
+- Check 3: architecture/data-flow escalation only when the round surfaces cross-boundary risk
+
+先看：
+- issue progress artifact 里的 `changed_files`
+- 如果还没有，则看 `allowed_scope`
+- 再看 issue validation 和当前 round backlog
+
+只有为确认 blocker 或 direct dependency 回归时，才允许扩到相邻调用链。
 
 只输出：
 1. defect / gap 或 none
@@ -95,6 +111,8 @@ Issue：<issue-id>
 4. 最小修复建议
 
 不要输出纯风格建议，不要扩展需求。
+不要做 repo-wide 扫描，不要审查与当前 issue 无直接关系的目录。
+不要读取 `node_modules`、`dist`、`build`、`.next`、`coverage` 这类目录，除非当前 issue 明确把这些路径放进 `allowed_scope`。
 不要把自己当成可提前忽略的 sidecar；你的输出必须被主控 agent 收敛后才能进入下一轮。
 ```
 
@@ -124,15 +142,25 @@ Issue：<issue-id>
 启动这个 subagent 时显式使用 `reasoning_effort=medium`。
 
 按当前 seat lens 工作：
-- Review 1: target path pass / fail
-- Review 2: regression and operational risk pass / fail
-- Review 3: evidence completeness pass / fail
+- Review 1: scope-first target path / direct dependency / evidence pass or fail
+- Review 2: regression-operational escalation only when Review 1 无法定论
+- Review 3: evidence completeness escalation only when当前 round 仍缺关键证据
+
+先看：
+- `changed_files`
+- `allowed_scope`
+- issue validation
+- checker 已归并结果
+
+只有为确认 direct dependency 风险时，才允许扩到直接调用链。
 
 只输出：
 1. verdict: pass / pass with noted debt / fail
 2. evidence
 3. blocking gap 或 none
 
+不要做 repo-wide 审查，不要把当前 round 扩成整个代码库 review。
+不要读取 `node_modules`、`dist`、`build`、`.next`、`coverage` 这类目录，除非当前 issue 明确把这些路径放进 `allowed_scope`。
 不要把自己当成可提前忽略的 sidecar；在主控 agent 明确收齐审查结论前，当前 round 不得通过。
 ```
 

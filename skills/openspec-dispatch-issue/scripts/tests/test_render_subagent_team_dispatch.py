@@ -67,6 +67,21 @@ class RenderSubagentTeamDispatchTest(unittest.TestCase):
                 - 继续 dispatch ISSUE-001
                 """
             ))
+            (issues_dir / "ISSUE-001.progress.json").write_text(textwrap.dedent(
+                """\
+                {
+                  "changed_files": [
+                    "src/dispatch.ts",
+                    "node_modules/react/index.js",
+                    "coverage/lcov.info"
+                  ],
+                  "validation": {
+                    "lint": "passed",
+                    "typecheck": "pending"
+                  }
+                }
+                """
+            ))
 
             process = subprocess.run(
                 [
@@ -94,20 +109,26 @@ class RenderSubagentTeamDispatchTest(unittest.TestCase):
         self.assertEqual(payload["reasoning_policy"]["review_group"], "medium")
         self.assertIn("subagent team 主链", dispatch_text)
         self.assertIn("Development group: 3 subagents", dispatch_text)
-        self.assertIn("Check group: 3 subagents", dispatch_text)
-        self.assertIn("Review group: 3 subagents", dispatch_text)
+        self.assertIn("Check group: 2 subagents", dispatch_text)
+        self.assertIn("Review group: 1 subagent", dispatch_text)
         self.assertIn("Developer 1: core implementation owner", dispatch_text)
-        self.assertIn("Checker 2: architecture, data flow, concurrency, persistence risks", dispatch_text)
-        self.assertIn("Checker 3: regression risk, tests, evidence gaps", dispatch_text)
-        self.assertIn("Reviewer 1: target path pass / fail", dispatch_text)
-        self.assertIn("Reviewer 2: regression and operational risk pass / fail", dispatch_text)
-        self.assertIn("Reviewer 3: evidence completeness pass / fail", dispatch_text)
+        self.assertIn("Checker 2: direct dependency regression risk, tests, evidence gaps", dispatch_text)
+        self.assertIn("Reviewer 1: scope-first target path / direct dependency / evidence pass or fail", dispatch_text)
         self.assertIn("## Gate Barrier", dispatch_text)
         self.assertIn("最长 1 小时的 blocking wait", dispatch_text)
         self.assertIn("不要当作 `explorer` sidecar", dispatch_text)
         self.assertIn("Gate-bearing subagent roster with seat / agent_id / status", dispatch_text)
         self.assertIn("Launch with `reasoning_effort=xhigh`", dispatch_text)
         self.assertIn("Launch with `reasoning_effort=medium`", dispatch_text)
+        self.assertIn("Current changed-file focus:", dispatch_text)
+        self.assertIn("Current review starting scope:", dispatch_text)
+        self.assertIn("Excluded incidental paths from review focus:", dispatch_text)
+        self.assertIn("`src/dispatch.ts`", dispatch_text)
+        self.assertIn("`node_modules/react/index.js`", dispatch_text)
+        self.assertIn("`coverage/lcov.info`", dispatch_text)
+        self.assertIn("lint=passed", dispatch_text)
+        self.assertIn("typecheck=pending", dispatch_text)
+        self.assertIn("默认排除 `node_modules`、`dist`、`build`、`.next`、`coverage`", dispatch_text)
         self.assertIn("Target mode:", dispatch_text)
         self.assertIn("`quality`", dispatch_text)
         self.assertIn("ISSUE-001", dispatch_text)
