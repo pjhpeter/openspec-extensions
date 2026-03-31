@@ -20,8 +20,8 @@ This is the normal flow when the runtime supports delegation and the user wants 
    - use `default` or `worker` style delegation for those gate seats; do not use `explorer` for design-review, check, or review gates
    - if unattended progression matters, wait up to 1 hour for those gate-bearing subagents instead of short polling
    - do not advance, auto-accept, or close the phase while any required gate-bearing subagent is still running
-7. For bounded implementation slices that are explicitly narrowed to one issue worker, spawn exactly one worker subagent for one approved issue.
-8. Pass the generated dispatch content or file to the worker or team as the source of truth.
+7. For bounded implementation slices that are explicitly narrowed to one issue-only execution subagent, spawn exactly one issue-only subagent for one approved issue.
+8. Pass the generated dispatch content or file to the issue execution subagent or team as the source of truth.
 9. Have code-writing subagents follow `openspec-execute-issue`, including issue-local progress and run artifacts.
 10. Reconcile from disk, normalize any findings into the change-level backlog, and decide whether the issue passes the round.
 11. If `auto_accept_issue_review=true` and the issue-local validation passed, accept/merge/commit it immediately from the coordinator session. Otherwise review it manually in the coordinator session first.
@@ -30,17 +30,17 @@ This is the normal flow when the runtime supports delegation and the user wants 
 
 ## Rules
 
-- one worker context handles one issue only
+- one issue-scoped execution context handles one issue only
 - use subagent-team rounds as the default issue-mode coordinator topology
 - do not let subagents inherit the session-wide reasoning default blindly; set role-based `reasoning_effort` explicitly
 - `auto_accept_*` only removes human sign-off after gate-bearing subagents have all finished and their verdicts are in hand
 - do not pass a gate while any required reviewer/checker for that gate is still running
 - do not close unfinished gate-bearing subagents early
 - gate-bearing review/check subagents must not be treated as `explorer` sidecars
-- fall back to the single-worker issue path only when the user explicitly narrows execution to one issue worker or the current step is already a bounded worker handoff
+- fall back to the single-issue execution path only when the user explicitly narrows execution to one issue-only subagent or the current step is already a bounded single-issue handoff
 - keep a change-level normalized backlog and round verdict for complex changes
-- do not let workers update `tasks.md`
-- do not let workers self-merge or create the final git commit
+- do not let issue execution subagents update `tasks.md`
+- do not let issue execution subagents self-merge or create the final git commit
 - prefer artifact-based reconcile over chat memory
 - do not dispatch new issue work while `Must fix now` items from the current planning or acceptance round are still open
 - do not move from "all issues completed" to `verify` or `archive` without both a passed change-level `/review` and a change-level acceptance decision

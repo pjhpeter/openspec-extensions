@@ -8,7 +8,7 @@ If it does not, the default example becomes `.worktree/<change-name>/ISSUE-001` 
 ---
 issue_id: ISSUE-001
 title: 用一句话描述这个 issue
-worker_worktree: <repo worker worktree path>
+worker_worktree: <repo issue worktree path>
 allowed_scope:
   - src/example/path.ts
 out_of_scope:
@@ -31,7 +31,7 @@ depends_on:
 
 ## Context
 
-只保留 worker 真正需要知道的上下文。
+只保留 issue 执行 subagent 真正需要知道的上下文。
 
 ## Implementation Notes
 
@@ -39,13 +39,13 @@ depends_on:
 - 复用点
 - 风险或边界
 
-## Worker Prompt
+## Issue Execution Prompt
 
 继续 OpenSpec change `<change-name>`，执行单个 issue。
 
 - Issue: `ISSUE-001`
-- Worker worktree:
-  - `<repo worker worktree path>`
+- Issue worktree (`worker_worktree`):
+  - `<repo issue worktree path>`
 - Allowed scope:
   - `src/example/path.ts`
 - Out of scope:

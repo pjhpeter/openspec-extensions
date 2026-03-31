@@ -1,6 +1,6 @@
 ---
 name: openspec-reconcile-change
-description: Reconcile worker-owned issue progress artifacts for an OpenSpec change and decide the coordinator's next step. Use when the user asks to sync worker progress, collect issue state, continue a change after worker contexts, or advance the workflow based on `issues/*.progress.json` and `runs/*.json`.
+description: Reconcile issue progress artifacts for an OpenSpec change and decide the coordinator's next step. Use when the user asks to sync issue progress, collect issue state, continue a change after issue execution contexts, or advance the workflow based on `issues/*.progress.json` and `runs/*.json`.
 ---
 
 # OpenSpec Reconcile Change
@@ -44,7 +44,7 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
    - `auto_accept_issue` -> run `coordinator_merge_issue.py` immediately, then rerun reconcile and keep advancing without waiting for user confirmation
    - `coordinator_review` -> review the issue, then either accept it with `coordinator_merge_issue.py` or create `Must fix now` backlog items and send it back to repair
    - `await_issue_dispatch_confirmation` -> semi-auto pause before the first issue dispatch after issue planning
-   - `dispatch_next_issue` -> prepare the next worker issue
+   - `dispatch_next_issue` -> prepare the next approved issue and, in the default path, continue through subagent-team
    - `await_next_issue_confirmation` -> semi-auto pause before dispatching the next pending issue
    - `verify_change` -> run change-level verify now
    - `await_verify_confirmation` -> semi-auto pause before running verify
@@ -54,8 +54,8 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
 
 ## Rules
 
-- Do not treat worker chat output as the source of truth when artifacts exist; prefer issue progress artifacts over run artifacts.
-- Do not let workers update `tasks.md`, self-merge, or create the final git commit for an issue.
+- Do not treat issue-execution chat output as the source of truth when artifacts exist; prefer issue progress artifacts over run artifacts.
+- Do not let issue execution subagents update `tasks.md`, self-merge, or create the final git commit for an issue.
 - Use issue docs to discover pending work that has not started yet.
 - `coordinator_merge_issue.py` expects the coordinator worktree to start clean before it imports the worker diff and creates the acceptance commit.
 - If artifacts are stale or suspicious, inspect the issue worktree and run artifacts directly before redispatching.
@@ -63,6 +63,7 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
 - For complex changes, keep the active normalized backlog and round verdict on disk instead of in chat only.
 - Do not dispatch, verify, or archive while unresolved `Must fix now` items remain in the active change-level backlog.
 - If the helper finds no issue artifacts, fall back to normal OpenSpec routing.
+- If `automation_profile=full_auto` and the helper emits `dispatch_next_issue`, do not stop to ask the user; render the next team dispatch or continue the subagent-team loop immediately.
 - If `auto_accept_issue_review=true` and the helper emits `auto_accept_issue`, do not stop to ask the user; merge/commit the issue immediately and continue.
 - If coordinator review accepts an issue, merge and commit it before dispatching the next dependent issue or moving to `verify`.
 - Do not move from "all issues completed" to `verify` until `runs/CHANGE-REVIEW.json` exists, is current, and has `status=passed`.
@@ -78,5 +79,5 @@ Keep the coordinator summary decision-oriented:
 - ISSUE-001: completed, review_required
 - ISSUE-002: pending
 - Must fix now: none
-- 下一步: 为 ISSUE-002 生成 worker dispatch
+- 下一步: 为 ISSUE-002 渲染 team dispatch，并继续 subagent-team 执行
 ```

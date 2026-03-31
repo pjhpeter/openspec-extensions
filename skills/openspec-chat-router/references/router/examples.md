@@ -9,13 +9,13 @@ Use these examples when you need quick intent-to-route references without re-rea
 - “先对这个 change 做设计评审，通过后再决定能不能拆 issue。” -> readiness review before `plan-issues`
 - “把这个 change 拆成几个可并行 issue。” -> `plan-issues`
 - “先 review 这个 change 的 issue 规划，再决定 dispatch 哪个 issue。” -> `plan-issues`, then change-level issue-planning review
-- “给我 ISSUE-001 的 worker 派发模板。” -> `dispatch-issue`
-- “给 ISSUE-001 创建 worker worktree。” -> `dispatch-issue`
-- “给 ISSUE-001 准备 dispatch 并直接开一个 subagent。” -> `dispatch-issue`, then one delegated issue worker
+- “给我 ISSUE-001 的派发模板。” -> `dispatch-issue`
+- “给 ISSUE-001 创建 issue worktree。” -> `dispatch-issue`
+- “给 ISSUE-001 准备 team dispatch 并直接开一个 subagent team。” -> `dispatch-issue`, then coordinator-owned subagent team
 - “继续这个复杂 change，不特别指定 ISSUE。” -> `subagent-team`
-- “这个 worker 会话只做 ISSUE-002。” -> `execute-issue`
-- “同步一下当前 change 的 worker 进度。” -> `reconcile`
-- “根据 worker 结果继续推进这个 change。” -> `reconcile`
+- “这个 issue-only subagent 只做 ISSUE-002。” -> `execute-issue`
+- “同步一下当前 change 的 issue 进度。” -> `reconcile`
+- “根据 issue 结果继续推进这个 change。” -> `reconcile`
 - “对这个 change 做 change-level acceptance review，再决定要不要 verify。” -> `reconcile`, then change-level acceptance decision
 - “这个需求我还没想清楚，你先帮我梳理一下。” -> `explore`
 - “帮我起一个登录重构的变更，把文档一次性补齐。” -> `propose`

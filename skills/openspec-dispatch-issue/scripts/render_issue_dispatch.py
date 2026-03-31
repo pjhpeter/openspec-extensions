@@ -69,10 +69,10 @@ def render_dispatch(
 
     return f"""继续 OpenSpec change `{change}`，执行单个 issue。
 
-这是给单个 issue subagent 使用的 dispatch。保持当前 issue 边界，不要再派生新的 worker、team，或扩大 scope。
+这是给单个 issue-only subagent 使用的 dispatch。保持当前 issue 边界，不要再派生新的 issue-only subagent、team，或扩大 scope。
 
 - Issue: `{issue_id}` - {title}
-- Worker worktree:
+- Issue worktree (`worker_worktree`):
   - `{worker_worktree}`
 - Workflow artifact repo root:
   - `{repo_root}`
