@@ -11,7 +11,12 @@ SCRIPT_DIR = Path(__file__).resolve().parents[1]
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from issue_mode_common import extract_open_work_items, load_issue_mode_config, read_change_control_state  # noqa: E402
+from issue_mode_common import (  # noqa: E402
+    extract_open_work_items,
+    issue_worker_worktree_setting,
+    load_issue_mode_config,
+    read_change_control_state,
+)
 
 
 class ExtractOpenWorkItemsTest(unittest.TestCase):
@@ -124,6 +129,18 @@ class ReadChangeControlStateTest(unittest.TestCase):
 
 
 class LoadIssueModeConfigTest(unittest.TestCase):
+    def test_defaults_to_shared_workspace_when_config_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+
+            config = load_issue_mode_config(repo_root)
+
+            worker_worktree, source = issue_worker_worktree_setting(repo_root, "demo-change", "ISSUE-001", config)
+
+        self.assertFalse(config["worker_worktree"]["enabled"])
+        self.assertEqual(worker_worktree, ".")
+        self.assertEqual(source, "config_default")
+
     def test_ignores_legacy_detached_worker_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)
@@ -167,6 +184,7 @@ class LoadIssueModeConfigTest(unittest.TestCase):
 
         self.assertEqual(config["worktree_root"], ".worktree")
         self.assertEqual(config["validation_commands"], ["pnpm lint"])
+        self.assertTrue(config["worker_worktree"]["enabled"])
         self.assertEqual(config["worker_worktree"]["mode"], "branch")
         self.assertEqual(config["worker_worktree"]["base_ref"], "main")
         self.assertEqual(config["worker_worktree"]["branch_prefix"], "demo")
@@ -180,6 +198,32 @@ class LoadIssueModeConfigTest(unittest.TestCase):
         self.assertNotIn("persistent_host", config)
         self.assertNotIn("coordinator_heartbeat", config)
         self.assertNotIn("worker_launcher", config)
+
+    def test_explicit_shared_workspace_config_materializes_repo_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            openspec_dir = repo_root / "openspec"
+            openspec_dir.mkdir(parents=True)
+            (openspec_dir / "issue-mode.json").write_text(textwrap.dedent(
+                """\
+                {
+                  "worktree_root": ".worktree",
+                  "worker_worktree": {
+                    "enabled": false,
+                    "mode": "detach",
+                    "base_ref": "HEAD",
+                    "branch_prefix": "opsx"
+                  }
+                }
+                """
+            ))
+
+            config = load_issue_mode_config(repo_root)
+            worker_worktree, source = issue_worker_worktree_setting(repo_root, "demo-change", "ISSUE-001", config)
+
+        self.assertFalse(config["worker_worktree"]["enabled"])
+        self.assertEqual(worker_worktree, ".")
+        self.assertEqual(source, "config_default")
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ Use this reference when a complex OpenSpec change should be governed by a change
 - `issue-mode` is the execution plane:
   - issue docs
   - issue team dispatch packets
-  - worker worktrees
+  - worker workspaces
   - `issues/*.progress.json`
   - `runs/*.json`
   - reconcile

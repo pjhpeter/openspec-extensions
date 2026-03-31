@@ -153,6 +153,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "pnpm type-check",
     ],
     "worker_worktree": {
+        "enabled": False,
         "mode": "detach",
         "base_ref": "HEAD",
         "branch_prefix": "opsx",
@@ -460,6 +461,21 @@ def automation_profile(config: dict[str, Any]) -> str:
     return "custom"
 
 
+def normalize_worker_worktree_enabled(payload: dict[str, Any]) -> bool:
+    worker_worktree = payload.get("worker_worktree")
+    if isinstance(worker_worktree, dict) and "enabled" in worker_worktree:
+        return normalize_bool(worker_worktree.get("enabled"), bool(DEFAULT_CONFIG["worker_worktree"]["enabled"]))
+
+    legacy_config_present = False
+    if isinstance(worker_worktree, dict):
+        legacy_config_present = any(key in worker_worktree for key in ("mode", "base_ref", "branch_prefix"))
+
+    if legacy_config_present or "worktree_root" in payload:
+        return True
+
+    return bool(DEFAULT_CONFIG["worker_worktree"]["enabled"])
+
+
 def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
     config_path = repo_root / CONFIG_RELATIVE_PATH
     config = dict(DEFAULT_CONFIG)
@@ -482,6 +498,7 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
     worker_worktree = config.get("worker_worktree", {})
     if not isinstance(worker_worktree, dict):
         worker_worktree = {}
+    worktree_enabled = normalize_worker_worktree_enabled(payload)
     worktree_mode = str(worker_worktree.get("mode", DEFAULT_CONFIG["worker_worktree"]["mode"])).strip() or "detach"
     if worktree_mode not in {"detach", "branch"}:
         raise SystemExit(f"{CONFIG_RELATIVE_PATH} field `worker_worktree.mode` must be `detach` or `branch`.")
@@ -502,6 +519,7 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
         "worktree_root": worktree_root,
         "validation_commands": validation_commands,
         "worker_worktree": {
+            "enabled": worktree_enabled,
             "mode": worktree_mode,
             "base_ref": base_ref,
             "branch_prefix": branch_prefix,
@@ -516,6 +534,8 @@ def load_issue_mode_config(repo_root: Path) -> dict[str, Any]:
 
 
 def default_worker_worktree_setting(config: dict[str, Any], change: str, issue_id: str) -> str:
+    if not bool(config["worker_worktree"].get("enabled", True)):
+        return "."
     return (Path(config["worktree_root"]) / change / issue_id).as_posix()
 
 
@@ -537,6 +557,8 @@ def validate_issue_worker_worktree(repo_root: Path, raw_path: str, config: dict[
 
     resolved_path = (repo_root / candidate_path).resolve()
     ensure_path_within(repo_root, resolved_path)
+    if resolved_path == repo_root.resolve():
+        return "."
 
     worktree_root = resolve_repo_path(repo_root, str(config["worktree_root"]))
     ensure_path_within(worktree_root, resolved_path)
@@ -572,6 +594,10 @@ def issue_worker_worktree_path(
     raw_path, source = issue_worker_worktree_setting(repo_root, change, issue_id, config)
     path = resolve_repo_path(repo_root, raw_path)
     return path, display_path(repo_root, path), source
+
+
+def is_shared_worker_workspace(repo_root: Path, path: Path) -> bool:
+    return path.resolve() == repo_root.resolve()
 
 
 def issue_validation_commands(

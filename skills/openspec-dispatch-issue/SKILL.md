@@ -1,6 +1,6 @@
 ---
 name: openspec-dispatch-issue
-description: Generate source-of-truth dispatch artifacts for one OpenSpec issue, prepare a subagent handoff, or create/reuse the issue worktree boundary. Use when the coordinator asks for “ISSUE-001 的派发模板”, “派发下一个 issue”, “创建 ISSUE-001 的 issue worktree”, “准备 issue worktree”, “直接开 subagent 做 ISSUE-001”, or similar requests after issue docs already exist.
+description: Generate source-of-truth dispatch artifacts for one OpenSpec issue, prepare a subagent handoff, or create/reuse the issue workspace boundary. Use when the coordinator asks for “ISSUE-001 的派发模板”, “派发下一个 issue”, “创建 ISSUE-001 的 issue workspace”, “准备 issue workspace”, “直接开 subagent 做 ISSUE-001”, or similar requests after issue docs already exist.
 ---
 
 # OpenSpec Dispatch Issue
@@ -14,7 +14,7 @@ Read `issue-mode-contract.md`, `issue-mode-config.md`, `issue-mode-rra.md`, and 
 1. Resolve the change and issue. If the user did not name an issue, prefer the recommended pending issue from `openspec-reconcile-change`.
 2. Read the latest change-level control artifacts when they exist and confirm that the issue is approved for dispatch in the current round.
 3. If issue-planning or acceptance `Must fix now` items still block this dispatch, stop and fix the backlog first.
-4. Create or reuse the issue worktree boundary (`worker_worktree`):
+4. Create or reuse the issue workspace boundary (`worker_worktree`):
    ```bash
    python3 .codex/skills/openspec-dispatch-issue/scripts/create_worker_worktree.py \
      --repo-root . \
@@ -36,16 +36,16 @@ Read `issue-mode-contract.md`, `issue-mode-config.md`, `issue-mode-rra.md`, and 
      --change "<change-name>" \
      --issue-id "<issue-id>"
    ```
-7. Use the generated dispatch artifact plus the created/reused worktree as the source of truth when sending work to the coordinator-owned subagent team, or to one bounded issue-only subagent when the user explicitly narrowed the path.
+7. Use the generated dispatch artifact plus the created/reused workspace as the source of truth when sending work to the coordinator-owned subagent team, or to one bounded issue-only subagent when the user explicitly narrowed the path.
 8. In runtimes with delegation:
    - default to `ISSUE-*.team.dispatch.md` for the approved issue round
    - use `ISSUE-*.dispatch.md` only when the user explicitly narrowed execution to one issue-only subagent
-9. Keep implementation inside that issue worktree and return review, merge, and commit to the coordinator.
+9. Keep implementation inside that issue workspace and return review, acceptance, and commit to the coordinator.
 
 ## Rules
 
 - Dispatch must be generated from the issue doc on disk.
-- Issue worktree defaults come from `worker_worktree` in `openspec/issue-mode.json`; if it is missing, fall back to `.worktree/<change-name>/<issue-id>/`.
+- Issue workspace defaults come from `worker_worktree` in `openspec/issue-mode.json`. Shared workspace mode materializes `worker_worktree: .`; isolated mode falls back to `.worktree/<change-name>/<issue-id>/`.
 - Do not improvise scope boundaries from memory when an issue doc exists.
 - If the issue doc is missing required frontmatter fields, fix the issue doc first.
 - If the active change-level round still has unresolved `Must fix now` items that block dispatch, do not launch issue execution yet.
@@ -62,8 +62,8 @@ Prefer a short coordinator response:
 
 - Team Dispatch: openspec/changes/<change>/issues/ISSUE-001.team.dispatch.md
 - Dispatch: openspec/changes/<change>/issues/ISSUE-001.dispatch.md
-- Issue worktree (`worker_worktree`): .worktree/<change>/ISSUE-001
-- Worktree status: created or reused
+- Issue workspace (`worker_worktree`): .
+- Workspace status: shared / created / reused
 - Round gate: approved for dispatch
 - 默认下一步是把 team dispatch 交给 coordinator 主会话编排 subagent team
 ```

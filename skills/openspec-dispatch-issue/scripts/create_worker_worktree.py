@@ -14,6 +14,7 @@ if str(SHARED_SCRIPTS) not in sys.path:
 from issue_mode_common import (  # noqa: E402
     display_path,
     ensure_issue_dispatch_allowed,
+    is_shared_worker_workspace,
     issue_worker_worktree_path,
     load_issue_mode_config,
     read_change_control_state,
@@ -59,13 +60,20 @@ def main() -> None:
     mode = args.mode or config["worker_worktree"]["mode"]
     base_ref = args.base_ref or config["worker_worktree"]["base_ref"]
     branch_name = args.branch_name or ""
+    shared_workspace = is_shared_worker_workspace(repo_root, worktree_path)
+    if shared_workspace:
+        mode = "shared"
+        base_ref = ""
+        branch_name = ""
     if mode == "branch" and not branch_name:
         branch_name = worker_branch_name(config, args.change, args.issue_id)
 
     existed = False
     created = False
 
-    if worktree_path.exists():
+    if shared_workspace:
+        existed = True
+    elif worktree_path.exists():
         if worktree_exists(worktree_path):
             existed = True
         elif worktree_path.is_dir() and not any(worktree_path.iterdir()):
@@ -73,7 +81,7 @@ def main() -> None:
         else:
             raise SystemExit(f"Target path exists but is not an empty git worktree: {worktree_path}")
 
-    if not existed and not args.dry_run:
+    if not shared_workspace and not existed and not args.dry_run:
         worktree_path.parent.mkdir(parents=True, exist_ok=True)
         command = ["git", "-C", str(repo_root), "worktree", "add"]
         if mode == "detach":
@@ -97,6 +105,7 @@ def main() -> None:
         "mode": mode,
         "base_ref": base_ref,
         "branch_name": branch_name,
+        "shared_workspace": shared_workspace,
         "created": created,
         "existed": existed,
         "dry_run": args.dry_run,

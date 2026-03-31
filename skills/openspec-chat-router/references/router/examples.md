@@ -10,7 +10,7 @@ Use these examples when you need quick intent-to-route references without re-rea
 - “把这个 change 拆成几个可并行 issue。” -> `plan-issues`
 - “先 review 这个 change 的 issue 规划，再决定 dispatch 哪个 issue。” -> `plan-issues`, then change-level issue-planning review
 - “给我 ISSUE-001 的派发模板。” -> `dispatch-issue`
-- “给 ISSUE-001 创建 issue worktree。” -> `dispatch-issue`
+- “给 ISSUE-001 创建 issue workspace。” -> `dispatch-issue`
 - “给 ISSUE-001 准备 team dispatch 并直接开一个 subagent team。” -> `dispatch-issue`, then coordinator-owned subagent team
 - “继续这个复杂 change，不特别指定 ISSUE。” -> `subagent-team`
 - “这个 issue-only subagent 只做 ISSUE-002。” -> `execute-issue`

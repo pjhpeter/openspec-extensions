@@ -66,7 +66,7 @@ If the change name, issue id, allowed scope, or done condition is missing and ri
 - Execute one issue only.
 - Treat `issues/<issue-id>.progress.json` as the worker-owned source of truth.
 - Write a run artifact under `runs/` for this worker context.
-- Do not update `tasks.md`, run `verify` or `archive`, merge the worker worktree back, or create the final git commit.
+- Do not update `tasks.md`, run `verify` or `archive`, self-accept the worker workspace, or create the final git commit.
 - If you discover out-of-scope gaps, report them as blockers or backlog candidates for the coordinator instead of silently widening the issue.
 - This contract is the same whether the worker is a spawned subagent or a separately launched worker session.
 

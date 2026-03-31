@@ -198,7 +198,7 @@ def render_dispatch(
 
 - Issue:
   - `{issue_id}` - {title}
-- Issue worktree (`worker_worktree`):
+- Issue workspace (`worker_worktree`):
   - `{worker_worktree}`
 - Workflow artifact repo root:
   - `{repo_root}`

@@ -14,7 +14,12 @@ if str(SHARED_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SHARED_SCRIPTS))
 
 from coordinator_change_common import sync_tasks_for_issues  # noqa: E402
-from issue_mode_common import display_path, issue_worker_worktree_path, load_issue_mode_config  # noqa: E402
+from issue_mode_common import (  # noqa: E402
+    display_path,
+    is_shared_worker_workspace,
+    issue_worker_worktree_path,
+    load_issue_mode_config,
+)
 
 UNMERGED_STATUSES = {"DD", "AU", "UD", "UA", "DU", "AA", "UU"}
 
@@ -249,9 +254,14 @@ def stage_and_commit(
     repo_root: Path,
     *,
     commit_message: str,
-    extra_paths: list[Path],
+    repo_relative_paths: list[str],
 ) -> str:
-    add_paths = ["git", "add", *[display_path(repo_root, path) for path in extra_paths]]
+    staged_paths: list[str] = []
+    for path in repo_relative_paths:
+        normalized = path.strip()
+        if normalized and normalized not in staged_paths:
+            staged_paths.append(normalized)
+    add_paths = ["git", "add", "--", *staged_paths]
     run_command(add_paths, cwd=repo_root)
     run_command(["git", "commit", "-m", commit_message], cwd=repo_root)
     return git_output(repo_root, "rev-parse", "HEAD")
@@ -285,7 +295,8 @@ def main() -> None:
 
     patch, base_revision, changed_files, worker_status = build_worker_patch(repo_root, worker_worktree)
     if not patch.strip():
-        raise SystemExit(f"No reviewable changes found in worker worktree for {args.issue_id}.")
+        raise SystemExit(f"No reviewable changes found in worker workspace for {args.issue_id}.")
+    shared_workspace = is_shared_worker_workspace(repo_root, worker_worktree)
 
     target_ref = current_target_ref(repo_root)
     commit_message = args.commit_message.strip() or default_commit_message(args.change, args.issue_id)
@@ -301,6 +312,7 @@ def main() -> None:
         "progress_path": display_path(repo_root, progress_path),
         "run_path": display_path(repo_root, run_path) if run_path else "",
         "commit_message": commit_message,
+        "shared_workspace": shared_workspace,
         "dry_run": args.dry_run,
         "worker_status_lines": worker_status,
     }
@@ -309,13 +321,17 @@ def main() -> None:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
 
-    worktree_root = str(config.get("worktree_root", "")).strip().strip("./")
-    ignored_prefixes = [worktree_root] if worktree_root else []
-    ensure_clean_target(repo_root, ignored_prefixes=ignored_prefixes)
-    apply_patch(repo_root, patch)
+    if not shared_workspace:
+        worktree_root = str(config.get("worktree_root", "")).strip().strip("./")
+        ignored_prefixes = [worktree_root] if worktree_root else []
+        ensure_clean_target(repo_root, ignored_prefixes=ignored_prefixes)
+        apply_patch(repo_root, patch)
 
     updated_at = now_iso()
-    summary = f"Coordinator accepted and merged {args.issue_id} from {worker_display} into {target_ref}."
+    if shared_workspace:
+        summary = f"Coordinator accepted {args.issue_id} from shared workspace {worker_display} on {target_ref}."
+    else:
+        summary = f"Coordinator accepted and merged {args.issue_id} from {worker_display} into {target_ref}."
     tasks_sync = sync_tasks_for_issues(repo_root, args.change, [args.issue_id])
 
     progress["change"] = args.change
@@ -349,11 +365,9 @@ def main() -> None:
         write_json(run_path, run)
         extra_paths.append(run_path)
 
-    commit_sha = stage_and_commit(
-        repo_root,
-        commit_message=commit_message,
-        extra_paths=extra_paths,
-    )
+    repo_relative_paths = list(changed_files)
+    repo_relative_paths.extend(display_path(repo_root, path) for path in extra_paths)
+    commit_sha = stage_and_commit(repo_root, commit_message=commit_message, repo_relative_paths=repo_relative_paths)
 
     result["commit_sha"] = commit_sha
     result["commit_summary"] = summary

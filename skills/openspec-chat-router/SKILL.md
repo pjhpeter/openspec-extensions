@@ -46,7 +46,7 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - In issue-mode, default the coordinator entry path to `openspec-subagent-team`.
 - In runtimes that support subagents or delegation, prefer the coordinator continuing through the approved issue round with `subagent-team`.
 - Use the single-issue `dispatch-issue` / `execute-issue` path only when the user explicitly wants one bounded issue-only subagent, or the current phase has already been narrowed to that one issue.
-- The default issue-mode flow is: coordinator enters through `openspec-subagent-team`, creates or reuses approved issue worktrees as needed, drives the current round, then reviews accepted issue output from the main session before merge and commit.
+- The default issue-mode flow is: coordinator enters through `openspec-subagent-team`, creates or reuses the approved issue workspace as needed, drives the current round, then reviews accepted issue output from the main session before acceptance and commit.
 - In multi-session work on the same change, the coordinator session owns `tasks.md`, change-level backlog, merge, commit, `verify`, and `archive`.
 - Issue execution subagents must write issue-local progress and run artifacts. They must not directly update `tasks.md`, self-merge, or create the final git commit.
 - Before a coordinator continues a change that already has issue artifacts, reconcile issue state from disk first and read change-level control artifacts if present instead of trusting chat memory.
@@ -69,7 +69,7 @@ Prefer the project-local companion skill first when the route becomes concrete:
 | They want to resume a change or create the next artifact | `continue` |
 | They want to implement, code, land, or continue coding from the change tasks | `apply` |
 | They want to split a complex change into issue-sized work packages or create issue docs | `plan-issues` |
-| They want to generate the next issue handoff packet, create the issue worktree, or prepare a bounded subagent handoff for one issue | `dispatch-issue` |
+| They want to generate the next issue handoff packet, create the issue workspace, or prepare a bounded subagent handoff for one issue | `dispatch-issue` |
 | They want to continue a complex change in issue mode and did not explicitly narrow the work to one issue-only subagent | `subagent-team` |
 | They explicitly want a subagent team / development-check-review loop for one issue or round | `subagent-team` |
 | They want one issue-only subagent to execute a single issue with explicit scope boundaries | `execute-issue` |
@@ -89,7 +89,7 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - “继续刚才那个 / 继续这个 change / 下一个文档” -> `continue`
 - “开始做 / 开始实现 / 直接落地” -> `apply`
 - “拆成 issue / 给出 issue 边界 / 生成 issue 文档” -> `plan-issues`
-- “给我 ISSUE-001 的派发模板 / 派发下一个 issue / 给 ISSUE-001 创建 issue worktree / 直接开 subagent 做 ISSUE-001” -> `dispatch-issue`
+- “给我 ISSUE-001 的派发模板 / 派发下一个 issue / 给 ISSUE-001 创建 issue workspace / 直接开 subagent 做 ISSUE-001” -> `dispatch-issue`
 - “用 subagent team 推进 ISSUE-001 / 开发组检查组审查组一起推进” -> `subagent-team`
 - “本会话只处理 ISSUE-001 / 执行这个 issue / subagent 只做 ISSUE-001” -> `execute-issue`
 - “同步 issue 进度 / 收敛 issue 状态 / 根据 issue 结果继续推进” -> `reconcile`
@@ -105,7 +105,7 @@ Preferred flow:
 2. Run a change-level spec-readiness design review with a dedicated `1` design-author subagent plus `2` design-review subagents, and keep a normalized backlog for that gate.
 3. Only after design review passes, split implementation into coordinator-owned `tasks.md` plus issue-sized units with clear boundaries.
 4. Review the issue plan before dispatching issue work.
-5. For each approved issue, create or reuse the issue worktree (`worker_worktree`) before handoff.
+5. For each approved issue, create or reuse the issue workspace (`worker_worktree`) before handoff.
 6. By default, render the subagent-team lifecycle packet and use it as the coordinator control packet for the current phase.
 7. Use one issue-only execution subagent for one approved issue only when the user explicitly narrows execution to that one issue, or the current step is already a bounded single-issue handoff.
 8. After the issue execution subagent reports `review_required`, either let the coordinator review it manually or, when `subagent_team.auto_accept_issue_review=true` and issue-local validation passed, auto-accept/merge/commit it immediately.
@@ -127,7 +127,7 @@ Rules:
 - Tell the user not to keep multiple issues in one long-running session.
 - Default the coordinator to the main session.
 - Default the coordinator execution entry to `openspec-subagent-team`.
-- Remind the user that the coordinator should create or reuse the issue worktree before handing the issue to a bounded execution subagent.
+- Remind the user that the coordinator should create or reuse the issue workspace before handing the issue to a bounded execution subagent.
 - Remind the user that subagent-team is the default coordinator topology when delegation is available.
 - Remind the user that gate-bearing subagents should use up to 1 hour blocking waits, and that auto-accept does not skip waiting for those gate subagents to finish.
 - If `subagent_team.auto_accept_*` is enabled, do not describe those phases as waiting for human sign-off.
@@ -176,7 +176,7 @@ Read `references/router/coordinator-playbook.md`.
 Summary rule:
 
 - `subagent-team` is the default issue-mode coordinator entry
-- `dispatch-issue` prepares the issue worktree and source-of-truth dispatch when execution is explicitly narrowed to one issue-only subagent
+- `dispatch-issue` prepares the issue workspace and source-of-truth dispatch when execution is explicitly narrowed to one issue-only subagent
 - reconcile, review, merge, change-level acceptance, verify, and archive stay in the coordinator session
 
 ## Preferred Path: Route To The Dedicated Project-Local OpenSpec Skill
@@ -207,7 +207,7 @@ If the dedicated skill is unavailable, use the closest OpenSpec CLI flow and con
 - `continue` -> inspect `openspec status --change "<name>" --json`, find the first ready artifact, and create only that next artifact
 - `apply` -> use `openspec instructions apply --change "<name>" --json`, read the context files it returns, implement pending tasks, and update task checkboxes
 - `plan-issues` -> read proposal, design, and `references/issue-mode-config.md`, then create or refresh `tasks.md`, `issues/INDEX.md`, and `ISSUE-*.md` files with explicit scope boundaries
-- `dispatch-issue` -> read the selected `ISSUE-*.md`, create or reuse the issue worktree when appropriate, render the team dispatch by default and the single-issue dispatch only when explicitly narrowed, and prefer the next pending issue from reconcile when the user did not specify one
+- `dispatch-issue` -> read the selected `ISSUE-*.md`, create or reuse the issue workspace when appropriate, render the team dispatch by default and the single-issue dispatch only when explicitly narrowed, and prefer the next pending issue from reconcile when the user did not specify one
 - `execute-issue` -> read `references/issue-mode-contract.md` plus repo defaults, implement only the assigned issue, write `issues/ISSUE-*.progress.json` and `runs/RUN-*.json`, and do not update `tasks.md`
 - `reconcile` -> read `references/issue-mode-contract.md`, inspect `openspec/changes/<name>/issues/ISSUE-*.md`, `openspec/changes/<name>/issues/*.progress.json`, and `openspec/changes/<name>/runs/*.json`, update coordinator-owned checklists if needed, then choose the next OpenSpec action
 - `verify` -> compare tasks, specs, design, and implementation using `openspec status`, change artifacts, and code evidence
