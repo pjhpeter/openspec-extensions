@@ -153,16 +153,16 @@ def render_dispatch(
   - Why: 当前 issue round 预期会修改 repo 代码、测试或集成实现。
 - Check group: 3 subagents
   - Checker 1: functional correctness, main path, edge cases
-  - Checker 2: regression risk, tests, validation evidence gaps
-  - Checker 3: scope leak, integration and operational evidence gaps
+  - Checker 2: architecture, data flow, concurrency, persistence risks
+  - Checker 3: regression risk, tests, evidence gaps
   - Launch with `reasoning_effort=medium`
   - Why: checker 只负责缺口识别、证据核对和最小修复建议。
 - Review group: 3 subagents
-  - Reviewer 1: requested scope pass / fail
-  - Reviewer 2: architecture and delivery risk pass / fail
-  - Reviewer 3: evidence completeness and closeout readiness pass / fail
+  - Reviewer 1: target path pass / fail
+  - Reviewer 2: regression and operational risk pass / fail
+  - Reviewer 3: evidence completeness pass / fail
   - Launch with `reasoning_effort=medium`
-  - Why: reviewer 只负责裁决、风险判断和收尾准备度检查。
+  - Why: reviewer 只负责验收裁决、风险判断和证据充分性检查。
 
 ## Coordinator Responsibilities
 

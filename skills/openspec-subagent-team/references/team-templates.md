@@ -23,6 +23,20 @@ Issue：<issue-id>
 主控 agent 负责统一 backlog、scope control 和 stop decision。
 ```
 
+## Issue Seat Lenses
+
+- Development 1: core implementation owner
+- Development 2: dependent module or integration owner
+- Development 3: tests, fixtures, cleanup owner
+- Check 1: functional correctness, main path, edge cases
+- Check 2: architecture, data flow, concurrency, persistence risks
+- Check 3: regression risk, tests, evidence gaps
+- Review 1: target path pass / fail
+- Review 2: regression and operational risk pass / fail
+- Review 3: evidence completeness pass / fail
+
+以上 seat lenses 默认与 `rra` 定义保持一致；除非用户显式覆盖，不要自行改写。
+
 ## Design Author Prompt
 
 ```text
@@ -58,6 +72,11 @@ Issue：<issue-id>
 
 启动这个 subagent 时显式使用 `reasoning_effort=medium`。
 
+按当前 seat lens 工作：
+- Check 1: functional correctness, main path, edge cases
+- Check 2: architecture, data flow, concurrency, persistence risks
+- Check 3: regression risk, tests, evidence gaps
+
 只输出：
 1. defect / gap 或 none
 2. 为什么它阻塞当前 round target / target mode
@@ -74,6 +93,10 @@ Issue：<issue-id>
 
 要求：
 - 如果这个 subagent 会修改 repo 代码或测试，启动时显式使用 `reasoning_effort=xhigh`
+- 按当前 seat lens 工作：
+  - Development 1: core implementation owner
+  - Development 2: dependent module or integration owner
+  - Development 3: tests, fixtures, cleanup owner
 - 先完成当前 issue 范围内的开发，再处理 coordinator 批准进入本轮 backlog 的问题
 - 最小改动
 - 明确列出修改文件
@@ -87,6 +110,11 @@ Issue：<issue-id>
 你是审查小组成员之一。
 
 启动这个 subagent 时显式使用 `reasoning_effort=medium`。
+
+按当前 seat lens 工作：
+- Review 1: target path pass / fail
+- Review 2: regression and operational risk pass / fail
+- Review 3: evidence completeness pass / fail
 
 只输出：
 1. verdict: pass / pass with noted debt / fail

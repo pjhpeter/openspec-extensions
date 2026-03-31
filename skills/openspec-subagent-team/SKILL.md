@@ -76,6 +76,10 @@ Read these first:
 - `semi_auto` means the lifecycle pauses after each review gate; `full_auto` means the lifecycle auto-continues across `spec_readiness -> issue_planning -> issue_execution -> change_acceptance -> change_verify -> archive` while still respecting RRA gates.
 - `spec_readiness` is the design-review gate in the complex-change path: proposal/design are prepared first, then a dedicated `1` author + `2` reviewers subagent team must pass it before task splitting begins.
 - `issue_planning` starts after design review passes, and is where coordinator-owned `tasks.md` plus `issues/INDEX.md` and `ISSUE-*.md` are produced/reviewed.
+- 在 `issue_execution` 里，开发组 / 检查组 / 审查组的 1/2/3 seat lenses 默认与 `rra` 定义保持一致：
+  - Development 1/2/3 = core implementation / dependent integration / tests-cleanup
+  - Check 1/2/3 = functional correctness / architecture-dataflow / regression-evidence
+  - Review 1/2/3 = target path / regression-operational risk / evidence completeness
 - design-author subagents use `reasoning_effort=xhigh`.
 - code-writing subagents use `reasoning_effort=xhigh`.
 - design reviewers, planning authors, checkers, reviewers, and closeout-only subagents use `reasoning_effort=medium`.
