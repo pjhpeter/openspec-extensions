@@ -13,6 +13,7 @@ import {
   isSharedWorkerWorkspace,
   issueWorkerWorktreePath,
   loadIssueModeConfig,
+  parseFrontmatter,
 } from "../domain/issue-mode";
 import {
   applyGitPatch,
@@ -124,8 +125,73 @@ function ensureReviewReady(progress: JsonRecord, issueId: string, force: boolean
   }
 }
 
-function defaultCommitMessage(change: string, issueId: string): string {
-  return `opsx(${change}): accept ${issueId}`;
+type IssueCommitContext = {
+  doneWhen: string[];
+  title: string;
+};
+
+function readIssueCommitContext(repoRoot: string, change: string, issueId: string): IssueCommitContext {
+  const issuePath = path.join(repoRoot, "openspec", "changes", change, "issues", `${issueId}.md`);
+  if (!fs.existsSync(issuePath)) {
+    return {
+      doneWhen: [],
+      title: "",
+    };
+  }
+
+  const frontmatter = parseFrontmatter(fs.readFileSync(issuePath, "utf8"));
+  const rawDoneWhen = frontmatter.done_when;
+  const doneWhen = Array.isArray(rawDoneWhen)
+    ? rawDoneWhen.map((value) => String(value).trim()).filter(Boolean)
+    : [];
+
+  return {
+    doneWhen,
+    title: String(frontmatter.title ?? "").trim(),
+  };
+}
+
+function summarizeChangedFiles(changedFiles: string[], limit = 5): string[] {
+  if (changedFiles.length <= limit) {
+    return [...changedFiles];
+  }
+  return [...changedFiles.slice(0, limit), `(+${changedFiles.length - limit} more files)`];
+}
+
+function buildDefaultCommitMessage(
+  change: string,
+  issueId: string,
+  context: IssueCommitContext,
+  changedFiles: string[]
+): string {
+  const titleSuffix = context.title || context.doneWhen[0] || "";
+  const subject = titleSuffix
+    ? `opsx(${change}): accept ${issueId} ${titleSuffix}`
+    : `opsx(${change}): accept ${issueId}`;
+
+  const bodyLines: string[] = [];
+  if (context.doneWhen.length > 0) {
+    bodyLines.push("Done when:");
+    for (const item of context.doneWhen.slice(0, 3)) {
+      bodyLines.push(`- ${item}`);
+    }
+    if (context.doneWhen.length > 3) {
+      bodyLines.push(`- (+${context.doneWhen.length - 3} more acceptance items)`);
+    }
+  }
+
+  const changedFileLines = summarizeChangedFiles(changedFiles);
+  if (changedFileLines.length > 0) {
+    if (bodyLines.length > 0) {
+      bodyLines.push("");
+    }
+    bodyLines.push("Changed files:");
+    for (const item of changedFileLines) {
+      bodyLines.push(`- ${item}`);
+    }
+  }
+
+  return bodyLines.length > 0 ? `${subject}\n\n${bodyLines.join("\n")}` : subject;
 }
 
 function ignoredWorktreePrefixes(configWorktreeRoot: string): string[] {
@@ -158,7 +224,9 @@ export function mergeIssue(args: ParsedMergeIssueArgs): JsonRecord {
 
   const sharedWorkspace = isSharedWorkerWorkspace(args.repoRoot, workerWorktree);
   const targetRef = currentTargetRef(args.repoRoot);
-  const commitMessage = args.commitMessage.trim() || defaultCommitMessage(args.change, args.issueId);
+  const issueContext = readIssueCommitContext(args.repoRoot, args.change, args.issueId);
+  const commitMessage = args.commitMessage.trim()
+    || buildDefaultCommitMessage(args.change, args.issueId, issueContext, workerPatch.changedFiles);
   const result: JsonRecord = {
     change: args.change,
     issue_id: args.issueId,

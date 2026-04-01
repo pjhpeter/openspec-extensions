@@ -91,6 +91,7 @@ validation:
     const runArtifact = JSON.parse(fs.readFileSync(path.join(runsDir, "RUN-20260331T000000-ISSUE-001.json"), "utf8")) as { boundary_status: string };
     const status = git(repoRoot, "status", "--short");
     const headMessage = git(repoRoot, "log", "-1", "--pretty=%s");
+    const headBody = git(repoRoot, "log", "-1", "--pretty=%B");
 
     assert.equal(payload.shared_workspace, true);
     assert.deepEqual(payload.changed_files, ["src/demo.ts"]);
@@ -98,7 +99,9 @@ validation:
     assert.equal(progress.status, "completed");
     assert.equal(runArtifact.boundary_status, "done");
     assert.equal(status, "");
-    assert.equal(headMessage, `opsx(${change}): accept ${issueId}`);
+    assert.equal(headMessage, `opsx(${change}): accept ${issueId} Shared workspace issue`);
+    assert.match(headBody, /Done when:\n- complete shared workspace acceptance/);
+    assert.match(headBody, /Changed files:\n- src\/demo\.ts/);
   });
 });
 
@@ -189,7 +192,7 @@ validation:
     assert.equal(workerStatus, "");
     assert.equal(syncedDemo, "export const demo = 2;\n");
     assert.equal(workerHead, repoHead);
-    assert.equal(headMessage, `opsx(${change}): accept ${issueId}`);
+    assert.equal(headMessage, `opsx(${change}): accept ${issueId} Change workspace issue`);
   });
 });
 
@@ -263,7 +266,10 @@ validation:
     assert.equal(payload.shared_workspace, false);
     assert.equal(payload.workspace_scope, "issue");
     assert.equal(fs.readFileSync(path.join(repoRoot, "src", "demo.ts"), "utf8"), "export const demo = 3;\n");
-    assert.equal(git(repoRoot, "log", "-1", "--pretty=%s"), `opsx(${change}): accept ${issueId}`);
+    assert.equal(
+      git(repoRoot, "log", "-1", "--pretty=%s"),
+      `opsx(${change}): accept ${issueId} Issue workspace issue`
+    );
   });
 });
 
@@ -373,7 +379,10 @@ done_when:
     }) as { commit_sha: string };
 
     assert.match(String(payload.commit_sha), /^[0-9a-f]{40}$/);
-    assert.equal(git(repoRoot, "log", "-1", "--pretty=%s"), `opsx(${change}): accept ${issueId}`);
+    assert.equal(
+      git(repoRoot, "log", "-1", "--pretty=%s"),
+      `opsx(${change}): accept ${issueId} Force merge issue`
+    );
   });
 });
 
