@@ -3,8 +3,14 @@ import path from "node:path";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { parseArgs } from "node:util";
 
-import { loadIssueModeConfig, type IssueModeConfig } from "../domain/issue-mode";
-import { resolveRepoPath } from "../utils/path";
+import {
+  inferWorkerWorktreeScope,
+  issueWorkerWorktreePath,
+  loadIssueModeConfig,
+  type IssueModeConfig,
+  workerBranchName,
+} from "../domain/issue-mode";
+import { displayPath, resolveRepoPath } from "../utils/path";
 
 const ARCHIVE_HELP_TEXT = `Usage:
   openspec-extensions archive change --repo-root <path> --change <change> [--archive-command <command>] [--skip-cleanup] [--dry-run]
@@ -113,56 +119,193 @@ function changeBranchName(config: IssueModeConfig, change: string): string {
   return prefix ? `${prefix}/${changeSlug}` : changeSlug;
 }
 
-function cleanupChangeWorktree(repoRoot: string, change: string, config: IssueModeConfig, dryRun: boolean) {
+type CleanupTarget = {
+  branchNames: string[];
+  issueIds: string[];
+  scope: "change" | "issue";
+  source: "config_default" | "issue_doc";
+  worktree: string;
+  worktreeRelative: string;
+};
+
+function issueDocIds(repoRoot: string, change: string): string[] {
+  const issuesDir = path.join(repoRoot, "openspec", "changes", change, "issues");
+  if (!fs.existsSync(issuesDir)) {
+    return [];
+  }
+
+  return fs.readdirSync(issuesDir)
+    .filter((name) => /^ISSUE-.*\.md$/.test(name))
+    .filter((name) => !name.endsWith(".dispatch.md") && !name.endsWith(".team.dispatch.md"))
+    .sort()
+    .map((name) => path.basename(name, ".md"));
+}
+
+function addCleanupTarget(
+  targets: Map<string, CleanupTarget>,
+  repoRoot: string,
+  target: {
+    branchName?: string;
+    issueId?: string;
+    scope: "change" | "issue" | "shared";
+    source: "config_default" | "issue_doc";
+    worktree: string;
+    worktreeRelative: string;
+  }
+): void {
+  if (target.scope === "shared") {
+    return;
+  }
+  if (path.resolve(target.worktree) === path.resolve(repoRoot)) {
+    return;
+  }
+
+  const key = canonicalPath(target.worktree);
+  let current = targets.get(key);
+  if (!current) {
+    current = {
+      branchNames: [],
+      issueIds: [],
+      scope: target.scope,
+      source: target.source,
+      worktree: target.worktree,
+      worktreeRelative: target.worktreeRelative,
+    };
+    targets.set(key, current);
+  }
+
+  if (target.issueId && !current.issueIds.includes(target.issueId)) {
+    current.issueIds.push(target.issueId);
+  }
+  if (target.branchName && !current.branchNames.includes(target.branchName)) {
+    current.branchNames.push(target.branchName);
+  }
+}
+
+function collectCleanupTargets(repoRoot: string, change: string, config: IssueModeConfig): CleanupTarget[] {
+  const targets = new Map<string, CleanupTarget>();
+  const issueIds = issueDocIds(repoRoot, change);
+
+  for (const issueId of issueIds) {
+    const [worktreePath, worktreeRelative, source] = issueWorkerWorktreePath(repoRoot, change, issueId, config);
+    const scope = inferWorkerWorktreeScope(repoRoot, worktreePath, config, change, issueId);
+    addCleanupTarget(targets, repoRoot, {
+      branchName:
+        String(config.worker_worktree.mode ?? "").trim() === "branch"
+          ? workerBranchName(config, change, issueId, scope)
+          : "",
+      issueId,
+      scope,
+      source,
+      worktree: worktreePath,
+      worktreeRelative: worktreeRelative,
+    });
+  }
+
   const scope = String(config.worker_worktree.scope ?? "shared").trim() || "shared";
-  if (scope !== "change") {
+  if (config.worker_worktree.enabled && scope === "change") {
+    const worktreeRelative = path.posix.join(config.worktree_root.replace(/\\/g, "/"), change);
+    const worktreePath = resolveRepoPath(repoRoot, worktreeRelative);
+    addCleanupTarget(targets, repoRoot, {
+      branchName:
+        String(config.worker_worktree.mode ?? "").trim() === "branch" ? changeBranchName(config, change) : "",
+      scope: "change",
+      source: "config_default",
+      worktree: worktreePath,
+      worktreeRelative: displayPath(repoRoot, worktreePath),
+    });
+  }
+
+  return [...targets.values()].sort((left, right) => left.worktreeRelative.localeCompare(right.worktreeRelative));
+}
+
+function cleanupChangeWorktree(repoRoot: string, change: string, config: IssueModeConfig, dryRun: boolean) {
+  const targets = collectCleanupTargets(repoRoot, change, config);
+  if (targets.length === 0) {
     return {
       required: false,
       worktree: "",
       removed: false,
       registered: false,
-      branch_deleted: false
+      branch_deleted: false,
+      targets: [],
     };
   }
 
-  const worktreePath = resolveRepoPath(repoRoot, path.posix.join(config.worktree_root.replace(/\\/g, "/"), change));
-  const exists = fs.existsSync(worktreePath);
-  const registered = exists ? worktreeIsRegistered(repoRoot, worktreePath) : false;
+  const entries = targets.map((target) => {
+    const existedBefore = fs.existsSync(target.worktree);
+    const registeredBefore = worktreeIsRegistered(repoRoot, target.worktree);
+    const branchNames = [...target.branchNames];
+    const branchesExistedBefore = branchNames.filter((branchName) => branchExists(repoRoot, branchName));
+
+    return {
+      branch_deleted: false,
+      branch_names: branchNames,
+      branch_names_existing: branchesExistedBefore,
+      exists: existedBefore,
+      issue_ids: [...target.issueIds],
+      registered: registeredBefore,
+      removed: dryRun ? existedBefore || registeredBefore : false,
+      scope: target.scope,
+      source: target.source,
+      worktree: target.worktree,
+      worktree_relative: target.worktreeRelative,
+    };
+  });
+
   if (dryRun) {
     return {
       required: true,
-      worktree: worktreePath,
-      removed: exists,
-      registered,
-      branch_deleted: false
+      worktree: targets.length === 1 ? targets[0]?.worktree ?? "" : "",
+      removed: entries.some((entry) => entry.removed),
+      registered: entries.some((entry) => entry.registered),
+      branch_deleted: entries.some((entry) => entry.branch_names_existing.length > 0),
+      targets: entries,
     };
   }
 
-  let removed = false;
-  if (registered) {
-    runCommand(["git", "worktree", "remove", "--force", worktreePath], repoRoot);
-    runCommand(["git", "worktree", "prune"], repoRoot);
-    removed = true;
-  } else if (exists) {
-    fs.rmSync(worktreePath, { recursive: true, force: true });
-    removed = true;
+  let shouldPrune = false;
+  for (const entry of entries) {
+    if (entry.registered && entry.exists) {
+      runCommand(["git", "worktree", "remove", "--force", entry.worktree], repoRoot);
+      shouldPrune = true;
+      continue;
+    }
+    if (entry.exists) {
+      fs.rmSync(entry.worktree, { recursive: true, force: true });
+    }
+    if (entry.registered) {
+      shouldPrune = true;
+    }
   }
 
-  let branchDeleted = false;
-  if (String(config.worker_worktree.mode ?? "").trim() === "branch") {
-    const branchName = changeBranchName(config, change);
-    if (branchExists(repoRoot, branchName)) {
-      runCommand(["git", "branch", "-D", branchName], repoRoot);
-      branchDeleted = true;
+  if (shouldPrune) {
+    runCommand(["git", "worktree", "prune"], repoRoot);
+  }
+
+  for (const entry of entries) {
+    const existsAfter = fs.existsSync(entry.worktree);
+    const registeredAfter = worktreeIsRegistered(repoRoot, entry.worktree);
+    entry.removed = !existsAfter && !registeredAfter && (entry.exists || entry.registered);
+  }
+
+  for (const entry of entries) {
+    for (const branchName of entry.branch_names_existing) {
+      if (branchExists(repoRoot, branchName)) {
+        runCommand(["git", "branch", "-D", branchName], repoRoot);
+      }
     }
+    entry.branch_deleted = entry.branch_names_existing.length > 0
+      && entry.branch_names_existing.every((branchName) => !branchExists(repoRoot, branchName));
   }
 
   return {
     required: true,
-    worktree: worktreePath,
-    removed,
-    registered,
-    branch_deleted: branchDeleted
+    worktree: targets.length === 1 ? targets[0]?.worktree ?? "" : "",
+    removed: entries.some((entry) => entry.removed),
+    registered: entries.some((entry) => entry.registered),
+    branch_deleted: entries.some((entry) => entry.branch_deleted),
+    targets: entries,
   };
 }
 
