@@ -12,8 +12,10 @@ The repository ships compiled CLI output from `dist/` plus raw `skills/` and `te
 - `npm run type-check`: run `tsc --noEmit`.
 - `npm test`: run the TS test suite.
 - `npm run smoke:package`: validate the packed tarball through `npx` and installed-bin install flows.
+- `openspec-ex init`: from an already selected repo root, initialize OpenSpec when needed and then install extension skills.
+- `openspec-extensions init /path/to/repo`: path-explicit equivalent of `openspec-ex init`.
 - `openspec-extensions install --help`: show installer options.
-- `openspec-extensions install --target-repo /path/to/repo --dry-run`: preview copied skill directories, config install, and `.gitignore` updates.
+- `openspec-extensions install --target-repo /path/to/repo --dry-run`: preview copied skill directories, config install, and `.gitignore` updates for an already initialized OpenSpec repo.
 - `openspec-extensions install --target-repo /path/to/repo --force --force-config`: overwrite existing installed skills and config in a target repo.
 
 ## Coding Style & Naming Conventions

@@ -5,32 +5,42 @@
 - Standard runtime path is now `openspec-extensions ...`.
 - User-facing docs, skills, and generated dispatch command text have been cut over to the TS CLI.
 - The repository no longer ships Python installers, Python helper scripts, or Python-side tests.
+- `openspec-ex init` is now the preferred one-shot entrypoint for fresh target repos.
 - `npm run smoke:package` now validates the built tarball through:
   - `npm pack --json`
+  - `npx --yes --package <tgz> openspec-ex init <repo> --dry-run`
   - `npx --yes --package <tgz> openspec-extensions install --dry-run`
   - `npm install <tgz>` followed by the installed `openspec-extensions` bin
 
 ## Upgrade Guidance
 
 - Node `>=20` is now the only runtime prerequisite for installation and execution.
-- Existing target repos should upgrade through the TS installer and, when replacing an older install, use `--force` so legacy Python skill directories are removed.
+- Fresh target repos should use `openspec-ex init` from the repo root, or `openspec-extensions init <repo>` when scripting with an explicit path. The command tries `openspec init` first and falls back to `npx --yes @fission-ai/openspec@latest init --tools codex`.
+- Existing target repos should upgrade through `openspec-extensions install --target-repo <repo>` and, when replacing an older install, use `--force` so legacy Python skill directories are removed.
 - No workflow should depend on `python3 .codex/skills/...` command paths anymore.
 
 1. Ensure Node `>=20`.
 2. Install or expose the CLI through the package path you plan to ship.
-3. Run:
+3. For a fresh repo, run:
+
+```bash
+cd /path/to/target-repo
+openspec-ex init
+```
+
+4. For an already initialized OpenSpec repo, run:
 
 ```bash
 openspec-extensions install --target-repo /path/to/target-repo
 ```
 
-4. For a non-destructive check first, use:
+5. For a non-destructive check first, use:
 
 ```bash
 openspec-extensions install --target-repo /path/to/target-repo --dry-run
 ```
 
-5. In this source repository, run `npm run smoke:package` before release or handoff.
+6. In this source repository, run `npm run smoke:package` before release or handoff.
 
 ## Rollback Path
 

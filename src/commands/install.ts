@@ -14,6 +14,7 @@ import { parseArgs } from "node:util";
 
 const SOURCE_SKILLS_ROOT = "skills";
 const TARGET_SKILLS_ROOT = path.join(".codex", "skills");
+const OPENSPEC_CONFIG_PATH = path.join("openspec", "config.yaml");
 const CONFIG_TEMPLATE_PATH = path.join("templates", "issue-mode.json");
 const TARGET_CONFIG_PATH = path.join("openspec", "issue-mode.json");
 const SKILL_NAMES = [
@@ -53,7 +54,7 @@ const INSTALL_HELP_TEXT = `Usage:
 
 type JsonObject = Record<string, unknown>;
 
-type InstallOptions = {
+export type InstallOptions = {
   dryRun: boolean;
   force: boolean;
   forceConfig: boolean;
@@ -62,8 +63,42 @@ type InstallOptions = {
   targetRepo: string;
 };
 
+export type InstallResult = {
+  config: {
+    invalid_json: boolean;
+    legacy_keys_present: string[];
+    overrides: JsonObject;
+    path: string;
+    status: "installed" | "overwritten" | "preserved";
+  };
+  dry_run: boolean;
+  force: boolean;
+  force_config: boolean;
+  gitignore: {
+    added_entries: string[];
+    entries: string[];
+    path: string;
+    skipped: boolean;
+    updated: boolean;
+  };
+  installed_skill_dirs: string[];
+  legacy_runtime_cleanup: {
+    reason: string;
+    removed_paths: string[];
+    skipped_paths: string[];
+  };
+  overwritten_skill_dirs: string[];
+  preserved_skill_dirs: string[];
+  source_repo: string;
+  target_repo: string;
+};
+
 function commandRepoRoot(): string {
   return path.resolve(__dirname, "..", "..");
+}
+
+function openspecInitSuggestion(targetRepo: string): string {
+  return `openspec-ex init ${JSON.stringify(targetRepo)}`;
 }
 
 function ensureDirectory(targetPath: string, label: string): void {
@@ -204,6 +239,20 @@ function validateSourceLayout(sourceRepo: string): void {
 
 function ensureTargetRepo(targetRepo: string): void {
   ensureDirectory(targetRepo, "Target repo");
+}
+
+export function isOpenSpecInitialized(targetRepo: string): boolean {
+  return existsSync(path.join(targetRepo, OPENSPEC_CONFIG_PATH));
+}
+
+function ensureOpenSpecInitialized(targetRepo: string): void {
+  if (isOpenSpecInitialized(targetRepo)) {
+    return;
+  }
+
+  throw new Error(
+    `Target repo is not initialized with OpenSpec. Run \`${openspecInitSuggestion(targetRepo)}\` or \`openspec init ${JSON.stringify(targetRepo)}\` first.`
+  );
 }
 
 function installSkillDirectories(options: {
@@ -354,12 +403,12 @@ function parseInstallArgs(argv: string[]): InstallOptions | null {
   };
 }
 
-export function runInstallCommand(argv: string[]): number {
-  const parsed = parseInstallArgs(argv);
-  if (!parsed) {
-    return 0;
-  }
-
+export function installExtensions(
+  parsed: InstallOptions,
+  options: {
+    skipOpenSpecPreflight?: boolean;
+  } = {}
+): InstallResult {
   const sourceRepo = realpathSync(path.resolve(parsed.sourceRepo || commandRepoRoot()));
   const targetRepo = realpathSync(path.resolve(parsed.targetRepo));
 
@@ -369,6 +418,9 @@ export function runInstallCommand(argv: string[]): number {
 
   validateSourceLayout(sourceRepo);
   ensureTargetRepo(targetRepo);
+  if (!options.skipOpenSpecPreflight) {
+    ensureOpenSpecInitialized(targetRepo);
+  }
 
   const installResult = installSkillDirectories({
     dryRun: parsed.dryRun,
@@ -429,7 +481,18 @@ export function runInstallCommand(argv: string[]): number {
     preserved_skill_dirs: installResult.preservedSkillDirs,
     source_repo: sourceRepo,
     target_repo: targetRepo
-  };
+  } satisfies InstallResult;
+
+  return result;
+}
+
+export function runInstallCommand(argv: string[]): number {
+  const parsed = parseInstallArgs(argv);
+  if (!parsed) {
+    return 0;
+  }
+
+  const result = installExtensions(parsed);
 
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   return 0;

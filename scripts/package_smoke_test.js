@@ -35,6 +35,12 @@ function writeGitignore(repoRoot) {
   fs.writeFileSync(path.join(repoRoot, ".gitignore"), ".cache/\n");
 }
 
+function seedOpenSpecRepo(repoRoot) {
+  fs.mkdirSync(path.join(repoRoot, "openspec", "changes", "archive"), { recursive: true });
+  fs.mkdirSync(path.join(repoRoot, "openspec", "specs"), { recursive: true });
+  fs.writeFileSync(path.join(repoRoot, "openspec", "config.yaml"), "schema: spec-driven\n");
+}
+
 function createTempDir(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
@@ -84,6 +90,7 @@ function verifyNpxInstall(repoRoot, tarballPath) {
   const targetRepo = createTempDir("opsx-smoke-npx-target-");
   try {
     writeGitignore(targetRepo);
+    seedOpenSpecRepo(targetRepo);
     const stdout = run(
       "npx",
       ["--yes", "--package", tarballPath, "openspec-extensions", "install", "--target-repo", targetRepo, "--dry-run"],
@@ -106,11 +113,36 @@ function verifyNpxInstall(repoRoot, tarballPath) {
   }
 }
 
+function verifyInitDryRun(repoRoot, tarballPath) {
+  const targetRepo = createTempDir("opsx-smoke-init-target-");
+  try {
+    writeGitignore(targetRepo);
+    const stdout = run(
+      "npx",
+      ["--yes", "--package", tarballPath, "openspec-ex", "init", targetRepo, "--dry-run"],
+      { cwd: repoRoot }
+    );
+    const payload = JSON.parse(stdout);
+
+    assert.equal(payload.dry_run, true);
+    assert.equal(payload.openspec_init.status, "planned");
+    assert.deepEqual(payload.install.installed_skill_dirs, EXPECTED_SKILL_DIRS);
+
+    return {
+      mode: "init_dry_run",
+      target_repo: targetRepo,
+    };
+  } finally {
+    cleanup(targetRepo);
+  }
+}
+
 function verifyInstalledBin(tarballPath) {
   const packageRepo = createTempDir("opsx-smoke-install-pkg-");
   const targetRepo = createTempDir("opsx-smoke-install-target-");
   try {
     writeGitignore(targetRepo);
+    seedOpenSpecRepo(targetRepo);
     run("npm", ["init", "-y"], { cwd: packageRepo });
     run("npm", ["install", tarballPath], { cwd: packageRepo });
 
@@ -119,6 +151,12 @@ function verifyInstalledBin(tarballPath) {
       "node_modules",
       ".bin",
       process.platform === "win32" ? "openspec-extensions.cmd" : "openspec-extensions"
+    );
+    const aliasBinPath = path.join(
+      packageRepo,
+      "node_modules",
+      ".bin",
+      process.platform === "win32" ? "openspec-ex.cmd" : "openspec-ex"
     );
     const stdout = run(binPath, ["install", "--target-repo", targetRepo], { cwd: packageRepo });
     const payload = JSON.parse(stdout);
@@ -130,6 +168,7 @@ function verifyInstalledBin(tarballPath) {
     assert.ok(fs.existsSync(path.join(targetRepo, ".codex", "skills", "openspec-chat-router", "SKILL.md")));
     assert.ok(!fs.existsSync(path.join(targetRepo, ".codex", "skills", "openspec-shared")));
     assert.ok(fs.existsSync(path.join(targetRepo, "openspec", "issue-mode.json")));
+    assert.ok(fs.existsSync(aliasBinPath));
     assert.deepEqual(
       collectMatchingFiles(installedPackageRoot, (filePath) => filePath.endsWith(".py")),
       []
@@ -163,6 +202,7 @@ function main() {
   try {
     const checks = [
       verifyTarballContents(tarballPath),
+      verifyInitDryRun(repoRoot, tarballPath),
       verifyNpxInstall(repoRoot, tarballPath),
       verifyInstalledBin(tarballPath),
     ];

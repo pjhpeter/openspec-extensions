@@ -42,6 +42,28 @@ test("cli help exits successfully", async () => {
   assert.equal(exitCode, 0);
 });
 
+test("cli init routes to command", async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-cli-init-"));
+
+  const result = await captureStdout(() =>
+    main([
+      "init",
+      repoRoot,
+      "--dry-run"
+    ])
+  );
+
+  const payload = JSON.parse(result.stdout.trim()) as {
+    dry_run: boolean;
+    openspec_init: { status: string };
+    install: { dry_run: boolean };
+  };
+  assert.equal(result.exitCode, 0);
+  assert.equal(payload.dry_run, true);
+  assert.equal(payload.openspec_init.status, "planned");
+  assert.equal(payload.install.dry_run, true);
+});
+
 test("cli dispatch issue routes to renderer", async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-cli-dispatch-"));
   const issuePath = path.join(repoRoot, "openspec", "changes", "demo-change", "issues", "ISSUE-001.md");

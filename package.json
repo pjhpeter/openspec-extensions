@@ -4,6 +4,7 @@
   "description": "OpenSpec issue-mode extensions packaged for npm-first distribution.",
   "license": "MIT",
   "bin": {
+    "openspec-ex": "dist/cli/index.js",
     "openspec-extensions": "dist/cli/index.js"
   },
   "engines": {

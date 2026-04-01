@@ -48,6 +48,12 @@ function createTargetRepo(): string {
   return realpathSync(targetRepo);
 }
 
+function seedOpenSpecRepo(targetRepo: string): void {
+  mkdirSync(path.join(targetRepo, "openspec", "changes", "archive"), { recursive: true });
+  mkdirSync(path.join(targetRepo, "openspec", "specs"), { recursive: true });
+  writeFileSync(path.join(targetRepo, "openspec", "config.yaml"), "schema: spec-driven\n");
+}
+
 function collectRelativeFiles(rootPath: string): string[] {
   if (!existsSync(rootPath)) {
     return [];
@@ -73,6 +79,7 @@ function collectRelativeFiles(rootPath: string): string[] {
 
 test("install dry-run reports TS-only skill set", () => {
   const targetRepo = createTargetRepo();
+  seedOpenSpecRepo(targetRepo);
 
   const result = withCapturedStdout(() => runInstallCommand([
     "--target-repo",
@@ -92,6 +99,7 @@ test("install dry-run reports TS-only skill set", () => {
 
 test("install writes skills, config, and gitignore entries", () => {
   const targetRepo = createTargetRepo();
+  seedOpenSpecRepo(targetRepo);
   const result = withCapturedStdout(() => runInstallCommand([
     "--target-repo",
     targetRepo
@@ -126,6 +134,7 @@ test("install writes skills, config, and gitignore entries", () => {
 
 test("install --force removes legacy Python runtime paths", () => {
   const targetRepo = createTargetRepo();
+  seedOpenSpecRepo(targetRepo);
   const legacySkillDir = path.join(targetRepo, ".codex", "skills", "openspec-shared");
   const legacyHeartbeat = path.join(targetRepo, "scripts", "openspec_worker_status.py");
 
@@ -154,4 +163,13 @@ test("install --force removes legacy Python runtime paths", () => {
   ]);
   assert.ok(!existsSync(legacySkillDir));
   assert.ok(!existsSync(legacyHeartbeat));
+});
+
+test("install rejects repos that have not been initialized with OpenSpec", () => {
+  const targetRepo = createTargetRepo();
+
+  assert.throws(
+    () => runInstallCommand(["--target-repo", targetRepo, "--dry-run"]),
+    /Target repo is not initialized with OpenSpec/
+  );
 });

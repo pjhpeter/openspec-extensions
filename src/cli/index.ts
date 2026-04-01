@@ -2,6 +2,7 @@
 
 import { runArchiveCommand } from "../commands/archive";
 import { runDispatchCommand } from "../commands/dispatch";
+import { runInitCommand } from "../commands/init";
 import { runInstallCommand } from "../commands/install";
 import { runReconcileCommand } from "../commands/reconcile";
 import { runReviewCommand } from "../commands/review";
@@ -12,6 +13,7 @@ import { runUpdateProgressCommand } from "../commands/execute/update-progress";
 const HELP_TEXT = `OpenSpec Extensions CLI
 
 Usage:
+  openspec-extensions init [path]
   openspec-extensions install [options]
   openspec-extensions dispatch issue [options]
   openspec-extensions dispatch issue-team [options]
@@ -26,6 +28,7 @@ Usage:
   openspec-extensions worktree create [options]
 
 Commands:
+  init                    Initialize OpenSpec when needed, then install extension skills.
   install                 Install OpenSpec extension skills into a target repo.
   dispatch issue          Render a single issue dispatch packet.
   dispatch issue-team     Render a subagent-team issue dispatch packet.
@@ -50,6 +53,10 @@ export async function main(argv: string[]): Promise<number> {
 
   if (command === "install") {
     return runInstallCommand(rest);
+  }
+
+  if (command === "init" || command === "bootstrap") {
+    return runInitCommand(rest);
   }
 
   if (command === "dispatch") {

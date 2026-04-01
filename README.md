@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > 特别鸣谢！本 skill 基于 **唐杰** 提供的 rra subagent team 工作流基座。
 
-OpenSpec Extensions 是 [OpenSpec](https://github.com/Fission-AI/OpenSpec) 的扩展能力集合，不替代 OpenSpec 本体。使用这些 skills 之前，必须先安装 OpenSpec，再将本仓库提供的扩展内容安装到目标仓库，这是项目级的 skills。
+OpenSpec Extensions 是 [OpenSpec](https://github.com/Fission-AI/OpenSpec) 的扩展能力集合，不替代 OpenSpec 本体。目标仓库需要先完成 OpenSpec 初始化，然后再安装这些扩展 skills；如果你想参考 OpenSpec 的初始化体验一条命令完成，可以直接使用 `openspec-ex init`。
 
 这个仓库集中管理 OpenSpec `issue-mode` 扩展 skills。
 
@@ -415,6 +415,35 @@ flowchart TD
 
 ## 安装到目标项目
 
+推荐像 OpenSpec 一样在项目目录执行初始化：
+
+```bash
+cd /path/to/your/project
+openspec-ex init
+```
+
+等价写法：
+
+```bash
+openspec-extensions init /path/to/your/project
+```
+
+`init` 会在目标仓库缺少 `openspec/config.yaml` 时优先执行：
+
+```bash
+openspec init /path/to/your/project
+```
+
+如果当前环境没有全局 `openspec` CLI，会自动回退到：
+
+```bash
+npx --yes @fission-ai/openspec@latest init --tools codex /path/to/your/project
+```
+
+然后继续安装扩展 skills。
+
+如果目标仓库已经完成 OpenSpec 初始化，也可以只执行扩展安装：
+
 ```bash
 openspec-extensions install \
   --target-repo /path/to/your/project
@@ -443,6 +472,8 @@ openspec-extensions install \
   --target-repo /path/to/your/project \
   --force-config
 ```
+
+如果目标仓库还没有完成 OpenSpec 初始化，`install` 会直接失败，并提示你先运行 `openspec-ex init` 或官方 `openspec init`。
 
 安装器会写入：
 
