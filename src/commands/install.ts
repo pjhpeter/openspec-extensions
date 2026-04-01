@@ -22,8 +22,7 @@ const SKILL_NAMES = [
   "openspec-dispatch-issue",
   "openspec-execute-issue",
   "openspec-reconcile-change",
-  "openspec-subagent-team",
-  "openspec-shared"
+  "openspec-subagent-team"
 ];
 const GITIGNORE_ENTRIES = [
   ".worktree/",
@@ -31,6 +30,7 @@ const GITIGNORE_ENTRIES = [
   "openspec/changes/*/runs/CHANGE-VERIFY.json"
 ];
 const LEGACY_RUNTIME_PATHS = [
+  path.join(TARGET_SKILLS_ROOT, "openspec-shared"),
   path.join(TARGET_SKILLS_ROOT, "openspec-monitor-worker"),
   path.join("scripts", "openspec_coordinator_heartbeat.py"),
   path.join("scripts", "openspec_coordinator_heartbeat_start.py"),
@@ -133,7 +133,7 @@ function cleanupLegacyRuntime(
     removedPaths,
     skippedPaths,
     reason: skippedPaths.length
-      ? "Existing installed skill directories were preserved. Re-run with --force to upgrade skills and remove legacy detached-worker artifacts safely."
+      ? "Existing installed skill directories were preserved. Re-run with --force to upgrade skills and remove legacy runtime artifacts safely."
       : ""
   };
 }
