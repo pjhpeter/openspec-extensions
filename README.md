@@ -223,13 +223,8 @@ flowchart TD
 4. 如果希望真正无人值守推进
 
 ```text
-按当前 openspec/issue-mode.json 配置继续当前 change。
-默认入口使用 subagent-team，按全自动方式推进整个生命周期。
-为所有 spawned subagent 指定 gpt 5.4 模型。
-设计文档编写 subagent 和编码 subagent 使用 xhigh，其他 subagent 使用 Medium。
-在所有 issues 完成后，先对当前 change 修改的代码执行 /review，通过后再进入 verify。
-对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
-当前 gate 的 review/check subagent 必须等待全部完成并收齐 verdict，禁止提前关闭或提前通过 phase。
+创建一个变更，默认入口使用 subagent-team，按全自动方式推进整个生命周期，subagent 模式使用 gpt 5.4，允许自动提交代码。
+需求如下：SubscribeDialogContent.vue 和 SubscribeDialogContentIntl.vue 两个组件太过雍总了，我希望优化到500-700行。
 ```
 
 5. 如果你想先看设计文档和任务拆分，再人工决定是否继续
