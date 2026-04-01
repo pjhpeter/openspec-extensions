@@ -68,6 +68,9 @@ test("detects spec_readiness when core docs are missing", () => {
     assert.match(dispatchText, /Design review: 2 required completions/);
     assert.match(dispatchText, /最长 1 小时的 blocking wait/);
     assert.match(dispatchText, /不要当作 `explorer` sidecar/);
+    assert.match(dispatchText, /Before starting this phase, reread `openspec\/issue-mode\.json` if it exists/);
+    assert.match(dispatchText, /开始当前 phase 前必须重新读取 `openspec\/issue-mode\.json`/);
+    assert.match(dispatchText, /using shared-workspace fallback defaults/);
     assert.match(dispatchText, /1 个设计作者和 2 个设计评审全部完成并收齐通过结论后暂停/);
     assert.match(dispatchText, /subagent_team\.auto_accept_spec_readiness=false/);
   });
@@ -337,6 +340,7 @@ validation:
 
     assert.equal(payload.phase, "ready_for_archive");
     assert.equal(payload.automation.archive_after_verify, true);
+    assert.match(dispatchText, /cat ".*openspec\/issue-mode\.json"/);
     assert.match(dispatchText, /openspec-extensions archive change --repo-root/);
     assert.match(dispatchText, /subagent_team\.auto_archive_after_verify=true/);
   });

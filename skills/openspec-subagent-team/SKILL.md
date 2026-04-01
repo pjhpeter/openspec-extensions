@@ -10,9 +10,11 @@ Use this skill in the coordinator session as the default entry path for the whol
 Read these first:
 
 - `../openspec-chat-router/references/issue-mode-contract.md`
+- `../openspec-chat-router/references/issue-mode-config.md`
 - `../openspec-chat-router/references/issue-mode-rra.md`
 - `../openspec-chat-router/references/router/coordinator-playbook.md`
 - `references/team-templates.md`
+- `openspec/issue-mode.json` if the repo has one
 
 ## Purpose
 
@@ -39,45 +41,52 @@ Read these first:
    - `change_acceptance`
    - `change_verify`
    - `ready_for_archive`
-5. If the current phase is issue execution, also render the issue packet:
+5. Before starting the current phase, reread `openspec/issue-mode.json` when it exists and restate the active rules that can affect execution:
+   - `worker_worktree.*`
+   - `validation_commands`
+   - `rra.gate_mode`
+   - `subagent_team.*`
+   - if the config changed since the previous phase, treat the latest file contents as authoritative and adjust the plan before spawning phase seats
+6. If the current phase is issue execution, also render the issue packet:
    ```bash
    openspec-extensions dispatch issue-team \
      --repo-root . \
      --change "<change-name>" \
      --issue-id "<issue-id>"
    ```
-6. Keep the main agent as control plane owner:
+7. Keep the main agent as control plane owner:
    - define or confirm the round target
    - dedupe findings into one normalized backlog
    - decide stop / continue
    - when an enabled `auto_accept_*` gate becomes eligible, continue immediately instead of asking the user to review first
    - if reconcile emits `commit_planning_docs`, run the coordinator-owned planning-doc commit immediately before any first issue dispatch
    - if reconcile emits `dispatch_next_issue`, treat it as a continuation command, not a terminal control-plane checkpoint
-7. Use a phase-specific topology:
+8. Use a phase-specific topology:
    - `spec_readiness`: 1 design author (`reasoning_effort=xhigh`) + 2 design reviewers (`reasoning_effort=medium`)
    - `issue_planning`: fast path is `2 development + 1 check + 1 review`, all `reasoning_effort=medium`
    - `issue_execution`: fast path is `3 development + 2 check + 1 review`; code-writing development seats use `reasoning_effort=xhigh`, check/review use `reasoning_effort=medium`
    - `change_acceptance` / `ready_for_archive`: fast path is `1 development + 1 check + 1 review`, all `reasoning_effort=medium`
    - `change_verify`: fast path is `2 development + 1 check + 1 review`; code-fix development seats use `reasoning_effort=xhigh`, check/review use `reasoning_effort=medium`
-8. When spawning subagents, explicitly set `reasoning_effort` instead of inheriting the session default.
-9. Treat every launched seat in the current phase as a gate-bearing participant, not a disposable sidecar:
+9. When spawning subagents, explicitly set `reasoning_effort` instead of inheriting the session default.
+10. Treat every launched seat in the current phase as a gate-bearing participant, not a disposable sidecar:
    - record the agent id, seat name, and current status
    - use `default` or `worker` style delegation for these gate-bearing seats; do not launch check/review gate seats as `explorer`
    - when the phase depends on their verdicts, wait up to 1 hour for completion instead of short polling
    - do not accept the phase, mark it passed, or close those subagents while any required gate-bearing seat is still running
-10. `auto_accept_*` only removes human chat sign-off after the gate team has finished:
+11. `auto_accept_*` only removes human chat sign-off after the gate team has finished:
    - it does not mean "spawned already, so the phase may pass"
    - it does not allow skipping review/check verdict collection
    - it does not allow closing unfinished gate-bearing subagents early
-11. Run the loop:
+12. Run the loop:
    - development
    - check
    - repair
    - review
    - if review fails, go back to development
-12. Developers that implement code for the issue must follow `openspec-execute-issue` and write issue progress/run artifacts.
-13. After all issues are complete, run a change-level `/review` and write `runs/CHANGE-REVIEW.json` before verify.
-14. Coordinator keeps merge, commit, verify, archive, and change-level control artifacts.
+13. Developers that implement code for the issue must follow `openspec-execute-issue` and write issue progress/run artifacts.
+14. Before moving from one lifecycle phase to the next, reread `openspec/issue-mode.json` again and confirm the next phase still matches the latest config.
+15. After all issues are complete, run a change-level `/review` and write `runs/CHANGE-REVIEW.json` before verify.
+16. Coordinator keeps merge, commit, verify, archive, and change-level control artifacts.
 
 ## Rules
 
@@ -92,6 +101,8 @@ Read these first:
 - `issue_planning` and `issue_execution` should start with the lighter fast path first; only escalate more check/review seats when the current round surfaces cross-boundary risk or unresolved evidence gaps.
 - Gate-bearing phase subagents are part of the acceptance barrier for that phase, not informational helpers.
 - `auto_accept_*` means "skip human sign-off after the gate team has finished and passed", not "advance immediately after spawn".
+- Before starting any new lifecycle phase, reread `openspec/issue-mode.json` if present; do not rely on a stale config snapshot from an earlier phase.
+- If `openspec/issue-mode.json` changed mid-run, the latest file contents override the coordinator's previous assumptions about automation, validation, worktree scope, and gate mode.
 - Do not mark a phase passed while any gate-bearing reviewer/checker for that phase is still running.
 - Do not close unfinished gate-bearing subagents just because the coordinator thinks the phase outcome is obvious.
 - Gate-bearing review/check subagents must not be launched as `explorer`; treat them as gate owners whose completion status must be collected explicitly.

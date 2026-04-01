@@ -439,18 +439,22 @@ function phaseScopeItems(repoRoot: string, phase: string, change: string, issueI
 }
 
 function phaseCommandHints(repoRoot: string, change: string, phase: string): string[] {
+  const commands = [
+    `if [ -f "${path.join(repoRoot, "openspec", "issue-mode.json")}" ]; then cat "${path.join(repoRoot, "openspec", "issue-mode.json")}"; else echo "openspec/issue-mode.json not found; using shared-workspace fallback defaults"; fi`
+  ];
   if (phase === "change_acceptance") {
-    return [`openspec-extensions review change --repo-root "${repoRoot}" --change "${change}"`];
+    commands.push(`openspec-extensions review change --repo-root "${repoRoot}" --change "${change}"`);
+    return commands;
   }
   if (phase === "change_verify") {
-    return [`openspec-extensions verify change --repo-root "${repoRoot}" --change "${change}"`];
+    commands.push(`openspec-extensions verify change --repo-root "${repoRoot}" --change "${change}"`);
+    return commands;
   }
   if (phase === "ready_for_archive") {
-    return [
-      `openspec-extensions archive change --repo-root "${repoRoot}" --change "${change}"`
-    ];
+    commands.push(`openspec-extensions archive change --repo-root "${repoRoot}" --change "${change}"`);
+    return commands;
   }
-  return [];
+  return commands;
 }
 
 function bulletList(items: string[]): string {
@@ -696,6 +700,24 @@ function renderPhasePacket(
   const coordinatorCommandsSection = commandHints.length > 0
     ? `## Coordinator Commands\n\n${bulletList(commandHints)}\n\n`
     : "";
+  const validationCommands = config.validation_commands.length > 0 ? config.validation_commands : ["none"];
+  const configRefreshSection = `## Phase Config Refresh
+
+- Before starting this phase, reread \`openspec/issue-mode.json\` if it exists.
+- Do not rely on the previous phase's config snapshot; if the file changed, the latest contents win.
+- Confirm these active rules before you spawn or continue phase seats:
+  - \`worker_worktree.enabled=${String(config.worker_worktree.enabled).toLowerCase()}\`
+  - \`worker_worktree.scope=${config.worker_worktree.scope}\`
+  - \`worker_worktree.mode=${config.worker_worktree.mode}\`
+  - \`validation_commands=${validationCommands.join(" | ")}\`
+  - \`rra.gate_mode=${config.rra.gate_mode}\`
+  - \`subagent_team.auto_accept_spec_readiness=${String(autoAcceptSpecReadiness).toLowerCase()}\`
+  - \`subagent_team.auto_accept_issue_planning=${String(autoAcceptIssuePlanning).toLowerCase()}\`
+  - \`subagent_team.auto_accept_issue_review=${String(autoAcceptIssueReview).toLowerCase()}\`
+  - \`subagent_team.auto_accept_change_acceptance=${String(autoAcceptChangeAcceptance).toLowerCase()}\`
+  - \`subagent_team.auto_archive_after_verify=${String(autoArchiveAfterVerify).toLowerCase()}\`
+
+`;
 
   const phaseNextStep = phase === "spec_readiness"
     ? (autoAcceptSpecReadiness
@@ -805,7 +827,7 @@ ${bulletList(nonGoals)}
 - Scope in phase:
 ${bulletList(scopeItems)}
 
-## Team Topology
+${configRefreshSection}## Team Topology
 
 ${renderTeamTopology(teamTopology)}
 
@@ -824,6 +846,8 @@ ${renderGateBearingSeats(teamTopology)}
 ## Coordinator Rules
 
 - 主代理负责整个 change 的 lifecycle orchestration，不只负责单个 issue。
+- 开始当前 phase 前必须重新读取 \`openspec/issue-mode.json\`（若存在），确认 worktree、validation、gate mode 和 auto-accept 规则没有变化。
+- 如果 \`openspec/issue-mode.json\` 在 phase 之间发生变化，以最新文件内容为准，先重算当前 phase 规则，再决定是否继续。
 - 当前 phase 的标准循环是：${phaseRoundLoop(phase)}。
 - 拉起 subagent 时必须显式设置 \`reasoning_effort\`，不要直接继承当前会话的全局默认值。
 - gate-bearing subagent 的 \`agent_id\`、seat 和完成状态必须落盘或写入 round 输出，不能只留在聊天里。
