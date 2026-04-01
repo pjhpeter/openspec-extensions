@@ -112,6 +112,45 @@ def filter_review_focus_paths(paths: list[str], allowed_scope: list[str]) -> tup
     return included, excluded
 
 
+def normalize_scope_item(text: str) -> str:
+    return text.strip().strip("`").strip()
+
+
+def scope_item_mentions_planning_artifact(scope_item: str) -> bool:
+    normalized = normalize_scope_item(scope_item)
+    if not normalized:
+        return False
+    if normalized.endswith(("proposal.md", "design.md", "tasks.md")):
+        return True
+    if normalized.endswith("issues/INDEX.md"):
+        return True
+    if normalized.endswith(".md") and (
+        normalized.startswith("issues/ISSUE-")
+        or "/issues/ISSUE-" in normalized
+        or normalized.endswith("ISSUE-*.md")
+    ):
+        return True
+    return False
+
+
+def scope_item_targets_issue_execution(scope_item: str, issue_id: str) -> bool:
+    normalized = normalize_scope_item(scope_item)
+    if not normalized:
+        return False
+    if normalized.upper() == issue_id.upper():
+        return True
+    return normalized.endswith((f"{issue_id}.progress.json", f"{issue_id}.team.dispatch.md"))
+
+
+def should_reuse_latest_round_contract(latest_round: dict[str, Any], issue_id: str) -> bool:
+    scope_in_round = normalize_string_list(latest_round.get("scope_in_round"))
+    if not scope_in_round:
+        return False
+    if any(scope_item_mentions_planning_artifact(item) for item in scope_in_round):
+        return False
+    return all(scope_item_targets_issue_execution(item, issue_id) for item in scope_in_round)
+
+
 def validation_snapshot_lines(payload: dict[str, Any]) -> list[str]:
     validation = payload.get("validation")
     if not isinstance(validation, dict) or not validation:
@@ -147,15 +186,32 @@ def render_dispatch(
 ) -> str:
     latest_round = control_state.get("latest_round", {})
     backlog = control_state.get("backlog", {})
-    target_mode = target_mode_override.strip() or str(latest_round.get("target_mode", "")).strip() or "mvp"
-    round_goal = round_goal_override.strip() or str(latest_round.get("round_target", "")).strip() or f"推进 {issue_id} 到可接受状态"
-    acceptance_criteria = list(latest_round.get("acceptance_criteria", []))
-    non_goals = list(latest_round.get("non_goals", []))
-    scope_in_round = list(latest_round.get("scope_in_round", []))
-    fixes_completed = list(latest_round.get("fixes_completed", []))
-    re_review_result = list(latest_round.get("re_review_result", []))
-    acceptance_text = str(latest_round.get("acceptance_text", "")).strip() or "none"
-    next_action_text = str(latest_round.get("next_action_text", "")).strip() or "none"
+    reuse_latest_round_contract = should_reuse_latest_round_contract(latest_round, issue_id)
+    target_mode = target_mode_override.strip() or str(latest_round.get("target_mode", "")).strip() or "quality"
+    round_goal = round_goal_override.strip()
+    if not round_goal and reuse_latest_round_contract:
+        round_goal = str(latest_round.get("round_target", "")).strip()
+    if not round_goal:
+        round_goal = f"推进 {issue_id} 完成开发、检查、修复、审查回合。"
+    acceptance_criteria = (
+        list(latest_round.get("acceptance_criteria", []))
+        if reuse_latest_round_contract
+        else [
+            f"{issue_id} 的目标范围达成",
+            "检查组发现的问题已被修复或显式降级",
+            "审查组给出 pass 或 pass with noted debt",
+        ]
+    )
+    non_goals = list(latest_round.get("non_goals", [])) if reuse_latest_round_contract else ["none"]
+    scope_in_round = list(latest_round.get("scope_in_round", [])) if reuse_latest_round_contract else [issue_id]
+    fixes_completed = list(latest_round.get("fixes_completed", [])) if reuse_latest_round_contract else ["none"]
+    re_review_result = list(latest_round.get("re_review_result", [])) if reuse_latest_round_contract else ["none"]
+    acceptance_text = (
+        str(latest_round.get("acceptance_text", "")).strip() if reuse_latest_round_contract else ""
+    ) or "none"
+    next_action_text = (
+        str(latest_round.get("next_action_text", "")).strip() if reuse_latest_round_contract else ""
+    ) or f"完成 {issue_id} 的当前 round 后，由 coordinator 收敛开发 / 检查 / 审查结果。"
     gate_mode = str(dispatch_gate.get("mode", "advisory")).strip() or "advisory"
     gate_status = str(dispatch_gate.get("status", "not_applicable")).strip() or "not_applicable"
     gate_reason = str(dispatch_gate.get("reason", "")).strip() or "none"
