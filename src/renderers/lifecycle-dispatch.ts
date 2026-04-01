@@ -440,14 +440,14 @@ function phaseScopeItems(repoRoot: string, phase: string, change: string, issueI
 
 function phaseCommandHints(repoRoot: string, change: string, phase: string): string[] {
   if (phase === "change_acceptance") {
-    return [`python3 .codex/skills/openspec-shared/scripts/coordinator_review_change.py --repo-root "${repoRoot}" --change "${change}"`];
+    return [`openspec-extensions review change --repo-root "${repoRoot}" --change "${change}"`];
   }
   if (phase === "change_verify") {
-    return [`python3 .codex/skills/openspec-shared/scripts/coordinator_verify_change.py --repo-root "${repoRoot}" --change "${change}"`];
+    return [`openspec-extensions verify change --repo-root "${repoRoot}" --change "${change}"`];
   }
   if (phase === "ready_for_archive") {
     return [
-      `python3 .codex/skills/openspec-shared/scripts/coordinator_archive_change.py --repo-root "${repoRoot}" --change "${change}"`
+      `openspec-extensions archive change --repo-root "${repoRoot}" --change "${change}"`
     ];
   }
   return [];

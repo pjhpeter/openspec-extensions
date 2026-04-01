@@ -369,9 +369,9 @@ def render_dispatch(
 - 尽量按文件/模块 ownership 分配，减少写集重叠。
 - 负责实现或修复 repo 代码的 development subagent 必须显式使用 `reasoning_effort=xhigh`。
 - 执行代码实现的 subagent 必须先写：
-  - `python3 .codex/skills/openspec-execute-issue/scripts/update_issue_progress.py start --repo-root "{repo_root}" --change "{change}" --issue-id "{issue_id}" --status in_progress --boundary-status working --next-action continue_issue --summary "已进入 subagent team repair round。"`
+  - `openspec-extensions execute update-progress start --repo-root "{repo_root}" --change "{change}" --issue-id "{issue_id}" --status in_progress --boundary-status working --next-action continue_issue --summary "已进入 subagent team repair round。"`
 - 停止前必须写：
-  - `python3 .codex/skills/openspec-execute-issue/scripts/update_issue_progress.py stop --repo-root "{repo_root}" --change "{change}" --issue-id "{issue_id}" --status completed --boundary-status review_required --next-action coordinator_review --summary "issue 边界内修复已完成，等待 coordinator 收敛。" --validation "lint=<pending-or-passed>" --validation "typecheck=<pending-or-passed>" --changed-file "<path>"`
+  - `openspec-extensions execute update-progress stop --repo-root "{repo_root}" --change "{change}" --issue-id "{issue_id}" --status completed --boundary-status review_required --next-action coordinator_review --summary "issue 边界内修复已完成，等待 coordinator 收敛。" --validation "lint=<pending-or-passed>" --validation "typecheck=<pending-or-passed>" --changed-file "<path>"`
 - 不要自合并，不要更新 `tasks.md`。
 
 ## Review Packet Rules

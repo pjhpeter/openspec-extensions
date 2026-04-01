@@ -92,7 +92,7 @@ def render_dispatch(
 {bullet_list(validation)}
 
 开始后先写：
-- `python3 .codex/skills/openspec-execute-issue/scripts/update_issue_progress.py start --repo-root "{repo_root}" --change "{change}" --issue-id "{issue_id}" --run-id "{effective_run_id}" --status in_progress --boundary-status working --next-action continue_issue --summary "已开始处理该 issue。"`
+- `openspec-extensions execute update-progress start --repo-root "{repo_root}" --change "{change}" --issue-id "{issue_id}" --run-id "{effective_run_id}" --status in_progress --boundary-status working --next-action continue_issue --summary "已开始处理该 issue。"`
 
 完成后回报：
 - Issue
@@ -103,7 +103,7 @@ def render_dispatch(
 - Need Coordinator Update
 
 停止前必须写：
-- `python3 .codex/skills/openspec-execute-issue/scripts/update_issue_progress.py stop --repo-root "{repo_root}" --change "{change}" --issue-id "{issue_id}" --run-id "{effective_run_id}" --status completed --boundary-status review_required --next-action coordinator_review --summary "issue 边界内实现已完成，等待 coordinator 收敛。" --validation "lint=<pending-or-passed>" --validation "typecheck=<pending-or-passed>" --changed-file "<path>"`
+- `openspec-extensions execute update-progress stop --repo-root "{repo_root}" --change "{change}" --issue-id "{issue_id}" --run-id "{effective_run_id}" --status completed --boundary-status review_required --next-action coordinator_review --summary "issue 边界内实现已完成，等待 coordinator 收敛。" --validation "lint=<pending-or-passed>" --validation "typecheck=<pending-or-passed>" --changed-file "<path>"`
 
 如果阻塞，改写为：
 - `status=blocked`

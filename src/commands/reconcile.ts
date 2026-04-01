@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { parseArgs } from "node:util";
 
+import { runMergeIssueCommand } from "./merge-issue";
 import {
   planningDocStatus,
   readJson,
@@ -56,6 +57,7 @@ type IssuePayload = JsonRecord & {
 const RECONCILE_HELP_TEXT = `Usage:
   openspec-extensions reconcile change --repo-root <path> --change <change>
   openspec-extensions reconcile commit-planning-docs --repo-root <path> --change <change> [--commit-message <message>] [--dry-run]
+  openspec-extensions reconcile merge-issue --repo-root <path> --change <change> --issue-id <issue> [--commit-message <message>] [--dry-run] [--force]
 `;
 
 function parseChangeArgs(argv: string[]): ParsedChangeArgs | null {
@@ -565,16 +567,20 @@ export function runReconcileCommand(argv: string[]): number {
     return 0;
   }
   if (subcommand !== "change") {
+    if (subcommand === "commit-planning-docs") {
+      const parsedCommitArgs = parseCommitPlanningDocsArgs(rest);
+      if (!parsedCommitArgs) {
+        return 0;
+      }
+      process.stdout.write(`${JSON.stringify(commitPlanningDocs(parsedCommitArgs), null, 2)}\n`);
+      return 0;
+    }
+    if (subcommand === "merge-issue") {
+      return runMergeIssueCommand(rest);
+    }
     if (subcommand !== "commit-planning-docs") {
       throw new Error(`Unknown reconcile command: ${subcommand}`);
     }
-
-    const parsedCommitArgs = parseCommitPlanningDocsArgs(rest);
-    if (!parsedCommitArgs) {
-      return 0;
-    }
-    process.stdout.write(`${JSON.stringify(commitPlanningDocs(parsedCommitArgs), null, 2)}\n`);
-    return 0;
   }
 
   const parsed = parseChangeArgs(rest);

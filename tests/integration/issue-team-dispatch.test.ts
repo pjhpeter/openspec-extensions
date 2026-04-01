@@ -135,6 +135,9 @@ validation:
   assert.match(dispatchText, /ISSUE-001/);
   assert.match(dispatchText, /pnpm lint/);
   assert.match(dispatchText, /\u4fee\u590d ISSUE-001 gate/);
+  assert.match(dispatchText, /openspec-extensions execute update-progress start --repo-root/);
+  assert.match(dispatchText, /openspec-extensions execute update-progress stop --repo-root/);
+  assert.doesNotMatch(dispatchText, /python3 \.codex\/skills/);
 });
 
 test("falls back to issue-local round contract when latest round is still planning", () => {

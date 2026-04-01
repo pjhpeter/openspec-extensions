@@ -9,8 +9,19 @@ const TASK_ID_PATTERN = "\\d+(?:\\.\\d+)+";
 
 export type JsonRecord = Record<string, unknown>;
 
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
 export function nowIso(): string {
-  return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+  const now = new Date();
+  const offsetMinutes = -now.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const absoluteMinutes = Math.abs(offsetMinutes);
+  const offsetHours = Math.floor(absoluteMinutes / 60);
+  const remainingMinutes = absoluteMinutes % 60;
+
+  return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}T${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}${sign}${pad2(offsetHours)}:${pad2(remainingMinutes)}`;
 }
 
 export function parseIso8601(value: string): Date | null {

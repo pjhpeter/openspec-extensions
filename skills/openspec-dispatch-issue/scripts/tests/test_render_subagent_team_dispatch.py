@@ -134,6 +134,9 @@ class RenderSubagentTeamDispatchTest(unittest.TestCase):
         self.assertIn("ISSUE-001", dispatch_text)
         self.assertIn("pnpm lint", dispatch_text)
         self.assertIn("修复 ISSUE-001 gate", dispatch_text)
+        self.assertIn("openspec-extensions execute update-progress start --repo-root", dispatch_text)
+        self.assertIn("openspec-extensions execute update-progress stop --repo-root", dispatch_text)
+        self.assertNotIn("python3 .codex/skills", dispatch_text)
 
     def test_falls_back_to_issue_local_round_contract_when_latest_round_is_still_planning(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

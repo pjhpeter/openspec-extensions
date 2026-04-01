@@ -16,7 +16,7 @@ Read `issue-mode-contract.md`, `issue-mode-config.md`, `issue-mode-rra.md`, and 
 3. If issue-planning or acceptance `Must fix now` items still block this dispatch, stop and fix the backlog first.
 4. Create or reuse the issue workspace boundary (`worker_worktree`):
    ```bash
-   python3 .codex/skills/openspec-dispatch-issue/scripts/create_worker_worktree.py \
+   openspec-extensions worktree create \
      --repo-root . \
      --change "<change-name>" \
      --issue-id "<issue-id>"
@@ -24,14 +24,14 @@ Read `issue-mode-contract.md`, `issue-mode-config.md`, `issue-mode-rra.md`, and 
    If the user only wants to preview the target path without creating it yet, add `--dry-run`.
 5. Render the team dispatch first for the default subagent-team path:
    ```bash
-   python3 .codex/skills/openspec-dispatch-issue/scripts/render_subagent_team_dispatch.py \
+   openspec-extensions dispatch issue-team \
      --repo-root . \
      --change "<change-name>" \
      --issue-id "<issue-id>"
    ```
 6. If the user explicitly wants one bounded issue-only handoff instead of the default subagent-team round, also render the standard issue dispatch:
    ```bash
-   python3 .codex/skills/openspec-dispatch-issue/scripts/render_issue_dispatch.py \
+   openspec-extensions dispatch issue \
      --repo-root . \
      --change "<change-name>" \
      --issue-id "<issue-id>"

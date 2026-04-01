@@ -19,6 +19,7 @@ Usage:
   openspec-extensions execute update-progress <start|checkpoint|stop> [options]
   openspec-extensions reconcile change [options]
   openspec-extensions reconcile commit-planning-docs [options]
+  openspec-extensions reconcile merge-issue [options]
   openspec-extensions review change [options]
   openspec-extensions verify change [options]
   openspec-extensions archive change [options]
@@ -32,6 +33,7 @@ Commands:
   execute update-progress Update issue progress and run artifacts.
   reconcile change        Reconcile change state and continuation policy.
   reconcile commit-planning-docs Commit planning docs for a change.
+  reconcile merge-issue   Accept and merge one reviewed issue into the coordinator branch.
   review change           Run change-level coordinator review.
   verify change           Run change-level coordinator verify.
   archive change          Archive a change and clean up change worktree state.

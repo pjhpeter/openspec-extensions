@@ -446,7 +446,7 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
         self.assertEqual(payload["phase"], "change_verify")
         self.assertEqual(payload["automation_profile"], "full_auto")
         self.assertTrue(payload["automation"]["accept_change_acceptance"])
-        self.assertIn("coordinator_verify_change.py", dispatch_text)
+        self.assertIn("openspec-extensions verify change --repo-root", dispatch_text)
         self.assertIn("subagent_team.auto_accept_change_acceptance=true", dispatch_text)
         self.assertIn("CHANGE-REVIEW.json 为当前 issue 集合的最新 review 结果", dispatch_text)
 
@@ -538,7 +538,7 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
 
         self.assertEqual(payload["phase"], "ready_for_archive")
         self.assertTrue(payload["automation"]["archive_after_verify"])
-        self.assertIn("coordinator_archive_change.py", dispatch_text)
+        self.assertIn("openspec-extensions archive change --repo-root", dispatch_text)
         self.assertIn("subagent_team.auto_archive_after_verify=true", dispatch_text)
 
     def test_change_acceptance_requires_change_review_before_verify(self) -> None:
@@ -602,7 +602,7 @@ class RenderChangeLifecycleDispatchTest(unittest.TestCase):
 
         self.assertEqual(payload["phase"], "change_acceptance")
         self.assertIn("需先对当前 change 修改的代码运行 /review", payload["phase_reason"])
-        self.assertIn("coordinator_review_change.py", dispatch_text)
+        self.assertIn("openspec-extensions review change --repo-root", dispatch_text)
         self.assertIn("只有 change-level /review 通过后，才允许继续进入 verify", dispatch_text)
         self.assertIn("任一 required gate-bearing subagent 仍在运行时，不允许提前通过当前 phase", dispatch_text)
 

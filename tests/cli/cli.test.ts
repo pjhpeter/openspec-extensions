@@ -171,6 +171,61 @@ done_when:
   assert.equal(payload.status, "ready_to_commit");
 });
 
+test("cli reconcile merge-issue routes to command", async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-cli-merge-issue-"));
+  const changeDir = path.join(repoRoot, "openspec", "changes", "demo-change");
+  const issuesDir = path.join(changeDir, "issues");
+  const runsDir = path.join(changeDir, "runs");
+  fs.mkdirSync(issuesDir, { recursive: true });
+  fs.mkdirSync(runsDir, { recursive: true });
+  initGitRepo(repoRoot);
+  fs.writeFileSync(path.join(repoRoot, "src.ts"), "export const demo = 1;\n");
+  fs.writeFileSync(path.join(issuesDir, "ISSUE-001.md"), `---
+issue_id: ISSUE-001
+title: Merge issue
+worker_worktree: .
+allowed_scope:
+  - src.ts
+out_of_scope:
+  - electron/
+done_when:
+  - merge rendered
+---
+`);
+  fs.writeFileSync(path.join(issuesDir, "ISSUE-001.progress.json"), JSON.stringify({
+    change: "demo-change",
+    issue_id: "ISSUE-001",
+    status: "completed",
+    boundary_status: "review_required",
+    next_action: "coordinator_review",
+    run_id: "RUN-20260402T000000-ISSUE-001",
+    updated_at: "2026-04-02T00:00:00+08:00"
+  }, null, 2));
+  git(repoRoot, "add", ".");
+  git(repoRoot, "commit", "-m", "init");
+  fs.writeFileSync(path.join(repoRoot, "src.ts"), "export const demo = 2;\n");
+
+  const result = await captureStdout(() =>
+    main([
+      "reconcile",
+      "merge-issue",
+      "--repo-root",
+      repoRoot,
+      "--change",
+      "demo-change",
+      "--issue-id",
+      "ISSUE-001",
+      "--dry-run"
+    ])
+  );
+
+  const payload = JSON.parse(result.stdout.trim()) as { changed_files: string[]; dry_run: boolean; issue_id: string };
+  assert.equal(result.exitCode, 0);
+  assert.equal(payload.dry_run, true);
+  assert.equal(payload.issue_id, "ISSUE-001");
+  assert.deepEqual(payload.changed_files, ["src.ts"]);
+});
+
 test("cli review change routes to command", async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-cli-review-"));
   const issuePath = path.join(repoRoot, "openspec", "changes", "demo-change", "issues", "ISSUE-001.md");

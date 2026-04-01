@@ -79,7 +79,7 @@ Important:
 - when reconcile emits `commit_planning_docs`, that result means "commit the planning docs now, then rerun reconcile"
 - when reconcile emits `dispatch_next_issue`, that result means "continue now", not "stop at control-plane ready and wait for another instruction"
 - even when `auto_accept_change_acceptance=true`, a passed change-level `/review` is still required before verify
-- when a change-level worktree is in use, archive should normally run through `python3 .codex/skills/openspec-shared/scripts/coordinator_archive_change.py --repo-root . --change "<change>"` so the successful archive also cleans up the reusable worktree
+- when a change-level worktree is in use, archive should normally run through `openspec-extensions archive change --repo-root . --change "<change>"` so the successful archive also cleans up the reusable worktree
 - gate-bearing design-review / check / review seats should not be launched as `explorer`, and should use up to 1 hour blocking waits when unattended progression matters
 - role-based `reasoning_effort` is currently a skill/dispatch contract, not an `issue-mode.json` field:
   - design-author subagent: `xhigh`

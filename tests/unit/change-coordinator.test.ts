@@ -8,6 +8,7 @@ import { execFileSync } from "node:child_process";
 import {
   artifactIsCurrent,
   incompleteTasks,
+  nowIso,
   planningDocStatus,
   reviewArtifactIsCurrent,
   syncTasksForIssues
@@ -101,6 +102,10 @@ test("incompleteTasks returns unchecked task rows", () => {
     const tasks = incompleteTasks(tasksPath);
     assert.deepEqual(tasks, [{ task_id: "1.2", line: "- [ ] 1.2 pending task" }]);
   });
+});
+
+test("nowIso uses local offset format", () => {
+  assert.match(nowIso(), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
 });
 
 test("artifact freshness compares artifact time against latest issue time", () => {

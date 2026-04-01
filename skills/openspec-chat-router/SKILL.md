@@ -213,7 +213,7 @@ If the dedicated skill is unavailable, use the closest OpenSpec CLI flow and con
 - `reconcile` -> read `references/issue-mode-contract.md`, inspect `openspec/changes/<name>/issues/ISSUE-*.md`, `openspec/changes/<name>/issues/*.progress.json`, and `openspec/changes/<name>/runs/*.json`, update coordinator-owned checklists if needed, then choose the next OpenSpec action
 - `verify` -> compare tasks, specs, design, and implementation using `openspec status`, change artifacts, and code evidence
 - `sync-specs` -> merge delta specs from `openspec/changes/<name>/specs/` into `openspec/specs/`
-- `archive` -> prefer `openspec archive "<name>"`; if readiness is unclear, verify first
+- `archive` -> prefer `openspec-extensions archive change --repo-root . --change "<name>"`; if readiness is unclear, verify first
 
 ## IM-Friendly Output Style
 

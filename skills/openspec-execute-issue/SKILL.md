@@ -22,7 +22,7 @@ If the change name, issue id, allowed scope, or done condition is missing and ri
    - latest `openspec/changes/<change>/control/ROUND-*.md` if present
 2. Start worker state with the bundled helper:
    ```bash
-   python3 .codex/skills/openspec-execute-issue/scripts/update_issue_progress.py start \
+   openspec-extensions execute update-progress start \
      --repo-root . \
      --change "<change-name>" \
      --issue-id "<issue-id>" \
@@ -39,7 +39,7 @@ If the change name, issue id, allowed scope, or done condition is missing and ri
    - only fall back to `pnpm lint` and `pnpm type-check` when the repo did not configure anything else
 5. Before stopping, update the same issue progress and run artifacts:
    ```bash
-   python3 .codex/skills/openspec-execute-issue/scripts/update_issue_progress.py stop \
+   openspec-extensions execute update-progress stop \
      --repo-root . \
      --change "<change-name>" \
      --issue-id "<issue-id>" \

@@ -551,9 +551,9 @@ ${bulletList(deferredItems)}
 - \u5c3d\u91cf\u6309\u6587\u4ef6/\u6a21\u5757 ownership \u5206\u914d\uff0c\u51cf\u5c11\u5199\u96c6\u91cd\u53e0\u3002
 - \u8d1f\u8d23\u5b9e\u73b0\u6216\u4fee\u590d repo \u4ee3\u7801\u7684 development subagent \u5fc5\u987b\u663e\u5f0f\u4f7f\u7528 \`reasoning_effort=xhigh\`\u3002
 - \u6267\u884c\u4ee3\u7801\u5b9e\u73b0\u7684 subagent \u5fc5\u987b\u5148\u5199\uff1a
-  - \`python3 .codex/skills/openspec-execute-issue/scripts/update_issue_progress.py start --repo-root "${input.repoRoot}" --change "${input.change}" --issue-id "${input.issueId}" --status in_progress --boundary-status working --next-action continue_issue --summary "\u5df2\u8fdb\u5165 subagent team repair round\u3002"\`
+  - \`openspec-extensions execute update-progress start --repo-root "${input.repoRoot}" --change "${input.change}" --issue-id "${input.issueId}" --status in_progress --boundary-status working --next-action continue_issue --summary "\u5df2\u8fdb\u5165 subagent team repair round\u3002"\`
 - \u505c\u6b62\u524d\u5fc5\u987b\u5199\uff1a
-  - \`python3 .codex/skills/openspec-execute-issue/scripts/update_issue_progress.py stop --repo-root "${input.repoRoot}" --change "${input.change}" --issue-id "${input.issueId}" --status completed --boundary-status review_required --next-action coordinator_review --summary "issue \u8fb9\u754c\u5185\u4fee\u590d\u5df2\u5b8c\u6210\uff0c\u7b49\u5f85 coordinator \u6536\u655b\u3002" --validation "lint=<pending-or-passed>" --validation "typecheck=<pending-or-passed>" --changed-file "<path>"\`
+  - \`openspec-extensions execute update-progress stop --repo-root "${input.repoRoot}" --change "${input.change}" --issue-id "${input.issueId}" --status completed --boundary-status review_required --next-action coordinator_review --summary "issue \u8fb9\u754c\u5185\u4fee\u590d\u5df2\u5b8c\u6210\uff0c\u7b49\u5f85 coordinator \u6536\u655b\u3002" --validation "lint=<pending-or-passed>" --validation "typecheck=<pending-or-passed>" --changed-file "<path>"\`
 - \u4e0d\u8981\u81ea\u5408\u5e76\uff0c\u4e0d\u8981\u66f4\u65b0 \`tasks.md\`\u3002
 
 ## Review Packet Rules

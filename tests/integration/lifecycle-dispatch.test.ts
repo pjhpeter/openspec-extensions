@@ -271,7 +271,7 @@ validation:
     assert.equal(payload.phase, "change_verify");
     assert.equal(payload.automation_profile, "full_auto");
     assert.equal(payload.automation.accept_change_acceptance, true);
-    assert.match(dispatchText, /coordinator_verify_change\.py/);
+    assert.match(dispatchText, /openspec-extensions verify change --repo-root/);
     assert.match(dispatchText, /subagent_team\.auto_accept_change_acceptance=true/);
     assert.match(dispatchText, /CHANGE-REVIEW\.json 为当前 issue 集合的最新 review 结果/);
   });
@@ -337,7 +337,7 @@ validation:
 
     assert.equal(payload.phase, "ready_for_archive");
     assert.equal(payload.automation.archive_after_verify, true);
-    assert.match(dispatchText, /coordinator_archive_change\.py/);
+    assert.match(dispatchText, /openspec-extensions archive change --repo-root/);
     assert.match(dispatchText, /subagent_team\.auto_archive_after_verify=true/);
   });
 });
@@ -387,7 +387,7 @@ validation:
 
     assert.equal(payload.phase, "change_acceptance");
     assert.match(payload.phase_reason, /需先对当前 change 修改的代码运行 \/review/);
-    assert.match(dispatchText, /coordinator_review_change\.py/);
+    assert.match(dispatchText, /openspec-extensions review change --repo-root/);
     assert.match(dispatchText, /只有 change-level \/review 通过后，才允许继续进入 verify/);
     assert.match(dispatchText, /任一 required gate-bearing subagent 仍在运行时，不允许提前通过当前 phase/);
   });

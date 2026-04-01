@@ -15,20 +15,20 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
 1. Resolve the change name.
 2. Run the bundled helper:
    ```bash
-   python3 .codex/skills/openspec-reconcile-change/scripts/reconcile_issue_progress.py \
+   openspec-extensions reconcile change \
      --repo-root . \
      --change "<change-name>"
    ```
 3. If the result is `commit_planning_docs`, run the planning-doc commit helper immediately:
    ```bash
-   python3 .codex/skills/openspec-reconcile-change/scripts/coordinator_commit_planning_docs.py \
+   openspec-extensions reconcile commit-planning-docs \
      --repo-root . \
      --change "<change-name>"
    ```
    Add `--dry-run` to preview the commit boundary first, or `--commit-message "..."` to override the default planning-doc commit message.
 4. If the result is `coordinator_review` and you are accepting the issue, or the result is `auto_accept_issue`, run the coordinator merge helper immediately:
    ```bash
-   python3 .codex/skills/openspec-reconcile-change/scripts/coordinator_merge_issue.py \
+   openspec-extensions reconcile merge-issue \
      --repo-root . \
      --change "<change-name>" \
      --issue-id "<issue-id>"
@@ -41,7 +41,7 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
    - `resolve_blocker` -> stop and surface blocker
    - `review_change_code` -> run change-level code review now:
      ```bash
-     python3 .codex/skills/openspec-shared/scripts/coordinator_review_change.py \
+     openspec-extensions review change \
        --repo-root . \
        --change "<change-name>"
      ```
@@ -49,8 +49,8 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
    - `resolve_change_review_failure` -> inspect `runs/CHANGE-REVIEW.json`, fix the blocking review findings, then rerun reconcile before verify
    - `resolve_verify_failure` -> inspect the verify artifact and fix the failing validation or unchecked tasks
    - `commit_planning_docs` -> commit `proposal.md` / `design.md` / `tasks.md` / `issues/INDEX.md` / `ISSUE-*.md` immediately, then rerun reconcile and keep advancing without waiting for user confirmation
-   - `auto_accept_issue` -> run `coordinator_merge_issue.py` immediately, then rerun reconcile and keep advancing without waiting for user confirmation
-   - `coordinator_review` -> review the issue, then either accept it with `coordinator_merge_issue.py` or create `Must fix now` backlog items and send it back to repair
+   - `auto_accept_issue` -> run `openspec-extensions reconcile merge-issue` immediately, then rerun reconcile and keep advancing without waiting for user confirmation
+   - `coordinator_review` -> review the issue, then either accept it with `openspec-extensions reconcile merge-issue` or create `Must fix now` backlog items and send it back to repair
    - `await_planning_docs_commit_confirmation` -> semi-auto pause before the coordinator-owned planning-doc commit that must happen before the first issue dispatch
    - `await_issue_dispatch_confirmation` -> semi-auto pause before the first issue dispatch after issue planning
    - `dispatch_next_issue` -> prepare the next approved issue and, in the default path, continue through subagent-team; this is not a terminal checkpoint
@@ -66,8 +66,8 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
 - Do not treat issue-execution chat output as the source of truth when artifacts exist; prefer issue progress artifacts over run artifacts.
 - Do not let issue execution subagents update `tasks.md`, self-merge, or create the final git commit for an issue.
 - Use issue docs to discover pending work that has not started yet.
-- `coordinator_merge_issue.py` expects a clean coordinator worktree only when the issue uses an isolated worker worktree; shared workspace mode commits the current repo-root issue diff directly.
-- When multiple issues in the same change share one change-level worktree, `coordinator_merge_issue.py` should resync that worktree to the latest accepted commit before the next issue starts.
+- `openspec-extensions reconcile merge-issue` expects a clean coordinator worktree only when the issue uses an isolated worker worktree; shared workspace mode commits the current repo-root issue diff directly.
+- When multiple issues in the same change share one change-level worktree, `openspec-extensions reconcile merge-issue` should resync that worktree to the latest accepted commit before the next issue starts.
 - If artifacts are stale or suspicious, inspect the issue workspace and run artifacts directly before redispatching.
 - In subagent-first flows, prefer artifact-based reconcile and coordinator review over any process-liveness heuristics.
 - For complex changes, keep the active normalized backlog and round verdict on disk instead of in chat only.

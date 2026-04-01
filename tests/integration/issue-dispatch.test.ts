@@ -78,6 +78,9 @@ validation:
     assert.match(dispatchText, /RUN-EXPLICIT-ISSUE-001/);
     assert.match(dispatchText, /Allowed scope:/);
     assert.match(dispatchText, /`src\/demo.ts`/);
+    assert.match(dispatchText, /openspec-extensions execute update-progress start --repo-root/);
+    assert.match(dispatchText, /openspec-extensions execute update-progress stop --repo-root/);
+    assert.doesNotMatch(dispatchText, /python3 \.codex\/skills/);
   });
 });
 

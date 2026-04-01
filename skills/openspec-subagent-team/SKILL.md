@@ -26,7 +26,7 @@ Read these first:
 1. Resolve the target change first, not just the issue.
 2. Render the lifecycle packet:
    ```bash
-   python3 .codex/skills/openspec-subagent-team/scripts/render_change_lifecycle_dispatch.py \
+   openspec-extensions dispatch lifecycle \
      --repo-root . \
      --change "<change-name>"
    ```
@@ -41,7 +41,7 @@ Read these first:
    - `ready_for_archive`
 5. If the current phase is issue execution, also render the issue packet:
    ```bash
-   python3 .codex/skills/openspec-dispatch-issue/scripts/render_subagent_team_dispatch.py \
+   openspec-extensions dispatch issue-team \
      --repo-root . \
      --change "<change-name>" \
      --issue-id "<issue-id>"

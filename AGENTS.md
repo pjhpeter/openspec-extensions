@@ -6,9 +6,9 @@ This repository packages OpenSpec issue-mode extensions for installation into ot
 ## Build, Test, and Development Commands
 There is no build step; the repository ships source files directly.
 
-- `python3 scripts/install_openspec_extensions.py --help`: show installer options.
-- `python3 scripts/install_openspec_extensions.py --target-repo /path/to/repo --dry-run`: preview copied skill directories, config install, and `.gitignore` updates.
-- `python3 scripts/install_openspec_extensions.py --target-repo /path/to/repo --force --force-config`: overwrite existing installed skills and config in a target repo.
+- `openspec-extensions install --help`: show installer options.
+- `openspec-extensions install --target-repo /path/to/repo --dry-run`: preview copied skill directories, config install, and `.gitignore` updates.
+- `openspec-extensions install --target-repo /path/to/repo --force --force-config`: overwrite existing installed skills and config in a target repo.
 
 ## Coding Style & Naming Conventions
 Follow the existing layout and naming exactly so installed relative paths remain valid. Use `openspec-*` kebab-case for skill directories, `snake_case.py` for Python helpers, and concise Markdown filenames such as `SKILL.md` and reference docs under `references/`. Python should stay stdlib-only unless the repository adds dependency management later; keep 4-space indentation, type hints, and `pathlib`-based filesystem handling, matching the installer. JSON templates should remain compact and readable with 2-space indentation.
