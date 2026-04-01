@@ -1,11 +1,13 @@
 import { parseArgs } from "node:util";
 
+import { runLifecycleDispatchRenderer } from "../renderers/lifecycle-dispatch";
 import { renderIssueDispatch } from "../renderers/issue-dispatch";
 import { runIssueTeamDispatchRenderer } from "../renderers/issue-team-dispatch";
 
 const DISPATCH_HELP_TEXT = `Usage:
   openspec-extensions dispatch issue --repo-root <path> --change <change> --issue-id <issue> [--run-id <id>] [--dry-run]
   openspec-extensions dispatch issue-team --repo-root <path> --change <change> --issue-id <issue> [--target-mode <mode>] [--round-goal <goal>] [--dry-run]
+  openspec-extensions dispatch lifecycle --repo-root <path> --change <change> [--phase <phase>] [--issue-id <issue>] [--dry-run]
 `;
 
 type IssueDispatchArgs = {
@@ -80,6 +82,10 @@ export function runDispatchCommand(argv: string[]): number {
 
   if (subcommand === "issue-team") {
     return runIssueTeamDispatchRenderer(rest);
+  }
+
+  if (subcommand === "lifecycle") {
+    return runLifecycleDispatchRenderer(rest);
   }
 
   throw new Error(`Unknown dispatch command: ${subcommand}`);

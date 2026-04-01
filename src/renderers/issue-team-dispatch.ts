@@ -34,6 +34,28 @@ type ParsedArgs = {
   targetMode: string;
 };
 
+export type IssueTeamDispatchArgs = ParsedArgs;
+
+export type IssueTeamDispatchPayload = {
+  change: string;
+  config_path: string;
+  control_gate: DispatchGate;
+  control_state: JsonRecord;
+  dry_run: boolean;
+  issue_id: string;
+  progress_path: string;
+  reasoning_policy: {
+    check_group: string;
+    development_group: string;
+    review_group: string;
+  };
+  team_dispatch_path: string;
+  validation: string[];
+  validation_source: "issue_doc" | "config_default";
+  worker_worktree: string;
+  worker_worktree_source: "issue_doc" | "config_default";
+};
+
 const REVIEW_EXCLUDED_DIRS = new Set(["node_modules", "dist", "build", ".next", "coverage"]);
 
 function parseCommandArgs(argv: string[]): ParsedArgs {
@@ -572,8 +594,7 @@ ${bulletList(reReviewResult)}
 `;
 }
 
-export function runIssueTeamDispatchRenderer(argv: string[]): number {
-  const args = parseCommandArgs(argv);
+export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamDispatchPayload {
   const config = loadIssueModeConfig(args.repoRoot);
   const [changeDir, issuePath, teamDispatchPath] = issuePaths(args.repoRoot, args.change, args.issueId);
   const controlState = readChangeControlState(args.repoRoot, args.change);
@@ -624,7 +645,7 @@ export function runIssueTeamDispatchRenderer(argv: string[]): number {
     fs.writeFileSync(teamDispatchPath, dispatchText);
   }
 
-  const payload = {
+  return {
     change: args.change,
     issue_id: args.issueId,
     team_dispatch_path: path.relative(args.repoRoot, teamDispatchPath).split(path.sep).join("/"),
@@ -638,11 +659,16 @@ export function runIssueTeamDispatchRenderer(argv: string[]): number {
     reasoning_policy: {
       development_group: "xhigh",
       check_group: "medium",
-      review_group: "medium",
+      review_group: "medium"
     },
     config_path: config.config_path,
-    dry_run: args.dryRun,
+    dry_run: args.dryRun
   };
+}
+
+export function runIssueTeamDispatchRenderer(argv: string[]): number {
+  const args = parseCommandArgs(argv);
+  const payload = renderIssueTeamDispatch(args);
 
   process.stdout.write(`${JSON.stringify(payload)}\n`);
   return 0;

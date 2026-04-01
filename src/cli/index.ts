@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 
+import { runArchiveCommand } from "../commands/archive";
 import { runDispatchCommand } from "../commands/dispatch";
 import { runInstallCommand } from "../commands/install";
+import { runReconcileCommand } from "../commands/reconcile";
+import { runReviewCommand } from "../commands/review";
+import { runVerifyCommand } from "../commands/verify";
+import { runWorktreeCommand } from "../commands/worktree";
 import { runUpdateProgressCommand } from "../commands/execute/update-progress";
 
 const HELP_TEXT = `OpenSpec Extensions CLI
@@ -10,13 +15,27 @@ Usage:
   openspec-extensions install [options]
   openspec-extensions dispatch issue [options]
   openspec-extensions dispatch issue-team [options]
+  openspec-extensions dispatch lifecycle [options]
   openspec-extensions execute update-progress <start|checkpoint|stop> [options]
+  openspec-extensions reconcile change [options]
+  openspec-extensions reconcile commit-planning-docs [options]
+  openspec-extensions review change [options]
+  openspec-extensions verify change [options]
+  openspec-extensions archive change [options]
+  openspec-extensions worktree create [options]
 
 Commands:
   install                 Install OpenSpec extension skills into a target repo.
   dispatch issue          Render a single issue dispatch packet.
   dispatch issue-team     Render a subagent-team issue dispatch packet.
+  dispatch lifecycle      Render the change lifecycle dispatch packet.
   execute update-progress Update issue progress and run artifacts.
+  reconcile change        Reconcile change state and continuation policy.
+  reconcile commit-planning-docs Commit planning docs for a change.
+  review change           Run change-level coordinator review.
+  verify change           Run change-level coordinator verify.
+  archive change          Archive a change and clean up change worktree state.
+  worktree create         Create or reuse a worker worktree for an issue.
 `;
 
 export async function main(argv: string[]): Promise<number> {
@@ -37,6 +56,26 @@ export async function main(argv: string[]): Promise<number> {
 
   if (command === "execute" && rest[0] === "update-progress") {
     return runUpdateProgressCommand(rest.slice(1));
+  }
+
+  if (command === "reconcile") {
+    return runReconcileCommand(rest);
+  }
+
+  if (command === "review") {
+    return runReviewCommand(rest);
+  }
+
+  if (command === "verify") {
+    return runVerifyCommand(rest);
+  }
+
+  if (command === "archive") {
+    return runArchiveCommand(rest);
+  }
+
+  if (command === "worktree") {
+    return runWorktreeCommand(rest);
   }
 
   throw new Error(`Unknown command: ${argv.join(" ")}`);

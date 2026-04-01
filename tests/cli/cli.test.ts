@@ -1,10 +1,21 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import { main } from "../../src/cli/index";
+
+function git(repoRoot: string, ...args: string[]): string {
+  return execFileSync("git", args, { cwd: repoRoot, encoding: "utf8" }).trim();
+}
+
+function initGitRepo(repoRoot: string): void {
+  git(repoRoot, "init");
+  git(repoRoot, "config", "user.name", "Test User");
+  git(repoRoot, "config", "user.email", "test@example.com");
+}
 
 function captureStdout(run: () => Promise<number>): Promise<{ exitCode: number; stdout: string }> {
   const originalWrite = process.stdout.write;
@@ -65,4 +76,237 @@ done_when:
   assert.equal(result.exitCode, 0);
   assert.equal(payload.dry_run, true);
   assert.equal(payload.dispatch_path, "openspec/changes/demo-change/issues/ISSUE-001.dispatch.md");
+});
+
+test("cli dispatch lifecycle routes to renderer", async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-cli-lifecycle-"));
+  const changeDir = path.join(repoRoot, "openspec", "changes", "demo-change");
+  fs.mkdirSync(changeDir, { recursive: true });
+  fs.writeFileSync(path.join(changeDir, "proposal.md"), "# proposal\n");
+
+  const result = await captureStdout(() =>
+    main([
+      "dispatch",
+      "lifecycle",
+      "--repo-root",
+      repoRoot,
+      "--change",
+      "demo-change",
+      "--dry-run"
+    ])
+  );
+
+  const payload = JSON.parse(result.stdout.trim()) as { dry_run: boolean; phase: string };
+  assert.equal(result.exitCode, 0);
+  assert.equal(payload.dry_run, true);
+  assert.equal(payload.phase, "spec_readiness");
+});
+
+test("cli reconcile change routes to command", async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-cli-reconcile-"));
+  const issuePath = path.join(repoRoot, "openspec", "changes", "demo-change", "issues", "ISSUE-001.md");
+  fs.mkdirSync(path.dirname(issuePath), { recursive: true });
+  fs.writeFileSync(issuePath, `---
+issue_id: ISSUE-001
+title: Reconcile change
+allowed_scope:
+  - src/reconcile.ts
+out_of_scope:
+  - electron/
+done_when:
+  - reconcile rendered
+---
+`);
+  initGitRepo(repoRoot);
+
+  const result = await captureStdout(() =>
+    main([
+      "reconcile",
+      "change",
+      "--repo-root",
+      repoRoot,
+      "--change",
+      "demo-change"
+    ])
+  );
+
+  const payload = JSON.parse(result.stdout.trim()) as { next_action: string; recommended_issue_id: string };
+  assert.equal(result.exitCode, 0);
+  assert.equal(payload.next_action, "await_planning_docs_commit_confirmation");
+  assert.equal(payload.recommended_issue_id, "ISSUE-001");
+});
+
+test("cli reconcile commit-planning-docs routes to command", async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-cli-commit-planning-"));
+  const issuePath = path.join(repoRoot, "openspec", "changes", "demo-change", "issues", "ISSUE-001.md");
+  fs.mkdirSync(path.dirname(issuePath), { recursive: true });
+  fs.writeFileSync(issuePath, `---
+issue_id: ISSUE-001
+title: Planning commit
+allowed_scope:
+  - src/planning.ts
+out_of_scope:
+  - electron/
+done_when:
+  - planning docs committed
+---
+`);
+  initGitRepo(repoRoot);
+
+  const result = await captureStdout(() =>
+    main([
+      "reconcile",
+      "commit-planning-docs",
+      "--repo-root",
+      repoRoot,
+      "--change",
+      "demo-change",
+      "--dry-run"
+    ])
+  );
+
+  const payload = JSON.parse(result.stdout.trim()) as { dry_run: boolean; status: string };
+  assert.equal(result.exitCode, 0);
+  assert.equal(payload.dry_run, true);
+  assert.equal(payload.status, "ready_to_commit");
+});
+
+test("cli review change routes to command", async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-cli-review-"));
+  const issuePath = path.join(repoRoot, "openspec", "changes", "demo-change", "issues", "ISSUE-001.md");
+  const progressPath = path.join(repoRoot, "openspec", "changes", "demo-change", "issues", "ISSUE-001.progress.json");
+  fs.mkdirSync(path.dirname(issuePath), { recursive: true });
+  fs.writeFileSync(issuePath, `---
+issue_id: ISSUE-001
+title: Review change
+allowed_scope:
+  - src/review.ts
+out_of_scope:
+  - electron/
+done_when:
+  - review rendered
+---
+`);
+  fs.writeFileSync(progressPath, JSON.stringify({
+    issue_id: "ISSUE-001",
+    status: "completed",
+    updated_at: "2026-03-30T10:00:00+08:00"
+  }, null, 2));
+
+  const result = await captureStdout(() =>
+    main([
+      "review",
+      "change",
+      "--repo-root",
+      repoRoot,
+      "--change",
+      "demo-change",
+      "--dry-run"
+    ])
+  );
+
+  const payload = JSON.parse(result.stdout.trim()) as { dry_run: boolean; status: string };
+  assert.equal(result.exitCode, 0);
+  assert.equal(payload.dry_run, true);
+  assert.equal(payload.status, "dry_run");
+});
+
+test("cli verify change routes to command", async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-cli-verify-"));
+  const changeDir = path.join(repoRoot, "openspec", "changes", "demo-change");
+  const issuePath = path.join(changeDir, "issues", "ISSUE-001.md");
+  const progressPath = path.join(changeDir, "issues", "ISSUE-001.progress.json");
+  const reviewPath = path.join(changeDir, "runs", "CHANGE-REVIEW.json");
+  fs.mkdirSync(path.dirname(issuePath), { recursive: true });
+  fs.mkdirSync(path.dirname(reviewPath), { recursive: true });
+  fs.writeFileSync(path.join(changeDir, "tasks.md"), "");
+  fs.writeFileSync(issuePath, `---
+issue_id: ISSUE-001
+title: Verify change
+allowed_scope:
+  - src/verify.ts
+out_of_scope:
+  - electron/
+done_when:
+  - verify rendered
+---
+`);
+  fs.writeFileSync(progressPath, JSON.stringify({
+    issue_id: "ISSUE-001",
+    status: "completed",
+    updated_at: "2026-03-30T10:00:00+08:00"
+  }, null, 2));
+  fs.writeFileSync(reviewPath, JSON.stringify({
+    change: "demo-change",
+    status: "passed",
+    updated_at: "2026-03-30T10:05:00+08:00"
+  }, null, 2));
+
+  const result = await captureStdout(() =>
+    main([
+      "verify",
+      "change",
+      "--repo-root",
+      repoRoot,
+      "--change",
+      "demo-change",
+      "--dry-run"
+    ])
+  );
+
+  const payload = JSON.parse(result.stdout.trim()) as { dry_run: boolean; status: string };
+  assert.equal(result.exitCode, 0);
+  assert.equal(payload.dry_run, true);
+  assert.equal(payload.status, "passed");
+});
+
+test("cli archive change routes to command", async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-cli-archive-"));
+
+  const result = await captureStdout(() =>
+    main([
+      "archive",
+      "change",
+      "--repo-root",
+      repoRoot,
+      "--change",
+      "demo-change",
+      "--dry-run"
+    ])
+  );
+
+  const payload = JSON.parse(result.stdout.trim()) as { archived: boolean; dry_run: boolean };
+  assert.equal(result.exitCode, 0);
+  assert.equal(payload.dry_run, true);
+  assert.equal(payload.archived, false);
+});
+
+test("cli worktree create routes to command", async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-cli-worktree-"));
+  const configPath = path.join(repoRoot, "openspec", "issue-mode.json");
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.writeFileSync(configPath, JSON.stringify({
+    worker_worktree: {
+      enabled: false
+    }
+  }, null, 2));
+
+  const result = await captureStdout(() =>
+    main([
+      "worktree",
+      "create",
+      "--repo-root",
+      repoRoot,
+      "--change",
+      "demo-change",
+      "--issue-id",
+      "ISSUE-001"
+    ])
+  );
+
+  const payload = JSON.parse(result.stdout.trim()) as { mode: string; shared_workspace: boolean; worktree_relative: string };
+  assert.equal(result.exitCode, 0);
+  assert.equal(payload.mode, "shared");
+  assert.equal(payload.shared_workspace, true);
+  assert.equal(payload.worktree_relative, ".");
 });

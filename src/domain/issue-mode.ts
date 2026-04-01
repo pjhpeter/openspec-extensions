@@ -158,6 +158,20 @@ export interface IssueModeConfig {
   config_exists: boolean;
 }
 
+export type IssueWorktreeSource = "issue_doc" | "config_default";
+
+export interface IssueDispatchGate {
+  action: string;
+  active: boolean;
+  allowed: boolean;
+  blocking: boolean;
+  enforced: boolean;
+  issue_id: string;
+  mode: string;
+  reason: string;
+  status: string;
+}
+
 export const DEFAULT_CONFIG: Omit<IssueModeConfig, "config_path" | "config_exists"> = {
   worktree_root: ".worktree",
   validation_commands: ["pnpm lint", "pnpm type-check"],
@@ -486,13 +500,83 @@ export function issueWorkerWorktreeSetting(
   change: string,
   issueId: string,
   config: IssueModeConfig
-): [string, "issue_doc" | "config_default"] {
+): [string, IssueWorktreeSource] {
   const frontmatter = readIssueFrontmatter(repoRoot, change, issueId);
   const workerWorktree = frontmatter.worker_worktree;
   if (typeof workerWorktree === "string" && workerWorktree.trim()) {
     return [validateIssueWorkerWorktree(repoRoot, workerWorktree, config), "issue_doc"];
   }
   return [defaultWorkerWorktreeSetting(config, change, issueId), "config_default"];
+}
+
+export function issueWorkerWorktreePath(
+  repoRoot: string,
+  change: string,
+  issueId: string,
+  config: IssueModeConfig
+): [string, string, IssueWorktreeSource] {
+  const [rawPath, source] = issueWorkerWorktreeSetting(repoRoot, change, issueId, config);
+  const resolvedPath = resolveRepoPath(repoRoot, rawPath);
+  return [resolvedPath, displayPath(repoRoot, resolvedPath), source];
+}
+
+export function isSharedWorkerWorkspace(repoRoot: string, targetPath: string): boolean {
+  return path.resolve(targetPath) === path.resolve(repoRoot);
+}
+
+export function inferWorkerWorktreeScope(
+  repoRoot: string,
+  worktreePath: string,
+  config: IssueModeConfig,
+  change: string,
+  issueId: string
+): "shared" | "change" | "issue" {
+  if (isSharedWorkerWorkspace(repoRoot, worktreePath)) {
+    return "shared";
+  }
+
+  const worktreeRoot = resolveRepoPath(repoRoot, config.worktree_root);
+  const relative = path.relative(path.resolve(worktreeRoot), path.resolve(worktreePath));
+  if (!relative || relative === "." || relative.startsWith("..") || path.isAbsolute(relative)) {
+    return "issue";
+  }
+
+  const parts = relative.split(path.sep).filter(Boolean);
+  if (parts.length === 1 && parts[0] === change) {
+    return "change";
+  }
+  if (parts.length === 2 && parts[0] === change && parts[1] === issueId) {
+    return "issue";
+  }
+  return "issue";
+}
+
+function slugifyBranchFragment(value: string): string {
+  const slug = value.replace(/[^A-Za-z0-9._/-]+/g, "-").replace(/^[./-]+|[./-]+$/g, "").replace(/\/{2,}/g, "/");
+  return slug || "worker";
+}
+
+export function workerBranchName(
+  config: IssueModeConfig,
+  change: string,
+  issueId: string,
+  scope?: "shared" | "change" | "issue"
+): string {
+  const prefix = slugifyBranchFragment(config.worker_worktree.branch_prefix).replace(/^\/+|\/+$/g, "");
+  const changeSlug = slugifyBranchFragment(change).replaceAll("/", "-");
+  const scopeValue = scope ?? config.worker_worktree.scope;
+  const issueSlug = slugifyBranchFragment(issueId).replaceAll("/", "-");
+
+  if (prefix) {
+    if (scopeValue === "change") {
+      return `${prefix}/${changeSlug}`;
+    }
+    return `${prefix}/${changeSlug}/${issueSlug}`;
+  }
+  if (scopeValue === "change") {
+    return changeSlug;
+  }
+  return `${changeSlug}/${issueSlug}`;
 }
 
 function backlogArtifactPath(repoRoot: string, change: string): string {
@@ -591,6 +675,80 @@ export function readChangeControlState(repoRoot: string, change: string): Record
       referenced_issue_ids: referencedIssueIds,
     },
   };
+}
+
+export function evaluateIssueDispatchGate(
+  config: IssueModeConfig,
+  controlState: Record<string, unknown>,
+  issueId: string
+): IssueDispatchGate {
+  const gateMode = String(config.rra.gate_mode || "advisory").trim() || "advisory";
+  const normalizedIssueId = issueId.trim();
+  const gate: IssueDispatchGate = {
+    action: "",
+    active: false,
+    allowed: true,
+    blocking: false,
+    enforced: false,
+    issue_id: normalizedIssueId,
+    mode: gateMode,
+    reason: "",
+    status: "not_applicable",
+  };
+
+  if (controlState.enabled !== true) {
+    return gate;
+  }
+
+  const mustFixNow = isRecord(controlState.must_fix_now) ? controlState.must_fix_now : {};
+  const mustFixNowOpen = Number(mustFixNow.open_count ?? 0);
+  if (mustFixNowOpen > 0) {
+    gate.active = true;
+    gate.blocking = true;
+    gate.allowed = false;
+    gate.status = "blocked_by_backlog";
+    gate.action = "resolve_round_backlog";
+    gate.reason = `当前 RRA backlog 仍有 ${mustFixNowOpen} 个 Must fix now 未处理。`;
+    gate.enforced = gateMode === "enforce";
+    return gate;
+  }
+
+  const latestRound = isRecord(controlState.latest_round) ? controlState.latest_round : {};
+  const dispatchableIssueIds = new Set(
+    Array.isArray(latestRound.referenced_issue_ids)
+      ? latestRound.referenced_issue_ids.map((candidate) => String(candidate).trim()).filter(Boolean)
+      : []
+  );
+  if (latestRound.dispatch_gate_active === true && dispatchableIssueIds.size > 0) {
+    gate.active = true;
+    if (dispatchableIssueIds.has(normalizedIssueId)) {
+      gate.allowed = true;
+      gate.status = "approved_for_dispatch";
+      gate.action = "dispatch_next_issue";
+      gate.reason = "当前 round 已批准该 issue 派发。";
+    } else {
+      gate.blocking = true;
+      gate.allowed = false;
+      gate.status = "blocked_by_round_scope";
+      gate.action = "update_round_scope";
+      gate.reason = "当前 round 未批准该 issue 派发，请更新 round scope。";
+    }
+  }
+
+  gate.enforced = gate.blocking && gateMode === "enforce";
+  return gate;
+}
+
+export function ensureIssueDispatchAllowed(
+  config: IssueModeConfig,
+  controlState: Record<string, unknown>,
+  issueId: string
+): IssueDispatchGate {
+  const gate = evaluateIssueDispatchGate(config, controlState, issueId);
+  if (gate.enforced) {
+    throw new Error(`Dispatch blocked by RRA gate: ${gate.reason || "unknown reason"}`);
+  }
+  return gate;
 }
 
 export function automationProfile(config: IssueModeConfig): "semi_auto" | "full_auto" | "custom" {
