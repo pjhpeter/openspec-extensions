@@ -10,6 +10,8 @@ import {
   type InstallResult
 } from "./install";
 
+const OPENSPEC_NPM_PACKAGE = "@fission-ai/openspec@1.2.0";
+
 const INIT_HELP_TEXT = `Usage:
   openspec-extensions init [path] [--source-repo <path>] [--force] [--force-config] [--skip-gitignore] [--dry-run] [--openspec-tools <tools>] [--openspec-profile <profile>] [--openspec-force]
   openspec-extensions init --target-repo <path> [--source-repo <path>] [--force] [--force-config] [--skip-gitignore] [--dry-run] [--openspec-tools <tools>] [--openspec-profile <profile>] [--openspec-force]
@@ -60,7 +62,7 @@ function buildOpenSpecInitCommands(request: OpenSpecInitRequest): {
   sharedArgs.push(request.targetRepo);
 
   return {
-    fallbackCommand: ["npx", "--yes", "@fission-ai/openspec@latest", ...sharedArgs],
+    fallbackCommand: ["npx", "--yes", OPENSPEC_NPM_PACKAGE, ...sharedArgs],
     primaryCommand: ["openspec", ...sharedArgs]
   };
 }
@@ -85,7 +87,7 @@ function runPreferredOpenSpecInit(request: OpenSpecInitRequest): "openspec" | "n
     return "openspec";
   }
 
-  const primaryError = primary.error as NodeJS.ErrnoException | undefined;
+  const primaryError = primary.error as { code?: string } | undefined;
   if (primaryError?.code === "ENOENT") {
     const fallback = runCommand(commands.fallbackCommand);
     if (fallback.status === 0) {

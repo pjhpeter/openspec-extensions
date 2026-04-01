@@ -437,7 +437,7 @@ openspec init /path/to/your/project
 如果当前环境没有全局 `openspec` CLI，会自动回退到：
 
 ```bash
-npx --yes @fission-ai/openspec@latest init --tools codex /path/to/your/project
+npx --yes @fission-ai/openspec@1.2.0 init --tools codex /path/to/your/project
 ```
 
 然后继续安装扩展 skills。
