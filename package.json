@@ -16,9 +16,11 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "npm run clean && tsc -p tsconfig.json",
     "clean": "rm -rf dist",
     "lint": "eslint . --ext .ts,.mts,.cts",
+    "prepack": "npm run build",
+    "smoke:package": "node scripts/package_smoke_test.js",
     "type-check": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test tests/**/*.test.ts"
   },
