@@ -3,6 +3,14 @@
   "version": "0.1.2",
   "description": "OpenSpec issue-mode extensions packaged for npm-first distribution.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pjhpeter/openspec-extensions.git"
+  },
+  "homepage": "https://github.com/pjhpeter/openspec-extensions#readme",
+  "bugs": {
+    "url": "https://github.com/pjhpeter/openspec-extensions/issues"
+  },
   "bin": {
     "openspec-ex": "dist/cli/index.js",
     "openspec-extensions": "dist/cli/index.js"
