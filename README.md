@@ -51,10 +51,12 @@ openspec init /path/to/your/project
 如果当前环境没有全局 `openspec` CLI，会自动回退到：
 
 ```bash
-npx --yes @fission-ai/openspec@1.2.0 init --tools codex /path/to/your/project
+npx --yes @fission-ai/openspec@1.2.0 init /path/to/your/project
 ```
 
 然后继续安装扩展 skills。
+
+`openspec-ex init` 默认不会替你指定 OpenSpec 的 `--tools`；如果你确实要固定某个工具链，再显式追加 `--openspec-tools <tools>`。
 
 如果目标仓库已经完成 OpenSpec 初始化，也可以只执行扩展安装：
 
@@ -89,14 +91,19 @@ openspec-extensions install \
 
 如果目标仓库还没有完成 OpenSpec 初始化，`install` 会直接失败，并提示你先运行 `openspec-ex init` 或官方 `openspec init`。
 
-安装器会写入：
+安装器会把以下扩展 skills 写入 OpenSpec 已配置工具对应的 `<toolDir>/skills/` 下：
 
-- `.codex/skills/openspec-chat-router`
-- `.codex/skills/openspec-plan-issues`
-- `.codex/skills/openspec-dispatch-issue`
-- `.codex/skills/openspec-execute-issue`
-- `.codex/skills/openspec-reconcile-change`
-- `.codex/skills/openspec-subagent-team`
+- `openspec-chat-router`
+- `openspec-plan-issues`
+- `openspec-dispatch-issue`
+- `openspec-execute-issue`
+- `openspec-reconcile-change`
+- `openspec-subagent-team`
+
+例如用户在 `openspec init` 里选择 Claude Code，就会写入 `.claude/skills/openspec-chat-router`；如果选择 Codex，就会写入 `.codex/skills/openspec-chat-router`。如果仓库配置了多个工具，安装器会对每个已配置的 skills 目录同步安装这一组扩展。
+
+此外还会写入：
+
 - `openspec/issue-mode.json`
 
 并在需要时向目标项目 `.gitignore` 追加：

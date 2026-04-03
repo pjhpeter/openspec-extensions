@@ -27,7 +27,7 @@ type OpenSpecInitRequest = {
   force: boolean;
   profile: string;
   targetRepo: string;
-  tools: string;
+  tools?: string;
 };
 
 type OpenSpecInitStatus = {
@@ -52,7 +52,11 @@ function buildOpenSpecInitCommands(request: OpenSpecInitRequest): {
   fallbackCommand: string[];
   primaryCommand: string[];
 } {
-  const sharedArgs = ["init", "--tools", request.tools];
+  const sharedArgs = ["init"];
+  // 只在用户显式指定时透传，避免默认把 Codex 写进 OpenSpec 基础配置。
+  if (request.tools) {
+    sharedArgs.push("--tools", request.tools);
+  }
   if (request.profile) {
     sharedArgs.push("--profile", request.profile);
   }
@@ -111,7 +115,7 @@ function parseInitArgs(argv: string[]): InitOptions | null {
       help: { short: "h", type: "boolean", default: false },
       "openspec-force": { type: "boolean", default: false },
       "openspec-profile": { type: "string", default: "" },
-      "openspec-tools": { type: "string", default: "codex" },
+      "openspec-tools": { type: "string", default: "" },
       "skip-gitignore": { type: "boolean", default: false },
       "source-repo": { type: "string", default: "" },
       "target-repo": { type: "string", default: "" }
@@ -135,9 +139,6 @@ function parseInitArgs(argv: string[]): InitOptions | null {
   }
 
   const targetRepo = positionalTarget || optionTarget || ".";
-  if (!values["openspec-tools"].trim()) {
-    throw new Error("Missing required option: --openspec-tools");
-  }
 
   return {
     dryRun: values["dry-run"],
@@ -166,7 +167,7 @@ export function runInitCommand(
     force: parsed.openspecForce,
     profile: parsed.openspecProfile,
     targetRepo,
-    tools: parsed.openspecTools
+    tools: parsed.openspecTools || undefined
   };
   const commands = buildOpenSpecInitCommands(request);
 
@@ -198,7 +199,12 @@ export function runInitCommand(
     };
   }
 
-  const install = installExtensions(parsed, { skipOpenSpecPreflight: true });
+  // dry-run 且尚未初始化时，只有显式传了工具列表才能可靠推导目标 skills 目录。
+  const install = installExtensions(parsed, {
+    allowMissingSkillRoots: openspecInit.status === "planned",
+    plannedOpenSpecTools: openspecInit.status === "planned" ? parsed.openspecTools : undefined,
+    skipOpenSpecPreflight: true
+  });
   const result = {
     dry_run: parsed.dryRun,
     install,

@@ -15,10 +15,11 @@
 ## Upgrade Guidance
 
 - Node `>=20` is now the only runtime prerequisite for installation and execution.
-- Fresh target repos should use `openspec-ex init` from the repo root, or `openspec-extensions init <repo>` when scripting with an explicit path. The command tries `openspec init` first and falls back to `npx --yes @fission-ai/openspec@1.2.0 init --tools codex`.
+- Fresh target repos should use `openspec-ex init` from the repo root, or `openspec-extensions init <repo>` when scripting with an explicit path. The command tries `openspec init` first and falls back to `npx --yes @fission-ai/openspec@1.2.0 init`. Pass `--openspec-tools <tools>` only when you need to pin the upstream OpenSpec tool selection.
+- Extension skill installs now follow the skill roots already configured by OpenSpec (for example `.claude/skills` or `.codex/skills`) instead of assuming Codex.
 - The fallback package version is pinned intentionally so OpenSpec upgrades happen as an explicit compatibility decision instead of silently tracking `latest`.
 - Existing target repos should upgrade through `openspec-extensions install --target-repo <repo>` and, when replacing an older install, use `--force` so legacy Python skill directories are removed.
-- No workflow should depend on `python3 .codex/skills/...` command paths anymore.
+- No workflow should depend on `python3 <toolDir>/skills/...` command paths anymore.
 
 1. Ensure Node `>=20`.
 2. Install or expose the CLI through the package path you plan to ship.

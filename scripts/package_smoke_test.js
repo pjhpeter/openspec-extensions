@@ -7,14 +7,21 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const EXPECTED_SKILL_DIRS = [
-  ".codex/skills/openspec-chat-router",
-  ".codex/skills/openspec-plan-issues",
-  ".codex/skills/openspec-dispatch-issue",
-  ".codex/skills/openspec-execute-issue",
-  ".codex/skills/openspec-reconcile-change",
-  ".codex/skills/openspec-subagent-team",
+const EXTENSION_SKILL_NAMES = [
+  "openspec-chat-router",
+  "openspec-plan-issues",
+  "openspec-dispatch-issue",
+  "openspec-execute-issue",
+  "openspec-reconcile-change",
+  "openspec-subagent-team",
 ];
+const OPENSPEC_SKILL_MARKER = "openspec-onboard";
+
+function expectedSkillDirs(targetSkillRoots) {
+  return targetSkillRoots.flatMap((skillsRoot) =>
+    EXTENSION_SKILL_NAMES.map((skillName) => `${skillsRoot}/${skillName}`)
+  );
+}
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -35,10 +42,15 @@ function writeGitignore(repoRoot) {
   fs.writeFileSync(path.join(repoRoot, ".gitignore"), ".cache/\n");
 }
 
-function seedOpenSpecRepo(repoRoot) {
+function seedOpenSpecRepo(repoRoot, targetSkillRoots = [".claude/skills"]) {
   fs.mkdirSync(path.join(repoRoot, "openspec", "changes", "archive"), { recursive: true });
   fs.mkdirSync(path.join(repoRoot, "openspec", "specs"), { recursive: true });
   fs.writeFileSync(path.join(repoRoot, "openspec", "config.yaml"), "schema: spec-driven\n");
+  for (const skillsRoot of targetSkillRoots) {
+    const markerPath = path.join(repoRoot, skillsRoot, OPENSPEC_SKILL_MARKER, "SKILL.md");
+    fs.mkdirSync(path.dirname(markerPath), { recursive: true });
+    fs.writeFileSync(markerPath, "---\nname: openspec-onboard\n---\n");
+  }
 }
 
 function createTempDir(prefix) {
@@ -90,7 +102,7 @@ function verifyNpxInstall(repoRoot, tarballPath) {
   const targetRepo = createTempDir("opsx-smoke-npx-target-");
   try {
     writeGitignore(targetRepo);
-    seedOpenSpecRepo(targetRepo);
+    seedOpenSpecRepo(targetRepo, [".claude/skills"]);
     const stdout = run(
       "npx",
       ["--yes", "--package", tarballPath, "openspec-extensions", "install", "--target-repo", targetRepo, "--dry-run"],
@@ -99,7 +111,8 @@ function verifyNpxInstall(repoRoot, tarballPath) {
     const payload = JSON.parse(stdout);
 
     assert.equal(payload.dry_run, true);
-    assert.deepEqual(payload.installed_skill_dirs, EXPECTED_SKILL_DIRS);
+    assert.deepEqual(payload.target_skill_roots, [".claude/skills"]);
+    assert.deepEqual(payload.installed_skill_dirs, expectedSkillDirs([".claude/skills"]));
     assert.match(String(payload.source_repo), /node_modules\/openspec-extensions$/);
     assert.equal(String(payload.target_repo), fs.realpathSync.native(targetRepo));
 
@@ -119,14 +132,15 @@ function verifyInitDryRun(repoRoot, tarballPath) {
     writeGitignore(targetRepo);
     const stdout = run(
       "npx",
-      ["--yes", "--package", tarballPath, "openspec-ex", "init", targetRepo, "--dry-run"],
+      ["--yes", "--package", tarballPath, "openspec-ex", "init", targetRepo, "--dry-run", "--openspec-tools", "claude,codex"],
       { cwd: repoRoot }
     );
     const payload = JSON.parse(stdout);
 
     assert.equal(payload.dry_run, true);
     assert.equal(payload.openspec_init.status, "planned");
-    assert.deepEqual(payload.install.installed_skill_dirs, EXPECTED_SKILL_DIRS);
+    assert.deepEqual(payload.install.target_skill_roots, [".claude/skills", ".codex/skills"]);
+    assert.deepEqual(payload.install.installed_skill_dirs, expectedSkillDirs([".claude/skills", ".codex/skills"]));
 
     return {
       mode: "init_dry_run",
@@ -142,7 +156,7 @@ function verifyInstalledBin(tarballPath) {
   const targetRepo = createTempDir("opsx-smoke-install-target-");
   try {
     writeGitignore(targetRepo);
-    seedOpenSpecRepo(targetRepo);
+    seedOpenSpecRepo(targetRepo, [".claude/skills"]);
     run("npm", ["init", "-y"], { cwd: packageRepo });
     run("npm", ["install", tarballPath], { cwd: packageRepo });
 
@@ -164,9 +178,10 @@ function verifyInstalledBin(tarballPath) {
 
     assert.equal(payload.dry_run, false);
     assert.equal(payload.config.status, "installed");
-    assert.deepEqual(payload.installed_skill_dirs, EXPECTED_SKILL_DIRS);
-    assert.ok(fs.existsSync(path.join(targetRepo, ".codex", "skills", "openspec-chat-router", "SKILL.md")));
-    assert.ok(!fs.existsSync(path.join(targetRepo, ".codex", "skills", "openspec-shared")));
+    assert.deepEqual(payload.target_skill_roots, [".claude/skills"]);
+    assert.deepEqual(payload.installed_skill_dirs, expectedSkillDirs([".claude/skills"]));
+    assert.ok(fs.existsSync(path.join(targetRepo, ".claude", "skills", "openspec-chat-router", "SKILL.md")));
+    assert.ok(!fs.existsSync(path.join(targetRepo, ".claude", "skills", "openspec-shared")));
     assert.ok(fs.existsSync(path.join(targetRepo, "openspec", "issue-mode.json")));
     assert.ok(fs.existsSync(aliasBinPath));
     assert.deepEqual(

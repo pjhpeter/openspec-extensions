@@ -46,7 +46,7 @@ Use [`README.md`](./README.md) as the long-form product and workflow reference. 
 - Run `npm run build` whenever the CLI, packaging surface, or emitted `dist/` contents could change.
 - Run `npm run smoke:package` for installer changes, packaging changes, release work, or any change that might affect packed tarball contents or installed-bin behavior.
 - Put command routing coverage in [`tests/cli`](./tests/cli), workflow and filesystem behavior in [`tests/integration`](./tests/integration), and pure logic in [`tests/unit`](./tests/unit).
-- For skill or template edits, confirm installed relative paths still resolve under `.codex/skills/` in a disposable target repo.
+- For skill or template edits, confirm installed relative paths still resolve under the OpenSpec-configured `<toolDir>/skills/` directories in a disposable target repo.
 - When changing dispatch, reconcile, review, verify, archive, or worktree behavior, prefer integration coverage over unit-only coverage.
 
 ## Release & Publishing Guidelines

@@ -13,7 +13,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 
 const SOURCE_SKILLS_ROOT = "skills";
-const TARGET_SKILLS_ROOT = path.join(".codex", "skills");
+const LEGACY_CODEX_SKILLS_ROOT = path.join(".codex", "skills");
 const OPENSPEC_CONFIG_PATH = path.join("openspec", "config.yaml");
 const CONFIG_TEMPLATE_PATH = path.join("templates", "issue-mode.json");
 const TARGET_CONFIG_PATH = path.join("openspec", "issue-mode.json");
@@ -25,14 +25,54 @@ const SKILL_NAMES = [
   "openspec-reconcile-change",
   "openspec-subagent-team"
 ];
+const OPENSPEC_CORE_SKILL_NAMES = [
+  "openspec-explore",
+  "openspec-new-change",
+  "openspec-continue-change",
+  "openspec-apply-change",
+  "openspec-ff-change",
+  "openspec-sync-specs",
+  "openspec-archive-change",
+  "openspec-bulk-archive-change",
+  "openspec-verify-change",
+  "openspec-onboard",
+  "openspec-propose"
+];
+// 与 openspec@1.2.0 的 tool -> skillsDir 约定保持一致。
+const OPENSPEC_TOOL_SKILL_DIRS = {
+  "amazon-q": ".amazonq",
+  antigravity: ".agent",
+  auggie: ".augment",
+  claude: ".claude",
+  cline: ".cline",
+  codex: ".codex",
+  codebuddy: ".codebuddy",
+  continue: ".continue",
+  costrict: ".cospec",
+  crush: ".crush",
+  cursor: ".cursor",
+  factory: ".factory",
+  gemini: ".gemini",
+  "github-copilot": ".github",
+  iflow: ".iflow",
+  kilocode: ".kilocode",
+  kiro: ".kiro",
+  opencode: ".opencode",
+  pi: ".pi",
+  qoder: ".qoder",
+  qwen: ".qwen",
+  roocode: ".roo",
+  trae: ".trae",
+  windsurf: ".windsurf"
+} as const;
 const GITIGNORE_ENTRIES = [
   ".worktree/",
   "openspec/changes/*/runs/CHANGE-REVIEW.json",
   "openspec/changes/*/runs/CHANGE-VERIFY.json"
 ];
 const LEGACY_RUNTIME_PATHS = [
-  path.join(TARGET_SKILLS_ROOT, "openspec-shared"),
-  path.join(TARGET_SKILLS_ROOT, "openspec-monitor-worker"),
+  path.join(LEGACY_CODEX_SKILLS_ROOT, "openspec-shared"),
+  path.join(LEGACY_CODEX_SKILLS_ROOT, "openspec-monitor-worker"),
   path.join("scripts", "openspec_coordinator_heartbeat.py"),
   path.join("scripts", "openspec_coordinator_heartbeat_start.py"),
   path.join("scripts", "openspec_coordinator_heartbeat_status.py"),
@@ -82,6 +122,7 @@ export type InstallResult = {
     updated: boolean;
   };
   installed_skill_dirs: string[];
+  target_skill_roots: string[];
   legacy_runtime_cleanup: {
     reason: string;
     removed_paths: string[];
@@ -99,6 +140,12 @@ function commandRepoRoot(): string {
 
 function openspecInitSuggestion(targetRepo: string): string {
   return `openspec-ex init ${JSON.stringify(targetRepo)}`;
+}
+
+function openspecToolSkillRoots(): string[] {
+  return Array.from(new Set(Object.values(OPENSPEC_TOOL_SKILL_DIRS)))
+    .sort()
+    .map((toolDir) => relativePosix(path.join(toolDir, "skills")));
 }
 
 function ensureDirectory(targetPath: string, label: string): void {
@@ -255,10 +302,66 @@ function ensureOpenSpecInitialized(targetRepo: string): void {
   );
 }
 
+function detectOpenSpecSkillRoots(targetRepo: string): string[] {
+  const roots = openspecToolSkillRoots().filter((skillsRoot) =>
+    OPENSPEC_CORE_SKILL_NAMES.some((skillName) =>
+      existsSync(path.join(targetRepo, skillsRoot, skillName, "SKILL.md"))
+    )
+  );
+
+  return roots.sort();
+}
+
+function plannedSkillRootsFromOpenSpecTools(tools: string | undefined): string[] {
+  if (!tools) {
+    return [];
+  }
+
+  const normalized = tools.trim();
+  if (!normalized || normalized === "none") {
+    return [];
+  }
+  if (normalized === "all") {
+    return openspecToolSkillRoots();
+  }
+
+  const roots = new Set<string>();
+  for (const toolId of normalized.split(",").map((value) => value.trim()).filter(Boolean)) {
+    const toolDir = OPENSPEC_TOOL_SKILL_DIRS[toolId as keyof typeof OPENSPEC_TOOL_SKILL_DIRS];
+    if (!toolDir) {
+      continue;
+    }
+    roots.add(relativePosix(path.join(toolDir, "skills")));
+  }
+
+  return Array.from(roots).sort();
+}
+
+function resolveTargetSkillRoots(options: {
+  allowMissing: boolean;
+  plannedOpenSpecTools?: string;
+  targetRepo: string;
+}): string[] {
+  const detectedRoots = detectOpenSpecSkillRoots(options.targetRepo);
+  if (detectedRoots.length > 0) {
+    return detectedRoots;
+  }
+
+  const plannedRoots = plannedSkillRootsFromOpenSpecTools(options.plannedOpenSpecTools);
+  if (options.allowMissing) {
+    return plannedRoots;
+  }
+
+  throw new Error(
+    `Target repo has no OpenSpec-managed skill directories. Run \`${openspecInitSuggestion(options.targetRepo)}\` or re-run \`openspec init ${JSON.stringify(options.targetRepo)}\` and select at least one skill-based AI tool before installing extensions.`
+  );
+}
+
 function installSkillDirectories(options: {
   dryRun: boolean;
   force: boolean;
   sourceRepo: string;
+  targetSkillRoots: string[];
   targetRepo: string;
 }): {
   installedSkillDirs: string[];
@@ -269,28 +372,30 @@ function installSkillDirectories(options: {
   const overwrittenSkillDirs: string[] = [];
   const preservedSkillDirs: string[] = [];
 
-  for (const skillName of SKILL_NAMES) {
-    const sourceDir = path.join(options.sourceRepo, SOURCE_SKILLS_ROOT, skillName);
-    const targetRelativeDir = path.join(TARGET_SKILLS_ROOT, skillName);
-    const targetDir = path.join(options.targetRepo, targetRelativeDir);
-    const displayPath = relativePosix(targetRelativeDir);
+  for (const targetSkillsRoot of options.targetSkillRoots) {
+    for (const skillName of SKILL_NAMES) {
+      const sourceDir = path.join(options.sourceRepo, SOURCE_SKILLS_ROOT, skillName);
+      const targetRelativeDir = path.join(targetSkillsRoot, skillName);
+      const targetDir = path.join(options.targetRepo, targetRelativeDir);
+      const displayPath = relativePosix(targetRelativeDir);
 
-    if (existsSync(targetDir)) {
-      if (!options.force) {
-        preservedSkillDirs.push(displayPath);
-        continue;
+      if (existsSync(targetDir)) {
+        if (!options.force) {
+          preservedSkillDirs.push(displayPath);
+          continue;
+        }
+        overwrittenSkillDirs.push(displayPath);
+        if (!options.dryRun) {
+          rmSync(targetDir, { recursive: true, force: true });
+        }
       }
-      overwrittenSkillDirs.push(displayPath);
+
       if (!options.dryRun) {
-        rmSync(targetDir, { recursive: true, force: true });
+        mkdirSync(path.dirname(targetDir), { recursive: true });
+        cpSync(sourceDir, targetDir, { recursive: true });
       }
+      installedSkillDirs.push(displayPath);
     }
-
-    if (!options.dryRun) {
-      mkdirSync(path.dirname(targetDir), { recursive: true });
-      cpSync(sourceDir, targetDir, { recursive: true });
-    }
-    installedSkillDirs.push(displayPath);
   }
 
   return {
@@ -406,6 +511,8 @@ function parseInstallArgs(argv: string[]): InstallOptions | null {
 export function installExtensions(
   parsed: InstallOptions,
   options: {
+    allowMissingSkillRoots?: boolean;
+    plannedOpenSpecTools?: string;
     skipOpenSpecPreflight?: boolean;
   } = {}
 ): InstallResult {
@@ -421,11 +528,17 @@ export function installExtensions(
   if (!options.skipOpenSpecPreflight) {
     ensureOpenSpecInitialized(targetRepo);
   }
+  const targetSkillRoots = resolveTargetSkillRoots({
+    allowMissing: options.allowMissingSkillRoots ?? false,
+    plannedOpenSpecTools: options.plannedOpenSpecTools,
+    targetRepo
+  });
 
   const installResult = installSkillDirectories({
     dryRun: parsed.dryRun,
     force: parsed.force,
     sourceRepo,
+    targetSkillRoots,
     targetRepo
   });
   const legacyRuntimeCleanup = cleanupLegacyRuntime(targetRepo, {
@@ -472,6 +585,7 @@ export function installExtensions(
       updated: gitignore.addedEntries.length > 0
     },
     installed_skill_dirs: installResult.installedSkillDirs,
+    target_skill_roots: targetSkillRoots,
     legacy_runtime_cleanup: {
       reason: legacyRuntimeCleanup.reason,
       removed_paths: legacyRuntimeCleanup.removedPaths,
