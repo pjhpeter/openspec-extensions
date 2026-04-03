@@ -7,6 +7,14 @@ description: Generate source-of-truth dispatch artifacts for one OpenSpec issue,
 
 Use this skill in the coordinator session after issue docs have been created.
 
+## Session Startup Update Check
+
+- 如果这是当前主会话首次触发任一 `openspec-extensions` skill，先做一次非阻塞版本检查，再继续本 skill 的 dispatch 流程。
+- 版本检查只做 best-effort；检查失败时直接跳过，不要影响 issue dispatch。
+- 如果发现 npm 有更新版本，只打印一条高亮提醒，然后继续执行，不要把升级当成当前 dispatch 的 blocker。
+- 高亮提醒统一使用这句：
+  - `【更新提醒】检测到 openspec-extensions 有新版本。可先退出到命令行执行 \`npm update -g openspec-extensions\` 更新 openspec-extensions，再执行 \`openspec-ex install --target-repo /path/to/your/project --force --force-config\` 刷新当前仓库插件；当前流程继续，不受这条提醒影响。`
+
 Read `issue-mode-contract.md`, `issue-mode-config.md`, `issue-mode-rra.md`, and `router/coordinator-playbook.md` first.
 
 ## Workflow
