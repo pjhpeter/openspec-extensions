@@ -171,7 +171,7 @@ openspec/changes/*/runs/CHANGE-REVIEW.json
 7. worker 只写 issue-local progress 和 run 工件，不自合并、不自提交。
 8. 主会话用 `reconcile` 从磁盘工件收敛状态，并整理 change 级 backlog / round verdict。
 9. 主会话 review、merge、commit。
-10. 所有必要 issue 都 accept 后，先对当前 change 修改的代码运行一次 `/review`，再做 change 级 acceptance，然后进入 `verify` / `archive`。
+10. 所有必要 issue 都 accept 后，先对当前分支未 push 的代码运行一次 change-level `/review`（排除 `openspec/changes/**`），再做 change 级 acceptance，然后进入 `verify` / `archive`。
 
 ## Issue Workspace 模型
 
@@ -263,7 +263,7 @@ flowchart TD
 4. review / verify / archive 收尾
 
 ```text
-先对当前 change 修改的代码执行 /review；review 通过后再检查当前 change 是否可以归档；如果 verify 通过，就同步 spec 并归档。
+先对当前分支未 push 的代码执行 change-level /review（排除 `openspec/changes/**`）；review 通过后再检查当前 change 是否可以归档；如果 verify 通过，就同步 spec 并归档。
 ```
 
 5. 如果中途会话返回过早，继续推进
@@ -402,7 +402,7 @@ flowchart TD
   - `auto_accept_spec_readiness`：proposal / design 经过 1 个设计作者和 2 个设计评审组成的 design review，并且 gate-bearing 设计评审 subagent 全部完成后，自动接受 spec-readiness，不再等待人工评审签字，直接进入任务拆分 / issue planning
   - `auto_accept_issue_planning`：`tasks.md` 以及 INDEX / ISSUE 文档达到可派发状态，并且当前 phase 的 gate-bearing planning/check/review subagent 全部完成后，自动接受 issue planning，不再等待人工评审签字；但在开始首个 issue execution 前，coordinator 仍会先把 `proposal.md` / `design.md` / `tasks.md` / `issues/INDEX.md` / `ISSUE-*.md` 提交成一次独立 commit，再派发当前 round 的 issue
   - `auto_accept_issue_review`：issue 进入 `review_required` 且 issue-local validation 全部通过，并且当前 round 的 gate-bearing check/review subagent 全部完成后，coordinator 自动接受并 merge/commit，然后进入下一个 issue 或 change acceptance。默认安装配置开启它，用来保证每个 issue 都先落成一次提交
-  - `auto_accept_change_acceptance`：change acceptance 满足放行条件、gate-bearing review subagent 全部完成后自动接受该 gate 并进入 verify；但前提仍然是 change-level `/review` 已通过
+  - `auto_accept_change_acceptance`：change acceptance 满足放行条件、gate-bearing review subagent 全部完成后自动接受该 gate 并进入 verify；但前提仍然是 change-level `/review` 已通过，且该 review 覆盖的是当前分支未 push 的代码并排除 `openspec/changes/**`
   - `auto_archive_after_verify`：verify 通过后自动进入 archive
 - `auto_accept_*` 只跳过人工签字，不跳过 gate-bearing subagent 的完成等待，也不允许提前关闭这些 subagent
 - 在首个 issue 开始前，coordinator 还必须先创建一次规划文档提交；这是独立于 issue acceptance commit 的前置边界
@@ -494,7 +494,7 @@ flowchart TD
   - spec-readiness 中的设计评审自动接受后进入任务拆分 / issue planning
   - issue planning 自动接受后，先提交当前 change 的规划文档，再派发当前 round 的 issue，而不是停在 `control-plane ready`
   - 单个 issue 自动接受并 merge/commit 后进入下一个 issue 或 change acceptance
-  - 所有 issues 完成后先运行 change-level `/review`
+  - 所有 issues 完成后先运行 change-level `/review`，范围是当前分支未 push 的代码并排除 `openspec/changes/**`
   - change acceptance 自动接受后进入 verify
   - verify 通过后自动 archive
 - 上面这些“自动接受”仍然要求当前 phase 的 gate-bearing subagent 已全部完成并收齐 verdict

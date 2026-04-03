@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { reviewChange } from "../../src/commands/review";
 import { verifyChange } from "../../src/commands/verify";
 
 function withTempDir(run: (repoRoot: string) => void): void {
@@ -13,6 +15,24 @@ function withTempDir(run: (repoRoot: string) => void): void {
   } finally {
     fs.rmSync(repoRoot, { recursive: true, force: true });
   }
+}
+
+function git(repoRoot: string, ...args: string[]): string {
+  return execFileSync("git", args, { cwd: repoRoot, encoding: "utf8" }).trim();
+}
+
+function initGitRepo(repoRoot: string): void {
+  git(repoRoot, "init");
+  git(repoRoot, "config", "user.name", "Test User");
+  git(repoRoot, "config", "user.email", "test@example.com");
+}
+
+function initGitRepoWithUpstream(repoRoot: string): string {
+  const remoteRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-verify-change-remote-"));
+  execFileSync("git", ["init", "--bare", remoteRoot], { encoding: "utf8" });
+  initGitRepo(repoRoot);
+  git(repoRoot, "remote", "add", "origin", remoteRoot);
+  return remoteRoot;
 }
 
 function writeIssueDoc(repoRoot: string, change: string, issueId = "ISSUE-001"): void {
@@ -104,5 +124,48 @@ test("verifyChange passes after review and validation", () => {
     assert.equal(payload.status, "passed");
     assert.equal(payload.change_review.current, true);
     assert.equal(payload.change_review.status, "passed");
+  });
+});
+
+test("verifyChange rejects stale review when code changed after review", () => {
+  withTempDir((repoRoot) => {
+    const remoteRoot = initGitRepoWithUpstream(repoRoot);
+    try {
+      const changeDir = path.join(repoRoot, "openspec", "changes", "demo-change");
+      fs.mkdirSync(path.join(repoRoot, "src"), { recursive: true });
+      fs.mkdirSync(changeDir, { recursive: true });
+      fs.writeFileSync(path.join(changeDir, "tasks.md"), "");
+      writeIssueDoc(repoRoot, "demo-change");
+      writeIssueProgress(repoRoot, "demo-change", "completed");
+      writeIssueModeConfig(repoRoot);
+      fs.writeFileSync(path.join(repoRoot, "src", "demo.ts"), "export const demo = 1;\n");
+      git(repoRoot, "add", ".");
+      git(repoRoot, "commit", "-m", "init");
+      git(repoRoot, "branch", "-M", "main");
+      git(repoRoot, "push", "-u", "origin", "main");
+
+      fs.writeFileSync(path.join(repoRoot, "src", "demo.ts"), "export const demo = 2;\n");
+      git(repoRoot, "add", "src/demo.ts");
+      git(repoRoot, "commit", "-m", "local review target");
+      reviewChange({
+        change: "demo-change",
+        dryRun: false,
+        repoRoot,
+        reviewCommand: "printf 'VERDICT: pass\\n'"
+      });
+
+      fs.writeFileSync(path.join(repoRoot, "src", "demo.ts"), "export const demo = 3;\n");
+
+      const payload = verifyChange({
+        change: "demo-change",
+        dryRun: false,
+        repoRoot
+      }) as { status: string; summary: string };
+
+      assert.equal(payload.status, "failed");
+      assert.match(payload.summary, /\/review is stale/);
+    } finally {
+      fs.rmSync(remoteRoot, { recursive: true, force: true });
+    }
   });
 });

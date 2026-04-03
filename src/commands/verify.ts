@@ -133,7 +133,7 @@ export function verifyChange(args: ParsedVerifyArgs): JsonRecord {
   const tasksPath = path.join(changeDir, "tasks.md");
   const remainingTasks = incompleteTasks(tasksPath);
   const reviewPayload = readJson(reviewArtifactPath(args.repoRoot, args.change));
-  const reviewCurrent = Object.keys(reviewPayload).length > 0 && reviewArtifactIsCurrent(issues, reviewPayload);
+  const reviewCurrent = Object.keys(reviewPayload).length > 0 && reviewArtifactIsCurrent(args.repoRoot, issues, reviewPayload);
   const reviewStatus = String(reviewPayload.status ?? "").trim();
   const reviewPassed = reviewCurrent && reviewStatus === "passed";
   const config = loadIssueModeConfig(args.repoRoot);
@@ -185,6 +185,10 @@ export function verifyChange(args: ParsedVerifyArgs): JsonRecord {
       status: reviewStatus,
       summary: String(reviewPayload.summary ?? "").trim()
     },
+    review_scope:
+      reviewPayload.review_scope && typeof reviewPayload.review_scope === "object" && !Array.isArray(reviewPayload.review_scope)
+        ? reviewPayload.review_scope
+        : {},
     tasks_sync: tasksSync,
     remaining_tasks: remainingTasks,
     validation: validationResults,

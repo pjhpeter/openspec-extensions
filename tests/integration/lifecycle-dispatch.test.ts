@@ -390,7 +390,7 @@ validation:
     const dispatchText = fs.readFileSync(path.join(repoRoot, payload.lifecycle_dispatch_path), "utf8");
 
     assert.equal(payload.phase, "change_acceptance");
-    assert.match(payload.phase_reason, /需先对当前 change 修改的代码运行 \/review/);
+    assert.match(payload.phase_reason, /需先对当前分支未 push 的代码运行 change-level \/review/);
     assert.match(dispatchText, /openspec-extensions review change --repo-root/);
     assert.match(dispatchText, /只有 change-level \/review 通过后，才允许继续进入 verify/);
     assert.match(dispatchText, /任一 required gate-bearing subagent 仍在运行时，不允许提前通过当前 phase/);

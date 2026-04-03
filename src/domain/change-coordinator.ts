@@ -1,13 +1,25 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 
 export const REVIEW_ARTIFACT_FILE_NAME = "CHANGE-REVIEW.json";
 export const VERIFY_ARTIFACT_FILE_NAME = "CHANGE-VERIFY.json";
 
 const TASK_ID_PATTERN = "\\d+(?:\\.\\d+)+";
+const REVIEW_EXCLUDED_PATH = "openspec/changes";
 
 export type JsonRecord = Record<string, unknown>;
+export type ReviewScope = {
+  base_revision: string;
+  changed_files: string[];
+  excluded_changed_files: string[];
+  fingerprint: string;
+  has_reviewable_changes: boolean;
+  head_revision: string;
+  patch: Buffer;
+  upstream_ref: string;
+};
 
 function pad2(value: number): string {
   return String(value).padStart(2, "0");
@@ -85,6 +97,141 @@ function runCommand(cmd: string[], cwd: string, check = true): SpawnSyncReturns<
     throw new Error(message);
   }
   return process;
+}
+
+function runBinaryCommand(
+  cmd: string[],
+  cwd: string,
+  check = true,
+  okCodes: number[] = [0]
+): Buffer {
+  const process = spawnSync(cmd[0] as string, cmd.slice(1), { cwd });
+  const exitCode = process.status ?? (process.error ? 1 : 0);
+  const stdout = Buffer.isBuffer(process.stdout) ? process.stdout : Buffer.from(process.stdout ?? "");
+  const stderr = Buffer.isBuffer(process.stderr)
+    ? process.stderr.toString("utf8")
+    : (process.stderr ?? process.error?.message ?? "");
+
+  if (check && !okCodes.includes(exitCode)) {
+    throw new Error(stderr.trim() || stdout.toString("utf8").trim() || "command failed");
+  }
+  return stdout;
+}
+
+function splitNullOutput(data: Buffer): string[] {
+  return data
+    .toString("utf8")
+    .split("\u0000")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function uniqueSortedPaths(paths: string[]): string[] {
+  return [...new Set(paths.map((item) => item.trim()).filter(Boolean))].sort();
+}
+
+function reviewPathspecArgs(): string[] {
+  return ["--", ".", `:(exclude)${REVIEW_EXCLUDED_PATH}/**`];
+}
+
+function hashReviewScope(baseRevision: string, upstreamRef: string, patch: Buffer): string {
+  return createHash("sha256")
+    .update(`upstream:${upstreamRef}\nbase:${baseRevision}\n`)
+    .update(patch)
+    .digest("hex");
+}
+
+function buildUntrackedPatch(repoRoot: string, paths: string[]): Buffer {
+  const patches: Buffer[] = [];
+  for (const relativePath of paths) {
+    const candidate = path.join(repoRoot, relativePath);
+    if (!fs.existsSync(candidate) || !fs.statSync(candidate).isFile()) {
+      continue;
+    }
+    const patch = runBinaryCommand(
+      ["git", "diff", "--binary", "--no-index", "--", "/dev/null", relativePath],
+      repoRoot,
+      false,
+      [0, 1]
+    );
+    if (patch.length > 0) {
+      patches.push(patch);
+    }
+  }
+  return Buffer.concat(patches);
+}
+
+function readScopeFingerprint(artifact: JsonRecord): string {
+  const payload = artifact.review_scope;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return "";
+  }
+  return String((payload as JsonRecord).fingerprint ?? "").trim();
+}
+
+export function reviewScopeToJson(scope: ReviewScope): JsonRecord {
+  return {
+    upstream_ref: scope.upstream_ref,
+    base_revision: scope.base_revision,
+    head_revision: scope.head_revision,
+    fingerprint: scope.fingerprint,
+    changed_files: scope.changed_files,
+    excluded_changed_files: scope.excluded_changed_files,
+    has_reviewable_changes: scope.has_reviewable_changes
+  };
+}
+
+export function buildReviewScope(repoRoot: string): ReviewScope {
+  const upstreamProcess = runCommand(
+    ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+    repoRoot,
+    false
+  );
+  const upstreamRef = upstreamProcess.stdout.trim();
+  if (upstreamProcess.status !== 0 || !upstreamRef) {
+    throw new Error("Current branch has no upstream tracking branch; cannot determine unpushed review scope.");
+  }
+
+  const headRevision = runCommand(["git", "rev-parse", "HEAD"], repoRoot).stdout.trim();
+  const baseRevision = runCommand(["git", "merge-base", "HEAD", "@{upstream}"], repoRoot).stdout.trim();
+  const trackedPatch = runBinaryCommand(
+    ["git", "diff", "--binary", "--find-renames", baseRevision, ...reviewPathspecArgs()],
+    repoRoot
+  );
+  const trackedFiles = splitNullOutput(
+    runBinaryCommand(["git", "diff", "--name-only", "-z", "--find-renames", baseRevision, ...reviewPathspecArgs()], repoRoot)
+  );
+  const includedUntrackedFiles = splitNullOutput(
+    runBinaryCommand(
+      ["git", "ls-files", "-z", "--others", "--exclude-standard", ...reviewPathspecArgs()],
+      repoRoot
+    )
+  );
+  const excludedTrackedFiles = splitNullOutput(
+    runBinaryCommand(
+      ["git", "diff", "--name-only", "-z", "--find-renames", baseRevision, "--", REVIEW_EXCLUDED_PATH],
+      repoRoot
+    )
+  );
+  const excludedUntrackedFiles = splitNullOutput(
+    runBinaryCommand(
+      ["git", "ls-files", "-z", "--others", "--exclude-standard", "--", REVIEW_EXCLUDED_PATH],
+      repoRoot
+    )
+  );
+  const untrackedPatch = buildUntrackedPatch(repoRoot, includedUntrackedFiles);
+  const patch = Buffer.concat([trackedPatch, untrackedPatch]);
+
+  return {
+    upstream_ref: upstreamRef,
+    base_revision: baseRevision,
+    head_revision: headRevision,
+    patch,
+    changed_files: uniqueSortedPaths([...trackedFiles, ...includedUntrackedFiles]),
+    excluded_changed_files: uniqueSortedPaths([...excludedTrackedFiles, ...excludedUntrackedFiles]),
+    has_reviewable_changes: patch.length > 0,
+    fingerprint: hashReviewScope(baseRevision, upstreamRef, patch)
+  };
 }
 
 export function extractStatusPaths(line: string): string[] {
@@ -318,10 +465,36 @@ export function artifactIsCurrent(issues: JsonRecord[], artifact: JsonRecord): b
   return verifiedAt >= latestIssueAt;
 }
 
-export function reviewArtifactIsCurrent(issues: JsonRecord[], artifact: JsonRecord): boolean {
-  return artifactIsCurrent(issues, artifact);
+export function reviewArtifactIsCurrent(repoRoot: string, issues: JsonRecord[], artifact: JsonRecord): boolean {
+  if (!artifactIsCurrent(issues, artifact)) {
+    return false;
+  }
+
+  const fingerprint = readScopeFingerprint(artifact);
+  if (!fingerprint) {
+    return true;
+  }
+
+  try {
+    return buildReviewScope(repoRoot).fingerprint === fingerprint;
+  } catch {
+    return false;
+  }
 }
 
-export function verificationArtifactIsCurrent(issues: JsonRecord[], artifact: JsonRecord): boolean {
-  return artifactIsCurrent(issues, artifact);
+export function verificationArtifactIsCurrent(repoRoot: string, issues: JsonRecord[], artifact: JsonRecord): boolean {
+  if (!artifactIsCurrent(issues, artifact)) {
+    return false;
+  }
+
+  const fingerprint = readScopeFingerprint(artifact);
+  if (!fingerprint) {
+    return true;
+  }
+
+  try {
+    return buildReviewScope(repoRoot).fingerprint === fingerprint;
+  } catch {
+    return false;
+  }
 }

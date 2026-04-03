@@ -7,10 +7,12 @@ import { execFileSync } from "node:child_process";
 
 import {
   artifactIsCurrent,
+  buildReviewScope,
   incompleteTasks,
   nowIso,
   planningDocStatus,
   reviewArtifactIsCurrent,
+  reviewScopeToJson,
   syncTasksForIssues
 } from "../../src/domain/change-coordinator";
 
@@ -31,6 +33,14 @@ function initGitRepo(repoRoot: string): void {
   git(repoRoot, "init");
   git(repoRoot, "config", "user.name", "Test User");
   git(repoRoot, "config", "user.email", "test@example.com");
+}
+
+function initGitRepoWithUpstream(repoRoot: string): string {
+  const remoteRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-change-coordinator-remote-"));
+  execFileSync("git", ["init", "--bare", remoteRoot], { encoding: "utf8" });
+  initGitRepo(repoRoot);
+  git(repoRoot, "remote", "add", "origin", remoteRoot);
+  return remoteRoot;
 }
 
 test("planningDocStatus reports only planning-doc dirty paths", () => {
@@ -113,13 +123,56 @@ test("artifact freshness compares artifact time against latest issue time", () =
     { issue_id: "ISSUE-001", updated_at: "2026-03-30T10:00:00+08:00" },
     { issue_id: "ISSUE-002", updated_at: "2026-03-30T10:05:00+08:00" }
   ];
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-change-coordinator-no-git-"));
 
-  assert.equal(
-    artifactIsCurrent(issues, { updated_at: "2026-03-30T10:06:00+08:00" }),
-    true
-  );
-  assert.equal(
-    reviewArtifactIsCurrent(issues, { updated_at: "2026-03-30T10:04:00+08:00" }),
-    false
-  );
+  try {
+    assert.equal(
+      artifactIsCurrent(issues, { updated_at: "2026-03-30T10:06:00+08:00" }),
+      true
+    );
+    assert.equal(
+      reviewArtifactIsCurrent(repoRoot, issues, { updated_at: "2026-03-30T10:04:00+08:00" }),
+      false
+    );
+  } finally {
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test("review scope fingerprint ignores openspec changes but catches code drift", () => {
+  withTempDir((repoRoot) => {
+    const remoteRoot = initGitRepoWithUpstream(repoRoot);
+    try {
+      const changeDir = path.join(repoRoot, "openspec", "changes", "demo-change");
+      fs.mkdirSync(path.join(repoRoot, "src"), { recursive: true });
+      fs.mkdirSync(changeDir, { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, "src", "demo.ts"), "export const demo = 1;\n");
+      fs.writeFileSync(path.join(changeDir, "proposal.md"), "# proposal\n");
+      git(repoRoot, "add", ".");
+      git(repoRoot, "commit", "-m", "init");
+      git(repoRoot, "branch", "-M", "main");
+      git(repoRoot, "push", "-u", "origin", "main");
+
+      fs.writeFileSync(path.join(repoRoot, "src", "demo.ts"), "export const demo = 2;\n");
+      git(repoRoot, "add", "src/demo.ts");
+      git(repoRoot, "commit", "-m", "local code change");
+      fs.writeFileSync(path.join(changeDir, "proposal.md"), "# updated proposal\n");
+
+      const issues = [{ issue_id: "ISSUE-001", updated_at: "2026-03-30T10:00:00+08:00" }];
+      const artifact = {
+        updated_at: "2026-03-30T10:06:00+08:00",
+        review_scope: reviewScopeToJson(buildReviewScope(repoRoot))
+      };
+
+      assert.equal(reviewArtifactIsCurrent(repoRoot, issues, artifact), true);
+
+      fs.writeFileSync(path.join(changeDir, "proposal.md"), "# excluded docs only\n");
+      assert.equal(reviewArtifactIsCurrent(repoRoot, issues, artifact), true);
+
+      fs.writeFileSync(path.join(repoRoot, "src", "demo.ts"), "export const demo = 3;\n");
+      assert.equal(reviewArtifactIsCurrent(repoRoot, issues, artifact), false);
+    } finally {
+      fs.rmSync(remoteRoot, { recursive: true, force: true });
+    }
+  });
 });

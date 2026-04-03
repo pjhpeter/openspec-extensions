@@ -196,7 +196,7 @@ function collectIssues(repoRoot: string, change: string): IssuePayload[] {
 
 function currentVerifyState(repoRoot: string, change: string, issues: IssuePayload[]): JsonRecord {
   const artifact = readJson(verifyArtifactPath(repoRoot, change));
-  const current = Object.keys(artifact).length > 0 && verificationArtifactIsCurrent(issues, artifact);
+  const current = Object.keys(artifact).length > 0 && verificationArtifactIsCurrent(repoRoot, issues, artifact);
   const status = String(artifact.status ?? "").trim();
   return {
     artifact,
@@ -209,7 +209,7 @@ function currentVerifyState(repoRoot: string, change: string, issues: IssuePaylo
 
 function currentReviewState(repoRoot: string, change: string, issues: IssuePayload[]): JsonRecord {
   const artifact = readJson(reviewArtifactPath(repoRoot, change));
-  const current = Object.keys(artifact).length > 0 && reviewArtifactIsCurrent(issues, artifact);
+  const current = Object.keys(artifact).length > 0 && reviewArtifactIsCurrent(repoRoot, issues, artifact);
   const status = String(artifact.status ?? "").trim();
   return {
     artifact,
@@ -297,7 +297,7 @@ function determinePhase(
     if (Object.keys(reviewState.artifact as JsonRecord).length > 0) {
       return ["change_acceptance", "", "全部 issue 已完成，但 change-level /review 工件已过期，需要重新运行后再决定是否 verify。"];
     }
-    return ["change_acceptance", "", "全部 issue 已完成，需先对当前 change 修改的代码运行 /review，然后才能进入 verify。"];
+    return ["change_acceptance", "", "全部 issue 已完成，需先对当前分支未 push 的代码运行 change-level /review（排除 openspec/changes/**），然后才能进入 verify。"];
   }
 
   const verifyState = currentVerifyState(repoRoot, change, issues);
@@ -349,7 +349,7 @@ function phaseGoal(phase: string, change: string, issueId: string, controlState:
     return `推进 ${issueId || "当前 issue"} 完成开发、检查、修复、审查回合。`;
   }
   if (phase === "change_acceptance") {
-    return `先对 ${change} 当前代码运行 /review，再确认它已达到 verify / archive 前的 change 级通过条件。`;
+    return `先对 ${change} 当前分支未 push 的代码运行 change-level /review（排除 openspec/changes/**），再确认它已达到 verify / archive 前的 change 级通过条件。`;
   }
   if (phase === "change_verify") {
     return `在已通过 change-level /review 后，对 ${change} 运行 change 级 verify，并处理验证失败或遗漏项。`;
@@ -776,7 +776,7 @@ function renderPhasePacket(
           ]
         : phase === "change_acceptance"
           ? [
-              "change acceptance 先要求 coordinator 对当前 change 修改的代码运行 change-level /review，并落盘 `runs/CHANGE-REVIEW.json`。",
+              "change acceptance 先要求 coordinator 对当前分支未 push 的代码运行 change-level /review（排除 `openspec/changes/**`），并落盘 `runs/CHANGE-REVIEW.json`。",
               "开发组只补 change-level review 或 acceptance 暴露出的缺口，不再随意扩 issue scope。",
               "change acceptance 默认不是编码 phase；使用 1 个开发 seat + 1 个 checker + 1 个 reviewer 的轻量 gate，全部使用 `reasoning_effort=medium`。",
               "检查组确认已接受 issue 能覆盖请求范围。",
@@ -787,7 +787,7 @@ function renderPhasePacket(
             ]
           : phase === "change_verify"
             ? [
-                "进入 verify 前，change-level /review 必须已经通过；不要跳过这一步直接运行 verify。",
+                "进入 verify 前，change-level /review 必须已经通过；该 review 的范围是当前分支未 push 的代码，并排除 `openspec/changes/**`。",
                 "开发组只处理 verify 失败所暴露的缺口，不再随意新增 issue。",
                 "verify 默认使用 2 个开发 seat + 1 个 checker + 1 个 reviewer 的快路径；如果 verify 暴露出代码/测试缺口，开发组 subagent 使用 `reasoning_effort=xhigh`，检查组和审查组使用 `reasoning_effort=medium`。",
                 "检查组负责运行并检查 repo validation、tasks completion、verify artifact。",

@@ -214,7 +214,7 @@ function issueValidationPassed(issue: IssuePayload): boolean {
 
 function currentReviewState(repoRoot: string, change: string, issues: IssuePayload[]): JsonRecord {
   const artifact = readJson(reviewArtifactPath(repoRoot, change));
-  const current = Object.keys(artifact).length > 0 && reviewArtifactIsCurrent(issues, artifact);
+  const current = Object.keys(artifact).length > 0 && reviewArtifactIsCurrent(repoRoot, issues, artifact);
   const status = String(artifact.status ?? "").trim();
   return {
     artifact,
@@ -314,7 +314,7 @@ function determineBaseNextAction(
     }
 
     const verifyArtifact = readJson(verifyArtifactPath(repoRoot, change));
-    if (Object.keys(verifyArtifact).length > 0 && verificationArtifactIsCurrent(issues, verifyArtifact)) {
+    if (Object.keys(verifyArtifact).length > 0 && verificationArtifactIsCurrent(repoRoot, issues, verifyArtifact)) {
       if (verifyArtifact.status === "passed") {
         if (autoArchiveAfterVerify) {
           return ["archive_change", "", "全部 issue 已完成且 change 已通过 verify，配置允许自动 archive。"];

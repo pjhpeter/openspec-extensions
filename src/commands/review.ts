@@ -1,9 +1,20 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { parseArgs } from "node:util";
 
-import { nowIso, readJson, reviewArtifactPath, writeJson, type JsonRecord } from "../domain/change-coordinator";
+import {
+  buildReviewScope,
+  nowIso,
+  readJson,
+  reviewArtifactPath,
+  reviewScopeToJson,
+  writeJson,
+  type JsonRecord,
+  type ReviewScope
+} from "../domain/change-coordinator";
+import { runGitCommand } from "../git/command";
 
 const DEFAULT_REVIEW_COMMAND = "codex review --uncommitted -";
 const VERDICT_PATTERN = /^VERDICT:\s*(pass|fail)\s*$/i;
@@ -98,8 +109,9 @@ function collectIssueProgress(changeDir: string): IssueProgressPayload[] {
 function buildReviewPrompt(change: string, completedIssueIds: string[]): string {
   const issueContext = completedIssueIds.length > 0 ? completedIssueIds.join(", ") : "none";
   return (
-    `Review the current uncommitted code changes for OpenSpec change \`${change}\` before verify.\n` +
+    `Review the current unpushed code changes for OpenSpec change \`${change}\` before verify.\n` +
     `Completed issues in scope: ${issueContext}.\n` +
+    "Files under `openspec/changes/` are excluded from this review scope.\n" +
     "Focus on correctness, regressions, missing validation, and blockers that must be fixed before verify.\n" +
     "Respond in plain text.\n" +
     "The first line must be exactly one of:\n" +
@@ -138,6 +150,35 @@ function runReviewProcess(repoRoot: string, prompt: string, reviewCommand: strin
     encoding: "utf8",
     input: prompt
   });
+}
+
+function createReviewWorkspace(repoRoot: string, scope: ReviewScope): string {
+  const reviewWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-review-worktree-"));
+  try {
+    runGitCommand(["worktree", "add", "--detach", reviewWorkspace, scope.base_revision], { cwd: repoRoot });
+    if (scope.patch.length > 0) {
+      runGitCommand(["apply", "--index", "--3way"], {
+        cwd: reviewWorkspace,
+        input: scope.patch
+      });
+    }
+    return reviewWorkspace;
+  } catch (error) {
+    runGitCommand(["worktree", "remove", "--force", reviewWorkspace], {
+      check: false,
+      cwd: repoRoot
+    });
+    fs.rmSync(reviewWorkspace, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+function removeReviewWorkspace(repoRoot: string, reviewWorkspace: string): void {
+  runGitCommand(["worktree", "remove", "--force", reviewWorkspace], {
+    check: false,
+    cwd: repoRoot
+  });
+  fs.rmSync(reviewWorkspace, { recursive: true, force: true });
 }
 
 export function reviewChange(args: ParsedReviewArgs): JsonRecord {
@@ -183,30 +224,71 @@ export function reviewChange(args: ParsedReviewArgs): JsonRecord {
     artifact.stdout_tail = [];
     artifact.stderr_tail = [];
   } else {
-    const process = runReviewProcess(args.repoRoot, reviewPrompt, reviewCommand);
-    const stdout = process.stdout ?? "";
-    const stderr = process.stderr ?? process.error?.message ?? "";
-    const exitCode = process.status ?? (process.error ? 1 : 0);
-    const verdict = parseVerdict(stdout);
-
-    let status = "failed";
-    let summary = `Change ${args.change} code review command failed.`;
-    if (exitCode === 0 && verdict === "pass") {
-      status = "passed";
-      summary = `Change ${args.change} passed coordinator code review.`;
-    } else if (exitCode === 0 && verdict === "fail") {
-      summary = `Change ${args.change} code review found blocking issues.`;
-    } else if (exitCode === 0) {
-      summary = `Change ${args.change} code review completed but did not return a parseable verdict.`;
+    let scope: ReviewScope | null = null;
+    try {
+      scope = buildReviewScope(args.repoRoot);
+      artifact.review_scope = reviewScopeToJson(scope);
+    } catch (error) {
+      artifact.status = "failed";
+      artifact.summary = `Change ${args.change} cannot run change-level code review: ${error instanceof Error ? error.message : String(error)}.`;
+      artifact.verdict = "fail";
+      artifact.review_command = reviewCommand;
+      artifact.exit_code = null;
+      artifact.stdout_tail = [];
+      artifact.stderr_tail = [];
     }
 
-    artifact.status = status;
-    artifact.summary = summary;
-    artifact.verdict = verdict;
-    artifact.review_command = reviewCommand;
-    artifact.exit_code = exitCode;
-    artifact.stdout_tail = tailLines(stdout);
-    artifact.stderr_tail = tailLines(stderr);
+    if (scope) {
+      if (!scope.has_reviewable_changes) {
+        artifact.status = "passed";
+        artifact.summary = `Change ${args.change} has no reviewable unpushed code outside openspec/changes/.`;
+        artifact.verdict = "pass";
+        artifact.review_command = reviewCommand;
+        artifact.exit_code = 0;
+        artifact.stdout_tail = [];
+        artifact.stderr_tail = [];
+      } else {
+        try {
+          const reviewWorkspace = createReviewWorkspace(args.repoRoot, scope);
+          try {
+            const process = runReviewProcess(reviewWorkspace, reviewPrompt, reviewCommand);
+            const stdout = process.stdout ?? "";
+            const stderr = process.stderr ?? process.error?.message ?? "";
+            const exitCode = process.status ?? (process.error ? 1 : 0);
+            const verdict = parseVerdict(stdout);
+
+            let status = "failed";
+            let summary = `Change ${args.change} code review command failed.`;
+            if (exitCode === 0 && verdict === "pass") {
+              status = "passed";
+              summary = `Change ${args.change} passed coordinator code review.`;
+            } else if (exitCode === 0 && verdict === "fail") {
+              summary = `Change ${args.change} code review found blocking issues.`;
+            } else if (exitCode === 0) {
+              summary = `Change ${args.change} code review completed but did not return a parseable verdict.`;
+            }
+
+            artifact.status = status;
+            artifact.summary = summary;
+            artifact.verdict = verdict;
+            artifact.review_command = reviewCommand;
+            artifact.exit_code = exitCode;
+            artifact.stdout_tail = tailLines(stdout);
+            artifact.stderr_tail = tailLines(stderr);
+          } finally {
+            removeReviewWorkspace(args.repoRoot, reviewWorkspace);
+          }
+        } catch (error) {
+          artifact.status = "failed";
+          artifact.summary = `Change ${args.change} cannot prepare review workspace: ${error instanceof Error ? error.message : String(error)}.`;
+          artifact.verdict = "fail";
+          artifact.review_command = reviewCommand;
+          artifact.exit_code = null;
+          artifact.stdout_tail = [];
+          artifact.stderr_tail = [];
+        }
+      }
+    }
   }
 
   if (!args.dryRun) {
