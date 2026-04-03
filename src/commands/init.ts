@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
@@ -15,6 +15,7 @@ const OPENSPEC_NPM_PACKAGE = "@fission-ai/openspec@1.2.0";
 const EXTENSIONS_NPM_PACKAGE = "openspec-extensions";
 const SELF_UPDATE_SKIP_ENV = "OPENSPEC_EXTENSIONS_SKIP_SELF_UPDATE_CHECK";
 const PACKAGE_VERSION = readPackageVersion();
+const ISSUE_MODE_CONFIG_PATH = path.join("openspec", "issue-mode.json");
 
 const INIT_HELP_TEXT = `Usage:
   openspec-extensions init [path] [--source-repo <path>] [--force] [--force-config] [--skip-gitignore] [--dry-run] [--openspec-tools <tools>] [--openspec-profile <profile>] [--openspec-force]
@@ -22,8 +23,11 @@ const INIT_HELP_TEXT = `Usage:
 
 Notes:
   Omit --openspec-tools to keep the official OpenSpec tool selector interactive.
-  Interactive terminals may offer to rerun init via the latest openspec-extensions package.
+  Interactive terminals may offer to upgrade the local openspec-extensions CLI before continuing init.
+  Interactive terminals also ask which issue-mode automation style to install when writing openspec/issue-mode.json.
 `;
+
+type JsonObject = Record<string, unknown>;
 
 type InitOptions = InstallOptions & {
   openspecForce: boolean;
@@ -64,6 +68,8 @@ type PackageUpdateStatus = {
   latest_version: string;
 };
 
+type IssueModeAutomationPreference = "semi-auto" | "full-auto";
+
 type InitResult = {
   dry_run: boolean;
   install: InstallResult;
@@ -74,7 +80,10 @@ export type InitDependencies = {
   checkForPackageUpdate?: () => PackageUpdateStatus | null | Promise<PackageUpdateStatus | null>;
   confirmPackageUpdate?: (status: PackageUpdateStatus) => boolean | Promise<boolean>;
   isInteractiveTerminal?: () => boolean;
-  relaunchWithLatestVersion?: (argv: string[]) => number | Promise<number>;
+  promptIssueModeAutomationPreference?: () =>
+    | IssueModeAutomationPreference
+    | Promise<IssueModeAutomationPreference>;
+  relaunchWithLatestVersion?: (status: PackageUpdateStatus, argv: string[]) => number | Promise<number>;
   runOpenSpecInit?: (request: OpenSpecInitRequest) => "openspec" | "npx";
   runOpenSpecCommand?: (
     command: string[],
@@ -85,6 +94,33 @@ export type InitDependencies = {
 type ParsedSemver = {
   core: [number, number, number];
   prerelease: Array<number | string>;
+};
+
+const ISSUE_MODE_AUTOMATION_OVERRIDES: Record<IssueModeAutomationPreference, JsonObject> = {
+  "semi-auto": {
+    rra: {
+      gate_mode: "advisory"
+    },
+    subagent_team: {
+      auto_accept_spec_readiness: false,
+      auto_accept_issue_planning: false,
+      auto_accept_issue_review: false,
+      auto_accept_change_acceptance: false,
+      auto_archive_after_verify: false
+    }
+  },
+  "full-auto": {
+    rra: {
+      gate_mode: "enforce"
+    },
+    subagent_team: {
+      auto_accept_spec_readiness: true,
+      auto_accept_issue_planning: true,
+      auto_accept_issue_review: true,
+      auto_accept_change_acceptance: true,
+      auto_archive_after_verify: true
+    }
+  }
 };
 
 function buildOpenSpecInitCommands(request: OpenSpecInitRequest): {
@@ -232,23 +268,71 @@ async function confirmPackageUpdate(status: PackageUpdateStatus): Promise<boolea
 
   try {
     const answer = (await readline.question(
-      `检测到 ${EXTENSIONS_NPM_PACKAGE} 有新版本 ${status.latest_version}（当前 ${status.current_version}）。是否使用最新版本继续本次 init？[Y/n] `
+      `A newer version of ${EXTENSIONS_NPM_PACKAGE} is available (${status.latest_version}; current: ${status.current_version}). Upgrade the local CLI and continue this init? [Y/n] `
     ))
       .trim()
       .toLowerCase();
 
-    return answer === "" || answer === "y" || answer === "yes" || answer === "是";
+    return answer === "" || answer === "y" || answer === "yes";
   } finally {
     readline.close();
   }
 }
 
-function relaunchWithLatestVersion(argv: string[]): number {
-  // 用 stderr 做交互提示，避免污染 stdout 的 JSON 输出。
-  process.stderr.write(`将使用最新版本继续本次 init；当前安装不会被自动改写。\n`);
-  const result = spawnSync(
-    "npx",
-    ["--yes", "--package", `${EXTENSIONS_NPM_PACKAGE}@latest`, "openspec-ex", "init", ...argv],
+async function promptIssueModeAutomationPreference(): Promise<IssueModeAutomationPreference> {
+  const readline = createInterface({
+    input: process.stdin,
+    output: process.stderr
+  });
+
+  try {
+    for (;;) {
+      const answer = (await readline.question(
+        "Choose the issue-mode automation style to install: [1] Semi-automatic and controllable (recommended) [2] Fully automatic and hands-off [1/2] "
+      ))
+        .trim()
+        .toLowerCase();
+
+      if (answer === "" || answer === "1" || answer === "semi" || answer === "semi-auto") {
+        return "semi-auto";
+      }
+      if (answer === "2" || answer === "full" || answer === "full-auto" || answer === "auto") {
+        return "full-auto";
+      }
+
+      process.stderr.write("Please enter 1 or 2.\n");
+    }
+  } finally {
+    readline.close();
+  }
+}
+
+function relaunchWithLatestVersion(status: PackageUpdateStatus, argv: string[]): number {
+  // 先升级本地 CLI，再重跑当前 init，避免“确认升级”只影响这一轮进程。
+  process.stderr.write(
+    `Upgrading local ${EXTENSIONS_NPM_PACKAGE} to ${status.latest_version} before continuing init...\n`
+  );
+  const installResult = spawnSync(
+    "npm",
+    ["install", "-g", `${EXTENSIONS_NPM_PACKAGE}@${status.latest_version}`],
+    {
+      stdio: "inherit"
+    }
+  );
+
+  if (installResult.status !== 0) {
+    if (installResult.error?.message) {
+      throw new Error(`Failed to upgrade ${EXTENSIONS_NPM_PACKAGE}: ${installResult.error.message}`);
+    }
+    if (installResult.signal) {
+      throw new Error(`Upgrade of ${EXTENSIONS_NPM_PACKAGE} terminated by signal ${installResult.signal}`);
+    }
+    throw new Error(`Failed to upgrade ${EXTENSIONS_NPM_PACKAGE}: npm install exited with code ${installResult.status}`);
+  }
+
+  const rerunResult = spawnSync(
+    "openspec-ex",
+    ["init", ...argv],
     {
       env: {
         ...process.env,
@@ -258,16 +342,16 @@ function relaunchWithLatestVersion(argv: string[]): number {
     }
   );
 
-  if (typeof result.status === "number") {
-    return result.status;
+  if (typeof rerunResult.status === "number") {
+    return rerunResult.status;
   }
-  if (result.error?.message) {
-    throw new Error(`Failed to run latest ${EXTENSIONS_NPM_PACKAGE}: ${result.error.message}`);
+  if (rerunResult.error?.message) {
+    throw new Error(`Failed to rerun ${EXTENSIONS_NPM_PACKAGE} after upgrade: ${rerunResult.error.message}`);
   }
-  if (result.signal) {
-    throw new Error(`Latest ${EXTENSIONS_NPM_PACKAGE} init terminated by signal ${result.signal}`);
+  if (rerunResult.signal) {
+    throw new Error(`Upgraded ${EXTENSIONS_NPM_PACKAGE} init terminated by signal ${rerunResult.signal}`);
   }
-  throw new Error(`Failed to run latest ${EXTENSIONS_NPM_PACKAGE}.`);
+  throw new Error(`Failed to rerun ${EXTENSIONS_NPM_PACKAGE} after upgrade.`);
 }
 
 async function maybeRelaunchWithLatestVersion(
@@ -295,7 +379,7 @@ async function maybeRelaunchWithLatestVersion(
   }
 
   const relaunch = dependencies.relaunchWithLatestVersion ?? relaunchWithLatestVersion;
-  return relaunch(argv);
+  return relaunch(packageUpdate, argv);
 }
 
 // 不显式传工具时把终端直接交给 OpenSpec，让官方选择器继续可用。
@@ -421,6 +505,32 @@ function parseInitArgs(argv: string[]): InitOptions | null {
   };
 }
 
+function shouldPromptForIssueModeAutomation(targetRepo: string, parsed: InitOptions, interactive: boolean): boolean {
+  if (!interactive || parsed.dryRun) {
+    return false;
+  }
+
+  const configPath = path.join(targetRepo, ISSUE_MODE_CONFIG_PATH);
+  return parsed.forceConfig || !existsSync(configPath);
+}
+
+async function resolveIssueModeConfigOverrides(
+  targetRepo: string,
+  parsed: InitOptions,
+  dependencies: InitDependencies
+): Promise<JsonObject> {
+  const interactiveTerminal = dependencies.isInteractiveTerminal ?? isInteractiveTerminal;
+  if (!shouldPromptForIssueModeAutomation(targetRepo, parsed, interactiveTerminal())) {
+    return {};
+  }
+
+  const resolvePreference =
+    dependencies.promptIssueModeAutomationPreference ?? promptIssueModeAutomationPreference;
+  const preference = await resolvePreference();
+  // 这里显式写全关键开关，避免模板默认值漂移后和用户选择不一致。
+  return ISSUE_MODE_AUTOMATION_OVERRIDES[preference];
+}
+
 export async function runInitCommand(
   argv: string[],
   dependencies: InitDependencies = {}
@@ -475,9 +585,12 @@ export async function runInitCommand(
     };
   }
 
+  const configOverrides = await resolveIssueModeConfigOverrides(targetRepo, parsed, dependencies);
+
   // dry-run 且尚未初始化时，只有显式传了工具列表才能可靠推导目标 skills 目录。
   const install = installExtensions(parsed, {
     allowMissingSkillRoots: openspecInit.status === "planned",
+    configOverrides,
     plannedOpenSpecTools: openspecInit.status === "planned" ? parsed.openspecTools : undefined,
     skipOpenSpecPreflight: true
   });

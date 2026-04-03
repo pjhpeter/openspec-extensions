@@ -134,6 +134,13 @@ export type InstallResult = {
   target_repo: string;
 };
 
+type InstallExecutionOptions = {
+  allowMissingSkillRoots?: boolean;
+  configOverrides?: JsonObject;
+  plannedOpenSpecTools?: string;
+  skipOpenSpecPreflight?: boolean;
+};
+
 function commandRepoRoot(): string {
   return path.resolve(__dirname, "..", "..");
 }
@@ -510,11 +517,7 @@ function parseInstallArgs(argv: string[]): InstallOptions | null {
 
 export function installExtensions(
   parsed: InstallOptions,
-  options: {
-    allowMissingSkillRoots?: boolean;
-    plannedOpenSpecTools?: string;
-    skipOpenSpecPreflight?: boolean;
-  } = {}
+  options: InstallExecutionOptions = {}
 ): InstallResult {
   const sourceRepo = realpathSync(path.resolve(parsed.sourceRepo || commandRepoRoot()));
   const targetRepo = realpathSync(path.resolve(parsed.targetRepo));
@@ -548,13 +551,13 @@ export function installExtensions(
   const config = installConfigTemplate({
     dryRun: parsed.dryRun,
     forceConfig: parsed.forceConfig,
-    overrides: {},
+    overrides: options.configOverrides ?? {},
     sourceRepo,
     targetRepo
   });
   const configState = inspectConfigState({
     configStatus: config.status,
-    overrides: {},
+    overrides: options.configOverrides ?? {},
     sourceRepo,
     targetRepo
   });
@@ -570,7 +573,7 @@ export function installExtensions(
     config: {
       invalid_json: configState.invalidJson,
       legacy_keys_present: configState.legacyKeysPresent,
-      overrides: {},
+      overrides: options.configOverrides ?? {},
       path: config.path,
       status: config.status
     },

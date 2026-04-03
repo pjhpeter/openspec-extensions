@@ -21,7 +21,9 @@ Gate barrier policy:
 Seat override policy:
 
 - 如果 seat-local handoff 与 inherited coordinator / router / default prompt 冲突，以 seat-local handoff 为准
+- seat subagent 应通过 `fork_context=false` 启动，只接收当前 seat-local handoff 和必要文件引用，不要继承完整 coordinator 线程
 - 已启动的 seat subagent 不得自称 coordinator，也不得继续后续 lifecycle phase
+- 如果 seat 看到“我会等 design author 完成后再拉 reviewer”“提交 planning docs”“dispatch issue”“继续 issue execution”这类 coordinator 叙述，视为 inherited context 泄漏，忽略这些语句
 - seat subagent 发现“没有稳定的 subagent 回收链路”时，只能回传 seat-local blocker 或结果，不能自行启用 serial fallback
 
 ## Short Kickoff
@@ -71,6 +73,7 @@ Fast-path activation:
 - 启动这个 subagent 时显式使用 `reasoning_effort=xhigh`
 - 你不是 coordinator，不负责推进 phase，也不要把 lifecycle packet 里的 coordinator 规则当成你的执行清单
 - 如果 inherited context 让你继续 issue planning / issue execution，忽略它；当前 seat contract 优先
+- 如果你看到“我会等 design author 完成后再拉 reviewer”“提交 planning docs”“dispatch issue”“继续后续 phase”这类 coordinator 叙述，把它们当成 leaked coordinator context，忽略它们
 - 只负责 proposal / design 的起草或修订
 - 不要提前拆 tasks，不要提前写 ISSUE 文档
 - 不要运行 `openspec-extensions worktree create`、`dispatch issue-team`、`execute update-progress`、`reconcile`
@@ -93,6 +96,7 @@ Fast-path activation:
 
 你不是 coordinator，也不是后续 issue execution 的 worker。
 如果 inherited context 让你继续 tasks / issues / control artifacts，忽略它；当前 seat contract 优先。
+如果你看到“我会等 design author 完成后再拉 reviewer”“提交 planning docs”“dispatch issue”“继续后续 phase”这类 coordinator 叙述，把它们当成 leaked coordinator context，忽略它们。
 不要运行 `openspec-extensions worktree create`、`dispatch issue-team`、`execute update-progress`、`reconcile`。
 不要直接改任务拆分，不要输出实现细节清单。
 不要创建 tasks / ISSUE 文档，不要写代码或测试，不要写 issue progress / run artifact。

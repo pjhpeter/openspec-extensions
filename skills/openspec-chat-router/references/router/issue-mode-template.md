@@ -23,7 +23,9 @@
    - checker / reviewer 默认先看 `changed_files`，没有时先看 `allowed_scope` 和 issue validation；只有为确认 direct dependency 风险时才允许向外扩，不要默认做 repo-wide 扫描
    - 对前端项目，默认不要读取 `node_modules`、`dist`、`build`、`.next`、`coverage`，除非当前 issue 明确把这些路径放进 `allowed_scope`
    - lifecycle packet 只给主会话 coordinator；给各个 seat subagent 的应是 seat-local handoff，不要把整份 packet 原样塞给 design reviewer / author
+   - 不要把完整 coordinator 线程 / 聊天历史 fork 给 design author / reviewer / planning / check / review seat；seat 只应拿到自己的 handoff 和必要文件引用
    - 一旦 seat subagent 已成功拉起，它就不能把“无 delegation 时主会话串行推进”的 fallback 套到自己头上，更不能自己继续到 issue planning / issue execution
+   - 如果 gate-bearing seat 已经拉起，但结果回收链路不稳定，主会话只能重拉 seat 或停下处理 blocker；不要把该 gate 改成主会话自证通过，更不要直接继续后续 phase
 7. 只有在显式收窄到单个 issue-only subagent 时，才让一个 issue 开一个 subagent，并且只在该 worktree 内工作
 8. team dispatch 里的 development seat 只写代码和 progress checkpoint；如果代码改动让既有校验失效，只把对应 validation 标回 `pending`，不直接把 issue 标成 `completed + review_required`，也不在该 seat 内自称校验已通过。checker / reviewer 通过后，由主会话把结果写成 `runs/ISSUE-REVIEW-<issue>.json`
 9. issue 执行 subagent 不直接合并、不直接提交

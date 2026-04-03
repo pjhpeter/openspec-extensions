@@ -55,7 +55,9 @@ openspec-extensions init /path/to/your/project
 
 如果你已经在 OpenSpec 初始化时选好了工具链，我默认跟随那次选择，不会擅自把 skills 安到 `.codex`。
 
-如果你是在交互终端里运行 `openspec-ex init`，而当前本地 `openspec-extensions` 版本落后于 npm 最新版，命令会先询问你是否要用最新版接管这一次 `init`。确认后会通过 `npx` 继续本次执行，但不会自动改写你现有的全局安装。
+如果你是在交互终端里运行 `openspec-ex init`，而当前本地 `openspec-extensions` 版本落后于 npm 最新版，命令会先用英文提示你是否升级本地 CLI。确认后会先执行 `npm install -g openspec-extensions@<latest>`，再用升级后的 `openspec-ex init` 继续本次执行。
+
+如果这次 `init` 会实际写入 `openspec/issue-mode.json`，我还会继续用英文询问你想要安装 `Semi-automatic and controllable` 还是 `Fully automatic and hands-off`。如果目标仓库里已经有配置且你没有传 `--force-config`，这一步会跳过，避免问了也不生效。
 
 如果仓库已经完成 OpenSpec 初始化，也可以只做扩展安装：
 

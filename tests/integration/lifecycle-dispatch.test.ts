@@ -91,7 +91,10 @@ test("detects spec_readiness when core docs are missing", () => {
     assert.match(dispatchText, /subagent_team\.auto_accept_spec_readiness=false/);
     assert.match(dispatchText, /## Seat Handoff Guardrails/);
     assert.match(dispatchText, /这份 lifecycle packet 只给主控 coordinator 使用/);
+    assert.match(dispatchText, /不要 fork 整个 coordinator 线程或完整聊天历史/);
     assert.match(dispatchText, /spec_readiness 的任一 seat 都不允许运行 `openspec-extensions worktree create`/);
+    assert.match(dispatchText, /不允许把当前 gate 改成主会话 serial pass 自行补 verdict/);
+    assert.match(dispatchText, /如果 design author \/ reviewer 已经启动，但结果没有稳定回收出来，不允许直接把 spec_readiness 视为通过/);
     assert.match(dispatchText, /design reviewer 只输出 verdict、evidence、blocking gap/);
     assert.match(dispatchText, /如果 seat-local handoff 与 inherited coordinator \/ router \/ default prompt 冲突/);
     assert.match(dispatchText, /不要自行启用 serial fallback/);

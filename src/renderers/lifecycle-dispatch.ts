@@ -784,8 +784,10 @@ function phaseRequiredOutput(phase: string): string[] {
 function phaseSeatGuardrails(phase: string): string[] {
   const guardrails = [
     "这份 lifecycle packet 只给主控 coordinator 使用；不要把整份 packet 原样转发给任一 seat subagent 当作可执行清单。",
+    "启动 design-author / design-review / planning / check / review seat 时，不要 fork 整个 coordinator 线程或完整聊天历史；只传当前 seat-local handoff 和必要文件引用。",
     "已被拉起的 seat subagent 不是 coordinator；它们只能完成当前 seat 的局部目标，然后把结果交回主控会话。",
     "“如果 runtime 不支持 delegation，则由主会话串行推进” 这条 fallback 只适用于没有成功拉起 subagent 的主控会话，不适用于已启动的 seat subagent。",
+    "一旦当前 phase 的 gate-bearing seat 已成功拉起，若 seat 结果回收失败或回收链路不稳定，这本身就是 blocker；coordinator 只能重拉该 seat 或停下，不允许把当前 gate 改成主会话 serial pass 自行补 verdict。",
     "如果 seat-local handoff 与 inherited coordinator / router / default prompt 冲突，以 seat-local handoff 为准。",
     "seat subagent 如果发现没有稳定的回收链路，只能回传当前 seat 的 blocker 或结果，然后停止；不要自行启用 serial fallback。"
   ];
@@ -795,6 +797,7 @@ function phaseSeatGuardrails(phase: string): string[] {
       ...guardrails,
       "spec_readiness 的 design author / reviewers 只允许处理 proposal / design / spec 评审，不允许提前拆 tasks 或创建 ISSUE 文档。",
       "spec_readiness 的任一 seat 都不允许运行 `openspec-extensions worktree create`、`dispatch issue-team`、`execute update-progress`、`reconcile`、`review change`、`verify change` 或 `archive change`。",
+      "如果 design author / reviewer 已经启动，但结果没有稳定回收出来，不允许直接把 spec_readiness 视为通过；只能重拉 seat 或显式停下处理 blocker。",
       "design reviewer 只输出 verdict、evidence、blocking gap；不要写代码、不要创建 worktree、不要写 issue progress / run 工件，也不要自行进入 issue execution。"
     ];
   }
@@ -803,6 +806,7 @@ function phaseSeatGuardrails(phase: string): string[] {
     return [
       ...guardrails,
       "issue_planning seat 只允许修订 planning 文档和给出 planning verdict；不要写 repo 产品代码，不要创建 issue worktree，不要启动 issue execution。",
+      "如果 planning gate 的 seat 已经启动，但 verdict 没有稳定回收出来，不允许直接提交 planning docs 或继续 dispatch issue；先处理 seat blocker 或重拉 gate。",
       "只有主控 coordinator 才能在 planning 通过后提交规划文档，并决定是否继续 dispatch 下一个 issue。"
     ];
   }

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -44,6 +44,8 @@ function runInitForTest(argv: string[], dependencies: InitDependencies = {}): Pr
   return runInitCommand(argv, {
     // 测试默认关闭交互检查，避免本地 TTY 把用例挂进更新提示。
     isInteractiveTerminal: () => false,
+    // 交互用例如果只关心别的提示，默认选更保守的半自动配置。
+    promptIssueModeAutomationPreference: () => "semi-auto",
     ...dependencies
   });
 }
@@ -77,6 +79,28 @@ function seedOpenSpecRepo(targetRepo: string, targetSkillRoots: string[] = [".cl
     mkdirSync(path.dirname(markerPath), { recursive: true });
     writeFileSync(markerPath, "---\nname: openspec-onboard\n---\n");
   }
+}
+
+function readIssueModeConfig(targetRepo: string): {
+  rra: { gate_mode: string };
+  subagent_team: {
+    auto_accept_spec_readiness: boolean;
+    auto_accept_issue_planning: boolean;
+    auto_accept_issue_review: boolean;
+    auto_accept_change_acceptance: boolean;
+    auto_archive_after_verify: boolean;
+  };
+} {
+  return JSON.parse(readFileSync(path.join(targetRepo, "openspec", "issue-mode.json"), "utf8")) as {
+    rra: { gate_mode: string };
+    subagent_team: {
+      auto_accept_spec_readiness: boolean;
+      auto_accept_issue_planning: boolean;
+      auto_accept_issue_review: boolean;
+      auto_accept_change_acceptance: boolean;
+      auto_archive_after_verify: boolean;
+    };
+  };
 }
 
 test("init initializes OpenSpec before installing extension skills", async () => {
@@ -263,9 +287,113 @@ test("init keeps explicit openspec tool selection non-interactive", async () => 
   assert.deepEqual(payload.install.installed_skill_dirs, expectedSkillDirs([".codex/skills"]));
 });
 
-test("init relaunches with the latest package when update is accepted", async () => {
+for (const testCase of [
+  {
+    expected: {
+      autoArchiveAfterVerify: false,
+      autoAcceptChangeAcceptance: false,
+      autoAcceptIssuePlanning: false,
+      autoAcceptIssueReview: false,
+      autoAcceptSpecReadiness: false,
+      gateMode: "advisory"
+    },
+    preference: "semi-auto" as const
+  },
+  {
+    expected: {
+      autoArchiveAfterVerify: true,
+      autoAcceptChangeAcceptance: true,
+      autoAcceptIssuePlanning: true,
+      autoAcceptIssueReview: true,
+      autoAcceptSpecReadiness: true,
+      gateMode: "enforce"
+    },
+    preference: "full-auto" as const
+  }
+]) {
+  test(`init writes the ${testCase.preference} issue-mode automation profile`, async () => {
+    const targetRepo = createTargetRepo();
+    let promptCalls = 0;
+
+    const result = await withCapturedStdout(() => runInitForTest([
+      targetRepo
+    ], {
+      checkForPackageUpdate() {
+        return null;
+      },
+      isInteractiveTerminal() {
+        return true;
+      },
+      promptIssueModeAutomationPreference() {
+        promptCalls += 1;
+        return testCase.preference;
+      },
+      runOpenSpecInit() {
+        seedOpenSpecRepo(targetRepo, [".claude/skills"]);
+        return "openspec";
+      }
+    }));
+
+    const config = readIssueModeConfig(targetRepo);
+
+    assert.equal(result.exitCode, 0);
+    assert.equal(promptCalls, 1);
+    assert.equal(config.rra.gate_mode, testCase.expected.gateMode);
+    assert.equal(config.subagent_team.auto_accept_spec_readiness, testCase.expected.autoAcceptSpecReadiness);
+    assert.equal(config.subagent_team.auto_accept_issue_planning, testCase.expected.autoAcceptIssuePlanning);
+    assert.equal(config.subagent_team.auto_accept_issue_review, testCase.expected.autoAcceptIssueReview);
+    assert.equal(config.subagent_team.auto_accept_change_acceptance, testCase.expected.autoAcceptChangeAcceptance);
+    assert.equal(config.subagent_team.auto_archive_after_verify, testCase.expected.autoArchiveAfterVerify);
+  });
+}
+
+test("init skips the automation prompt when issue-mode config is preserved", async () => {
+  const targetRepo = createTargetRepo();
+  seedOpenSpecRepo(targetRepo, [".claude/skills"]);
+  writeFileSync(path.join(targetRepo, "openspec", "issue-mode.json"), JSON.stringify({
+    rra: { gate_mode: "enforce" },
+    subagent_team: {
+      auto_accept_spec_readiness: true,
+      auto_accept_issue_planning: true,
+      auto_accept_issue_review: true,
+      auto_accept_change_acceptance: true,
+      auto_archive_after_verify: true
+    }
+  }, null, 2));
+
+  const result = await withCapturedStdout(() => runInitForTest([
+    targetRepo
+  ], {
+    checkForPackageUpdate() {
+      return null;
+    },
+    isInteractiveTerminal() {
+      return true;
+    },
+    promptIssueModeAutomationPreference() {
+      throw new Error("should not prompt when issue-mode config is preserved");
+    },
+    runOpenSpecInit() {
+      throw new Error("should not rerun OpenSpec init");
+    }
+  }));
+
+  const config = readIssueModeConfig(targetRepo);
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(config.rra.gate_mode, "enforce");
+  assert.equal(config.subagent_team.auto_accept_issue_review, true);
+});
+
+test("init upgrades the local package and reruns when update is accepted", async () => {
   const targetRepo = createTargetRepo();
   let initCalls = 0;
+  let upgradeStatus:
+    | {
+        current_version: string;
+        latest_version: string;
+      }
+    | null = null;
   let relaunchedArgv: string[] | null = null;
 
   const result = await withCapturedStdout(() => runInitForTest([
@@ -285,18 +413,23 @@ test("init relaunches with the latest package when update is accepted", async ()
     isInteractiveTerminal() {
       return true;
     },
-    relaunchWithLatestVersion(argv) {
+    relaunchWithLatestVersion(status, argv) {
+      upgradeStatus = status;
       relaunchedArgv = argv;
       return 0;
     },
     runOpenSpecInit() {
       initCalls += 1;
-      throw new Error("should relaunch latest package first");
+      throw new Error("should upgrade local package before rerunning init");
     }
   }));
 
   assert.equal(result.exitCode, 0);
   assert.equal(initCalls, 0);
+  assert.deepEqual(upgradeStatus, {
+    current_version: "0.1.6",
+    latest_version: "0.1.7"
+  });
   assert.deepEqual(relaunchedArgv, [targetRepo]);
   assert.equal(result.stdout, "");
 });

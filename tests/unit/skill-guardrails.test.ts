@@ -13,6 +13,8 @@ test("subagent-team agent prompt scopes coordinator defaults to the main session
   assert.match(prompt, /only when this session is the main coordinator session/);
   assert.match(prompt, /explicit seat-local handoff or role instruction/);
   assert.match(prompt, /do not apply serial fallback/);
+  assert.match(prompt, /do not fork the full coordinator thread or full chat history/);
+  assert.match(prompt, /do not self-certify the gate/);
 });
 
 test("chat-router agent prompt does not reroute spawned seat sessions", () => {
@@ -21,6 +23,7 @@ test("chat-router agent prompt does not reroute spawned seat sessions", () => {
   assert.match(prompt, /only for the main user-facing or coordinator session/);
   assert.match(prompt, /explicit seat-local spawned-subagent handoff/);
   assert.match(prompt, /do not apply coordinator fallback rules/);
+  assert.match(prompt, /do not fork the full coordinator thread\/context into them/);
 });
 
 test("team templates require seat contracts to override inherited coordinator context", () => {
@@ -28,5 +31,7 @@ test("team templates require seat contracts to override inherited coordinator co
 
   assert.match(template, /Seat override policy:/);
   assert.match(template, /以 seat-local handoff 为准/);
+  assert.match(template, /fork_context=false/);
+  assert.match(template, /inherited context 泄漏/);
   assert.match(template, /不能自行启用 serial fallback/);
 });

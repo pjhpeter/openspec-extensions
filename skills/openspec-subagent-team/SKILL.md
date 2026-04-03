@@ -63,6 +63,7 @@ Read these first:
    - if reconcile emits `commit_planning_docs`, run the coordinator-owned planning-doc commit immediately before any first issue dispatch
    - if reconcile emits `dispatch_next_issue`, treat it as a continuation command, not a terminal control-plane checkpoint
    - the lifecycle packet is coordinator-only; when spawning a seat subagent, pass a seat-local handoff instead of pasting the entire lifecycle packet as its executable task
+   - when spawning a design-author / design-review / planning / check / review seat, do not fork the full coordinator thread/context; use `fork_context=false` and pass only the seat-local handoff plus minimal relevant file references
 8. Use a phase-specific topology:
    - `spec_readiness`: 1 design author (`reasoning_effort=xhigh`) + 2 design reviewers (`reasoning_effort=medium`)
    - `issue_planning`: fast path is `2 development + 1 check + 1 review`, all `reasoning_effort=medium`
@@ -86,6 +87,7 @@ Read these first:
    - use `default` or `worker` style delegation for these gate-bearing seats; do not launch check/review gate seats as `explorer`
    - when the phase depends on their verdicts, wait up to 1 hour for completion instead of short polling
    - do not accept the phase, mark it passed, or close those subagents while any required gate-bearing seat is still running
+   - if a launched gate-bearing seat cannot return a stable result, treat that as a phase blocker; relaunch or stop, but do not self-certify the missing verdict and do not downgrade that same gate into serial fallback
 13. `auto_accept_*` only removes human chat sign-off after the gate team has finished:
    - it does not mean "spawned already, so the phase may pass"
    - it does not allow skipping review/check verdict collection
@@ -117,6 +119,7 @@ Read these first:
 - `issue_planning` 通过后，coordinator 还要把当前 gate 结果写成 `runs/ISSUE-PLANNING.json`；缺这个工件时，不能开始首个 issue execution。
 - `issue_execution` 里如果走的是 team dispatch，development seat 只负责实现、changed_files 和 progress checkpoint；如果当前改动让既有校验失效，只把相关 validation 标回 `pending`，不要在 development seat 内自行宣称校验通过。checker / reviewer 通过后，coordinator 还要把当前 gate 结果写成 `runs/ISSUE-REVIEW-<issue>.json`，然后才能把 issue 标成 `completed + review_required` 并进入 merge。
 - if a seat subagent was successfully launched, the fallback rule "main session continues serially when delegation is unavailable" no longer applies to that seat; only the coordinator may use that fallback.
+- if any gate-bearing seat for the current phase was successfully launched, the coordinator must not replace a missing seat verdict with its own serial pass; unresolved seat recovery means the gate is still blocked until the seat is relaunched or the blocker is surfaced.
 - Before the first issue dispatch, the coordinator must first commit `proposal.md`, `design.md`, `tasks.md`, `issues/INDEX.md`, and `ISSUE-*.md` as a dedicated planning-doc commit.
 - When `issue_planning` is auto-accepted and reconcile emits `commit_planning_docs`, the coordinator must commit those planning docs immediately, rerun reconcile, and then honor `dispatch_next_issue`.
 - `issue_planning` and `issue_execution` should start with the lighter fast path first; only escalate more check/review seats when the current round surfaces cross-boundary risk or unresolved evidence gaps.

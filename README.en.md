@@ -55,7 +55,9 @@ If you do not pass `--openspec-tools`, I hand the current terminal straight to t
 
 If OpenSpec initialization already selected a toolchain, I follow that choice. I do not assume `.codex` by default anymore.
 
-When you run `openspec-ex init` in an interactive terminal and the local `openspec-extensions` version is behind npm latest, the command can first ask whether you want the latest package to take over this one `init` run. If you confirm, it continues through `npx`, but it does not rewrite your existing global install automatically.
+When you run `openspec-ex init` in an interactive terminal and the local `openspec-extensions` version is behind npm latest, the command first asks in English whether you want to upgrade the local CLI. If you confirm, it runs `npm install -g openspec-extensions@<latest>` and then continues the same `init` through the upgraded `openspec-ex`.
+
+When this `init` run is actually going to write `openspec/issue-mode.json`, the CLI then asks in English whether you want `Semi-automatic and controllable` or `Fully automatic and hands-off`. If the target repo already has an `issue-mode.json` and you do not pass `--force-config`, the prompt is skipped because the config would be preserved anyway.
 
 If the repo is already initialized, you can install just the extensions:
 
