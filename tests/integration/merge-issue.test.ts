@@ -6,6 +6,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { mergeIssue } from "../../src/commands/merge-issue";
+import { issueReviewArtifactPath } from "../../src/domain/change-coordinator";
 
 function withTempDir(run: (repoRoot: string) => void): void {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-merge-issue-"));
@@ -24,6 +25,19 @@ function initGitRepo(repoRoot: string): void {
   git(repoRoot, "init");
   git(repoRoot, "config", "user.name", "Test User");
   git(repoRoot, "config", "user.email", "test@example.com");
+}
+
+function writeIssueReviewArtifact(repoRoot: string, change: string, issueId: string): void {
+  const artifactPath = issueReviewArtifactPath(repoRoot, change, issueId);
+  fs.mkdirSync(path.dirname(artifactPath), { recursive: true });
+  fs.writeFileSync(artifactPath, JSON.stringify({
+    change,
+    issue_id: issueId,
+    status: "pass",
+    run_id: `RUN-20260331T000000-${issueId}`,
+    changed_files: ["src/demo.ts"],
+    updated_at: "2099-01-01T00:00:00+00:00"
+  }, null, 2));
 }
 
 test("mergeIssue accepts and commits shared workspace changes", () => {
@@ -102,6 +116,112 @@ validation:
     assert.equal(headMessage, `opsx(${change}): accept ${issueId} Shared workspace issue`);
     assert.match(headBody, /Done when:\n- complete shared workspace acceptance/);
     assert.match(headBody, /Changed files:\n- src\/demo\.ts/);
+  });
+});
+
+test("mergeIssue rejects team dispatch issue without review gate artifact", () => {
+  withTempDir((repoRoot) => {
+    const change = "demo-change";
+    const issueId = "ISSUE-001";
+    const changeDir = path.join(repoRoot, "openspec", "changes", change);
+    const issuesDir = path.join(changeDir, "issues");
+    const runsDir = path.join(changeDir, "runs");
+    const srcDir = path.join(repoRoot, "src");
+    fs.mkdirSync(issuesDir, { recursive: true });
+    fs.mkdirSync(runsDir, { recursive: true });
+    fs.mkdirSync(srcDir, { recursive: true });
+
+    initGitRepo(repoRoot);
+    fs.writeFileSync(path.join(srcDir, "demo.ts"), "export const demo = 1;\n");
+    fs.writeFileSync(path.join(issuesDir, `${issueId}.md`), `---
+issue_id: ${issueId}
+title: Shared workspace issue
+worker_worktree: .
+allowed_scope:
+  - src/demo.ts
+out_of_scope:
+  - electron/
+done_when:
+  - complete shared workspace acceptance
+validation:
+  - pnpm lint
+---
+`);
+    fs.writeFileSync(path.join(issuesDir, `${issueId}.team.dispatch.md`), "# team dispatch\n");
+    fs.writeFileSync(path.join(issuesDir, `${issueId}.progress.json`), JSON.stringify({
+      change,
+      issue_id: issueId,
+      status: "completed",
+      boundary_status: "review_required",
+      next_action: "coordinator_review",
+      summary: "ready",
+      validation: { lint: "passed" },
+      changed_files: ["src/demo.ts"],
+      run_id: "RUN-20260331T000000-ISSUE-001",
+      updated_at: "2026-03-31T00:00:00+08:00"
+    }, null, 2));
+    git(repoRoot, "add", ".");
+    git(repoRoot, "commit", "-m", "init change artifacts");
+    fs.writeFileSync(path.join(srcDir, "demo.ts"), "export const demo = 2;\n");
+
+    assert.throws(
+      () => mergeIssue({ change, commitMessage: "", dryRun: false, force: false, issueId, repoRoot }),
+      /requires a passed checker\/reviewer gate artifact/
+    );
+  });
+});
+
+test("mergeIssue accepts team dispatch issue after review gate artifact exists", () => {
+  withTempDir((repoRoot) => {
+    const change = "demo-change";
+    const issueId = "ISSUE-001";
+    const changeDir = path.join(repoRoot, "openspec", "changes", change);
+    const issuesDir = path.join(changeDir, "issues");
+    const runsDir = path.join(changeDir, "runs");
+    const srcDir = path.join(repoRoot, "src");
+    fs.mkdirSync(issuesDir, { recursive: true });
+    fs.mkdirSync(runsDir, { recursive: true });
+    fs.mkdirSync(srcDir, { recursive: true });
+
+    initGitRepo(repoRoot);
+    fs.writeFileSync(path.join(srcDir, "demo.ts"), "export const demo = 1;\n");
+    fs.writeFileSync(path.join(issuesDir, `${issueId}.md`), `---
+issue_id: ${issueId}
+title: Shared workspace issue
+worker_worktree: .
+allowed_scope:
+  - src/demo.ts
+out_of_scope:
+  - electron/
+done_when:
+  - complete shared workspace acceptance
+validation:
+  - pnpm lint
+---
+`);
+    fs.writeFileSync(path.join(issuesDir, `${issueId}.team.dispatch.md`), "# team dispatch\n");
+    fs.writeFileSync(path.join(issuesDir, `${issueId}.progress.json`), JSON.stringify({
+      change,
+      issue_id: issueId,
+      status: "completed",
+      boundary_status: "review_required",
+      next_action: "coordinator_review",
+      summary: "ready",
+      validation: { lint: "passed" },
+      changed_files: ["src/demo.ts"],
+      run_id: "RUN-20260331T000000-ISSUE-001",
+      updated_at: "2026-03-31T00:00:00+08:00"
+    }, null, 2));
+    writeIssueReviewArtifact(repoRoot, change, issueId);
+    git(repoRoot, "add", ".");
+    git(repoRoot, "commit", "-m", "init change artifacts");
+    fs.writeFileSync(path.join(srcDir, "demo.ts"), "export const demo = 2;\n");
+
+    const payload = mergeIssue({ change, commitMessage: "", dryRun: false, force: false, issueId, repoRoot }) as {
+      changed_files: string[];
+    };
+
+    assert.deepEqual(payload.changed_files, ["src/demo.ts"]);
   });
 });
 

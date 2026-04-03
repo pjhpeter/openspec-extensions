@@ -5,12 +5,20 @@ import { parseArgs } from "node:util";
 
 import { runMergeIssueCommand } from "./merge-issue";
 import {
+  issueReviewArtifactIsCurrent,
+  issueReviewArtifactPath,
+  issueReviewStatus,
+  issueTeamDispatchPath,
   planningDocStatus,
+  phaseGateArtifactIsCurrent,
+  phaseGateArtifactPath,
+  phaseGateStatus,
   readJson,
   reviewArtifactIsCurrent,
   reviewArtifactPath,
   verificationArtifactIsCurrent,
   verifyArtifactPath,
+  type PhaseGate,
   type JsonRecord
 } from "../domain/change-coordinator";
 import { automationProfile, loadIssueModeConfig, readChangeControlState, type IssueModeConfig } from "../domain/issue-mode";
@@ -225,6 +233,48 @@ function currentReviewState(repoRoot: string, change: string, issues: IssuePaylo
   };
 }
 
+function currentPhaseGateState(repoRoot: string, change: string, phase: PhaseGate): JsonRecord {
+  const artifact = readJson(phaseGateArtifactPath(repoRoot, change, phase));
+  const status = phaseGateStatus(artifact);
+  const current = Object.keys(artifact).length > 0 && phaseGateArtifactIsCurrent(repoRoot, change, phase, artifact);
+  return {
+    artifact,
+    current,
+    path: path.relative(repoRoot, phaseGateArtifactPath(repoRoot, change, phase)).split(path.sep).join("/"),
+    status: status.status,
+    passed: current && status.passed,
+    failed: current && status.failed
+  };
+}
+
+function currentIssueReviewGateState(repoRoot: string, change: string, issue: IssuePayload): JsonRecord {
+  const issueId = String(issue.issue_id ?? "").trim();
+  if (!issueId || !fs.existsSync(issueTeamDispatchPath(repoRoot, change, issueId))) {
+    return {
+      artifact: {},
+      current: true,
+      failed: false,
+      passed: true,
+      path: "",
+      required: false,
+      status: "not_required"
+    };
+  }
+
+  const artifact = readJson(issueReviewArtifactPath(repoRoot, change, issueId));
+  const status = issueReviewStatus(artifact);
+  const current = Object.keys(artifact).length > 0 && issueReviewArtifactIsCurrent(issue, artifact);
+  return {
+    artifact,
+    current,
+    failed: current && status.failed,
+    passed: current && status.passed,
+    path: path.relative(repoRoot, issueReviewArtifactPath(repoRoot, change, issueId)).split(path.sep).join("/"),
+    required: true,
+    status: status.status
+  };
+}
+
 function determineBaseNextAction(
   repoRoot: string,
   change: string,
@@ -236,6 +286,75 @@ function determineBaseNextAction(
   const autoAcceptChangeAcceptance = config.subagent_team.auto_accept_change_acceptance;
   const autoArchiveAfterVerify = config.subagent_team.auto_archive_after_verify;
   const planningDocs = planningDocStatus(repoRoot, change);
+  const changeDir = path.join(repoRoot, "openspec", "changes", change);
+  const proposalPath = path.join(changeDir, "proposal.md");
+  const designPath = path.join(changeDir, "design.md");
+  const tasksPath = path.join(changeDir, "tasks.md");
+  const issuesIndexPath = path.join(changeDir, "issues", "INDEX.md");
+  const issueDocs = issues.filter((issue) => issue.issue_path);
+
+  const missingCore = [proposalPath, designPath]
+    .filter((currentPath) => !fs.existsSync(currentPath))
+    .map((currentPath) => path.basename(currentPath));
+  if (missingCore.length > 0) {
+    return ["complete_spec_readiness_gate", "", `变更基础文档未齐全：${missingCore.join(", ")}。`];
+  }
+
+  // reconcile 也要受显式文档门禁约束，不能只看 tasks / issue 文档是否已经生成。
+  const specReadinessGate = currentPhaseGateState(repoRoot, change, "spec_readiness");
+  if (specReadinessGate.failed === true) {
+    return [
+      "complete_spec_readiness_gate",
+      "",
+      `最近一次 spec_readiness gate 未通过；需先修订 proposal / design，并重新更新 ${specReadinessGate.path}。`
+    ];
+  }
+  if (specReadinessGate.passed !== true) {
+    const hasLaterPlanningArtifacts = fs.existsSync(tasksPath) || fs.existsSync(issuesIndexPath) || issueDocs.length > 0;
+    if (Object.keys(specReadinessGate.artifact as JsonRecord).length > 0 && specReadinessGate.current !== true) {
+      return [
+        "complete_spec_readiness_gate",
+        "",
+        `proposal / design 在最近一次 spec_readiness gate 后发生变化；需先重新完成设计评审并刷新 ${specReadinessGate.path}。`
+      ];
+    }
+    return [
+      "complete_spec_readiness_gate",
+      "",
+      hasLaterPlanningArtifacts
+        ? `spec_readiness gate 尚未记录通过；即使 tasks / issue 文档已经存在，也必须先完成文档评审并写入 ${specReadinessGate.path}。`
+        : `设计文档已齐全，但必须先完成 spec_readiness gate，并写入 ${specReadinessGate.path}。`
+    ];
+  }
+
+  if (!fs.existsSync(tasksPath) || !fs.existsSync(issuesIndexPath) || issueDocs.length === 0) {
+    return ["plan_issues", "", "任务拆分 / issue 规划工件未完成，需先产出或修订 tasks.md、INDEX 和 ISSUE 文档。"];
+  }
+
+  // planning 文档存在不等于 planning gate 已过；首个 issue 派发前必须先收敛这道门。
+  const issuePlanningGate = currentPhaseGateState(repoRoot, change, "issue_planning");
+  const firstPlannedIssueId = String(issueDocs[0]?.issue_id ?? "");
+  if (issuePlanningGate.failed === true) {
+    return [
+      "complete_issue_planning_gate",
+      firstPlannedIssueId,
+      `最近一次 issue_planning gate 未通过；需先修订 planning 文档，并重新更新 ${issuePlanningGate.path}。`
+    ];
+  }
+  if (issuePlanningGate.passed !== true) {
+    if (Object.keys(issuePlanningGate.artifact as JsonRecord).length > 0 && issuePlanningGate.current !== true) {
+      return [
+        "complete_issue_planning_gate",
+        firstPlannedIssueId,
+        `规划文档在最近一次 issue_planning gate 后发生变化；需先重新完成 planning review 并刷新 ${issuePlanningGate.path}。`
+      ];
+    }
+    return [
+      "complete_issue_planning_gate",
+      firstPlannedIssueId,
+      `issue_planning gate 尚未记录通过；必须先完成 planning/check/review 门禁，并写入 ${issuePlanningGate.path}。`
+    ];
+  }
 
   if (issues.length === 0) {
     return ["no_issue_artifacts", "", "未找到 issue 工件。"];
@@ -249,6 +368,28 @@ function determineBaseNextAction(
   const reviewRequired = issues.filter((issue) => issue.boundary_status === "review_required" || issue.next_action === "coordinator_review");
   if (reviewRequired.length > 0) {
     const candidate = reviewRequired[0] as IssuePayload;
+    const reviewGate = currentIssueReviewGateState(repoRoot, change, candidate);
+    if (reviewGate.required && reviewGate.failed) {
+      return [
+        "resolve_issue_review_failure",
+        String(candidate.issue_id ?? ""),
+        `当前 issue 的 checker/reviewer gate 未通过；需先修复问题并重新更新 ${reviewGate.path}。`
+      ];
+    }
+    if (reviewGate.required && reviewGate.passed !== true) {
+      if (Object.keys(reviewGate.artifact as JsonRecord).length > 0 && reviewGate.current !== true) {
+        return [
+          "complete_issue_review_gate",
+          String(candidate.issue_id ?? ""),
+          `当前 issue 的 checker/reviewer gate 已过期；需先重新收敛检查/审查结论并刷新 ${reviewGate.path}，之后才能 merge。`
+        ];
+      }
+      return [
+        "complete_issue_review_gate",
+        String(candidate.issue_id ?? ""),
+        `当前 issue 使用了 team dispatch；在 merge 前必须先完成 checker/reviewer gate，并写入 ${reviewGate.path}。`
+      ];
+    }
     if (autoAcceptIssueReview && issueValidationPassed(candidate)) {
       return [
         "auto_accept_issue",
@@ -472,7 +613,8 @@ export function reconcileChange(args: ParsedChangeArgs): JsonRecord {
   let recommendedIssueId = baseRecommendedIssueId;
   let reason = baseReason;
   if (controlGate !== null && gateMode === "enforce") {
-    if (!(["review_change_code", "resolve_change_review_failure"].includes(nextAction) && controlGate[0] === "change_acceptance_required")) {
+    const docGateBlockingAction = ["complete_spec_readiness_gate", "plan_issues", "complete_issue_planning_gate"].includes(nextAction);
+    if (!docGateBlockingAction && !(["review_change_code", "resolve_change_review_failure"].includes(nextAction) && controlGate[0] === "change_acceptance_required")) {
       [nextAction, recommendedIssueId, reason] = controlGate;
     }
   }

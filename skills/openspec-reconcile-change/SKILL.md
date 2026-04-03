@@ -50,7 +50,9 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
    - `resolve_verify_failure` -> inspect the verify artifact and fix the failing validation or unchecked tasks
    - `commit_planning_docs` -> commit `proposal.md` / `design.md` / `tasks.md` / `issues/INDEX.md` / `ISSUE-*.md` immediately, then rerun reconcile and keep advancing without waiting for user confirmation
    - `auto_accept_issue` -> run `openspec-extensions reconcile merge-issue` immediately, then rerun reconcile and keep advancing without waiting for user confirmation
+   - `complete_issue_review_gate` -> current issue is still missing the team check/review gate artifact; normalize checker/reviewer verdicts into `runs/ISSUE-REVIEW-<issue>.json`, then rerun reconcile
    - `coordinator_review` -> review the issue, then either accept it with `openspec-extensions reconcile merge-issue` or create `Must fix now` backlog items and send it back to repair
+   - `resolve_issue_review_failure` -> current issue's team review gate failed; repair first, then refresh `runs/ISSUE-REVIEW-<issue>.json`
    - `await_planning_docs_commit_confirmation` -> semi-auto pause before the coordinator-owned planning-doc commit that must happen before the first issue dispatch
    - `await_issue_dispatch_confirmation` -> semi-auto pause before the first issue dispatch after issue planning
    - `dispatch_next_issue` -> prepare the next approved issue and, in the default path, continue through subagent-team; this is not a terminal checkpoint
@@ -79,6 +81,7 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
 - If `commit_planning_docs` is emitted, do not skip straight to issue execution; commit the planning docs first, rerun reconcile, and only then honor `dispatch_next_issue`.
 - If `automation_profile=full_auto` and the helper emits `dispatch_next_issue`, do not stop to ask the user; render the next team dispatch or continue the subagent-team loop immediately.
 - If `auto_accept_issue_review=true` and the helper emits `auto_accept_issue`, do not stop to ask the user; merge/commit the issue immediately and continue.
+- If the current issue came from `ISSUE-*.team.dispatch.md`, do not accept/merge it until `runs/ISSUE-REVIEW-<issue>.json` exists, is current, and passed.
 - `dispatch_next_issue` means the first approved issue after the planning-doc commit, or the next pending issue after an accepted issue, should be dispatched immediately; it must not be reframed as a terminal control-plane checkpoint.
 - If coordinator review accepts an issue, merge and commit it before dispatching the next dependent issue or moving to `verify`.
 - Do not move from "all issues completed" to `verify` until `runs/CHANGE-REVIEW.json` exists, is current, and has `status=passed`.

@@ -97,7 +97,7 @@ Read these first:
    - repair
    - review
    - if review fails, go back to development
-15. Developers that implement code for the issue must follow `openspec-execute-issue` and write issue progress/run artifacts.
+15. Only the explicit issue-only worker path uses `openspec-execute-issue` end to end. In `issue_execution` team rounds, development seats may write `start` / `checkpoint` issue progress updates, but must not close the issue as `completed + review_required`; the coordinator does that only after checker/reviewer gates pass and `runs/ISSUE-REVIEW-<issue>.json` is recorded.
 16. Before moving from one lifecycle phase to the next, reread `openspec/issue-mode.json` again and confirm the next phase still matches the latest config.
 17. After all issues are complete, run a change-level `/review` and write `runs/CHANGE-REVIEW.json` before verify.
 18. Coordinator keeps merge, commit, verify, archive, and change-level control artifacts.
@@ -110,9 +110,12 @@ Read these first:
 - `subagent_team.*` now controls full-process auto-accept and continuation, not just the design-review checkpoint.
 - `semi_auto` means the lifecycle still keeps manual gates for design / planning / change acceptance / archive. It may still auto-accept validated issues one by one so each issue lands as its own commit. `full_auto` means the lifecycle auto-continues across `spec_readiness -> issue_planning -> issue_execution -> change_acceptance -> change_verify -> archive` while still respecting RRA gates.
 - `spec_readiness` is the design-review gate in the complex-change path: proposal/design are prepared first, then a dedicated `1` author + `2` reviewers subagent team must pass it before task splitting begins.
+- `spec_readiness` 通过后，coordinator 还要把当前 gate 结果写成 `runs/SPEC-READINESS.json`；缺这个工件时，后续 tasks / issue 文档不能把 phase 顶过去。
 - design-author / design-review seats are not coordinator substitutes: they must not create worktrees, write issue progress artifacts, dispatch issues, or continue into issue execution.
 - if inherited context or default agent prompts conflict with an explicit seat handoff, the seat handoff wins.
 - `issue_planning` starts after design review passes, and is where coordinator-owned `tasks.md` plus `issues/INDEX.md` and `ISSUE-*.md` are produced/reviewed.
+- `issue_planning` 通过后，coordinator 还要把当前 gate 结果写成 `runs/ISSUE-PLANNING.json`；缺这个工件时，不能开始首个 issue execution。
+- `issue_execution` 里如果走的是 team dispatch，development seat 只负责实现、changed_files 和 progress checkpoint；如果当前改动让既有校验失效，只把相关 validation 标回 `pending`，不要在 development seat 内自行宣称校验通过。checker / reviewer 通过后，coordinator 还要把当前 gate 结果写成 `runs/ISSUE-REVIEW-<issue>.json`，然后才能把 issue 标成 `completed + review_required` 并进入 merge。
 - if a seat subagent was successfully launched, the fallback rule "main session continues serially when delegation is unavailable" no longer applies to that seat; only the coordinator may use that fallback.
 - Before the first issue dispatch, the coordinator must first commit `proposal.md`, `design.md`, `tasks.md`, `issues/INDEX.md`, and `ISSUE-*.md` as a dedicated planning-doc commit.
 - When `issue_planning` is auto-accepted and reconcile emits `commit_planning_docs`, the coordinator must commit those planning docs immediately, rerun reconcile, and then honor `dispatch_next_issue`.
@@ -136,7 +139,7 @@ Read these first:
 - `auto_accept_spec_readiness=true` means spec-readiness does not wait for human sign-off once proposal/design have passed the `1` author + `2` reviewers design review.
 - `auto_accept_issue_planning=true` means issue planning does not wait for human sign-off once tasks.md plus INDEX/ISSUE docs are dispatch-ready; the coordinator still commits the planning docs before the first issue dispatch.
 - `dispatch_next_issue` means "continue now"; it is not a pause point, not a terminal checkpoint, and not a prompt to wait for another user instruction.
-- `auto_accept_issue_review=true` means eligible `review_required` issues are coordinator-accepted, merged, and committed automatically once issue-local validation passes.
+- `auto_accept_issue_review=true` means eligible `review_required` issues are coordinator-accepted, merged, and committed automatically only after issue-local validation passed and the current team review gate artifact also passed.
 - `auto_accept_change_acceptance=true` means change acceptance does not wait for human sign-off once a passed change-level `/review` has already made verify allowed.
 - unattended progression should use long blocking waits for gate-bearing subagents, typically up to 1 hour
 - One issue stays one bounded execution unit even when multiple subagents participate in the round.

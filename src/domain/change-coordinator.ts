@@ -5,11 +5,17 @@ import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 
 export const REVIEW_ARTIFACT_FILE_NAME = "CHANGE-REVIEW.json";
 export const VERIFY_ARTIFACT_FILE_NAME = "CHANGE-VERIFY.json";
+export const SPEC_READINESS_ARTIFACT_FILE_NAME = "SPEC-READINESS.json";
+export const ISSUE_PLANNING_ARTIFACT_FILE_NAME = "ISSUE-PLANNING.json";
+export const ISSUE_REVIEW_ARTIFACT_PREFIX = "ISSUE-REVIEW-";
 
 const TASK_ID_PATTERN = "\\d+(?:\\.\\d+)+";
 const REVIEW_EXCLUDED_PATH = "openspec/changes";
+const PASSING_GATE_STATUSES = new Set(["accepted", "approved", "ok", "pass", "passed", "success", "succeeded"]);
+const FAILING_GATE_STATUSES = new Set(["blocked", "fail", "failed", "rejected"]);
 
 export type JsonRecord = Record<string, unknown>;
+export type PhaseGate = "spec_readiness" | "issue_planning";
 export type ReviewScope = {
   base_revision: string;
   changed_files: string[];
@@ -169,6 +175,51 @@ function readScopeFingerprint(artifact: JsonRecord): string {
   return String((payload as JsonRecord).fingerprint ?? "").trim();
 }
 
+function isJsonRecord(value: unknown): value is JsonRecord {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function readGateScopeFingerprint(artifact: JsonRecord): string {
+  const payload = artifact.gate_scope;
+  if (!isJsonRecord(payload)) {
+    return "";
+  }
+  return String(payload.fingerprint ?? "").trim();
+}
+
+function latestPathUpdatedAt(paths: string[]): Date | null {
+  let latest: Date | null = null;
+  for (const currentPath of paths) {
+    if (!fs.existsSync(currentPath)) {
+      continue;
+    }
+    const updatedAt = fs.statSync(currentPath).mtime;
+    if (!latest || updatedAt > latest) {
+      latest = updatedAt;
+    }
+  }
+  return latest;
+}
+
+function normalizeStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return [...new Set(value.map((item) => String(item).trim()).filter(Boolean))].sort();
+}
+
+function phaseGateDocPaths(repoRoot: string, change: string, phase: PhaseGate): string[] {
+  const changeDir = changeDirPath(repoRoot, change);
+  if (phase === "spec_readiness") {
+    return [path.join(changeDir, "proposal.md"), path.join(changeDir, "design.md")].filter((currentPath) => fs.existsSync(currentPath));
+  }
+  return planningDocPaths(repoRoot, change);
+}
+
+function phaseGateArtifactFileName(phase: PhaseGate): string {
+  return phase === "spec_readiness" ? SPEC_READINESS_ARTIFACT_FILE_NAME : ISSUE_PLANNING_ARTIFACT_FILE_NAME;
+}
+
 export function reviewScopeToJson(scope: ReviewScope): JsonRecord {
   return {
     upstream_ref: scope.upstream_ref,
@@ -179,6 +230,110 @@ export function reviewScopeToJson(scope: ReviewScope): JsonRecord {
     excluded_changed_files: scope.excluded_changed_files,
     has_reviewable_changes: scope.has_reviewable_changes
   };
+}
+
+export function phaseGateArtifactPath(repoRoot: string, change: string, phase: PhaseGate): string {
+  return path.join(changeDirPath(repoRoot, change), "runs", phaseGateArtifactFileName(phase));
+}
+
+export function issueReviewArtifactPath(repoRoot: string, change: string, issueId: string): string {
+  return path.join(changeDirPath(repoRoot, change), "runs", `${ISSUE_REVIEW_ARTIFACT_PREFIX}${issueId}.json`);
+}
+
+export function issueTeamDispatchPath(repoRoot: string, change: string, issueId: string): string {
+  return path.join(changeDirPath(repoRoot, change), "issues", `${issueId}.team.dispatch.md`);
+}
+
+export function phaseGateScopeToJson(repoRoot: string, change: string, phase: PhaseGate): JsonRecord {
+  const trackedPaths = phaseGateDocPaths(repoRoot, change, phase)
+    .map((currentPath) => path.relative(repoRoot, currentPath).split(path.sep).join("/"))
+    .sort();
+  const fingerprint = createHash("sha256");
+
+  // 文档门禁必须绑定到当前文档快照，不能只凭“文件存在”就视为已通过。
+  for (const relativePath of trackedPaths) {
+    fingerprint.update(`${relativePath}\u0000`);
+    fingerprint.update(fs.readFileSync(path.join(repoRoot, relativePath)));
+    fingerprint.update("\u0000");
+  }
+
+  return {
+    fingerprint: fingerprint.digest("hex"),
+    tracked_paths: trackedPaths
+  };
+}
+
+export function phaseGateArtifactIsCurrent(
+  repoRoot: string,
+  change: string,
+  phase: PhaseGate,
+  artifact: JsonRecord
+): boolean {
+  const updatedAt = parseIso8601(String(artifact.updated_at ?? ""));
+  if (!updatedAt) {
+    return false;
+  }
+
+  const docPaths = phaseGateDocPaths(repoRoot, change, phase);
+  if (docPaths.length === 0) {
+    return false;
+  }
+
+  const latestDocAt = latestPathUpdatedAt(docPaths);
+  if (latestDocAt && updatedAt < latestDocAt) {
+    return false;
+  }
+
+  const fingerprint = readGateScopeFingerprint(artifact);
+  if (!fingerprint) {
+    return true;
+  }
+
+  return phaseGateScopeToJson(repoRoot, change, phase).fingerprint === fingerprint;
+}
+
+export function phaseGateStatus(artifact: JsonRecord): { failed: boolean; passed: boolean; status: string } {
+  const status = String(artifact.status ?? "").trim().toLowerCase();
+  return {
+    status,
+    passed: PASSING_GATE_STATUSES.has(status),
+    failed: FAILING_GATE_STATUSES.has(status)
+  };
+}
+
+export function issueReviewStatus(artifact: JsonRecord): { failed: boolean; passed: boolean; status: string } {
+  const status = String(artifact.status ?? "").trim().toLowerCase().replaceAll(" ", "_");
+  return {
+    status,
+    passed: new Set(["accepted", "approved", "ok", "pass", "passed", "pass_with_noted_debt", "success", "succeeded"]).has(status),
+    failed: FAILING_GATE_STATUSES.has(status)
+  };
+}
+
+export function issueReviewArtifactIsCurrent(progress: JsonRecord, artifact: JsonRecord): boolean {
+  const reviewedAt = parseIso8601(String(artifact.updated_at ?? ""));
+  if (!reviewedAt) {
+    return false;
+  }
+
+  const progressUpdatedAt = parseIso8601(String(progress.updated_at ?? ""));
+  if (progressUpdatedAt && reviewedAt < progressUpdatedAt) {
+    return false;
+  }
+
+  const artifactRunId = String(artifact.run_id ?? "").trim();
+  const progressRunId = String(progress.run_id ?? "").trim();
+  if (artifactRunId && progressRunId && artifactRunId !== progressRunId) {
+    return false;
+  }
+
+  const artifactChangedFiles = normalizeStringList(artifact.changed_files);
+  const progressChangedFiles = normalizeStringList(progress.changed_files);
+  if (artifactChangedFiles.length > 0 && progressChangedFiles.length > 0) {
+    return JSON.stringify(artifactChangedFiles) === JSON.stringify(progressChangedFiles);
+  }
+
+  return true;
 }
 
 export function buildReviewScope(repoRoot: string): ReviewScope {

@@ -6,6 +6,14 @@ import test from "node:test";
 import { execFileSync } from "node:child_process";
 
 import { reconcileChange } from "../../src/commands/reconcile";
+import {
+  issueReviewArtifactPath,
+  phaseGateArtifactPath,
+  phaseGateScopeToJson,
+  type PhaseGate
+} from "../../src/domain/change-coordinator";
+
+const GATE_UPDATED_AT = "2099-01-01T00:00:00+00:00";
 
 function withTempDir(run: (repoRoot: string) => void): void {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-reconcile-"));
@@ -31,9 +39,44 @@ function commitAll(repoRoot: string, message: string): void {
   git(repoRoot, "commit", "-m", message);
 }
 
-function writeIssueDoc(repoRoot: string, change: string, issueId = "ISSUE-001"): void {
+function writePhaseGateArtifact(repoRoot: string, change: string, phase: PhaseGate, status = "passed"): void {
+  const artifactPath = phaseGateArtifactPath(repoRoot, change, phase);
+  fs.mkdirSync(path.dirname(artifactPath), { recursive: true });
+  fs.writeFileSync(artifactPath, JSON.stringify({
+    phase,
+    status,
+    updated_at: GATE_UPDATED_AT,
+    gate_scope: phaseGateScopeToJson(repoRoot, change, phase)
+  }, null, 2));
+}
+
+function writeIssueReviewArtifact(repoRoot: string, change: string, issueId: string, status = "pass"): void {
+  const artifactPath = issueReviewArtifactPath(repoRoot, change, issueId);
+  fs.mkdirSync(path.dirname(artifactPath), { recursive: true });
+  fs.writeFileSync(artifactPath, JSON.stringify({
+    change,
+    issue_id: issueId,
+    status,
+    run_id: `RUN-${issueId}`,
+    changed_files: ["src/demo.ts"],
+    updated_at: GATE_UPDATED_AT
+  }, null, 2));
+}
+
+function writeIssueDoc(
+  repoRoot: string,
+  change: string,
+  issueId = "ISSUE-001",
+  options: { includeGateArtifacts?: boolean } = {}
+): void {
+  const changeDir = path.join(repoRoot, "openspec", "changes", change);
+  const issuesDir = path.join(changeDir, "issues");
   const issuePath = path.join(repoRoot, "openspec", "changes", change, "issues", `${issueId}.md`);
   fs.mkdirSync(path.dirname(issuePath), { recursive: true });
+  fs.writeFileSync(path.join(changeDir, "proposal.md"), "# proposal\n");
+  fs.writeFileSync(path.join(changeDir, "design.md"), "# design\n");
+  fs.writeFileSync(path.join(changeDir, "tasks.md"), "- [ ] 1.1 ship issue flow\n");
+  fs.writeFileSync(path.join(issuesDir, "INDEX.md"), `- \`${issueId}\` \`1.1\`\n`);
   fs.writeFileSync(issuePath, `---
 issue_id: ${issueId}
 title: Demo issue
@@ -48,6 +91,10 @@ validation:
   - pnpm lint
 ---
 `);
+  if (options.includeGateArtifacts !== false) {
+    writePhaseGateArtifact(repoRoot, change, "spec_readiness");
+    writePhaseGateArtifact(repoRoot, change, "issue_planning");
+  }
 }
 
 function writeIssueProgress(
@@ -175,6 +222,97 @@ test("auto_issue_planning commits docs before first dispatch", () => {
     assert.equal((payload.continuation_policy as Record<string, string>).mode, "continue_immediately");
     assert.equal((payload.planning_docs as Record<string, boolean>).needs_commit, true);
     assert.match(String(payload.reason), /先自动提交规划文档/);
+  });
+});
+
+test("missing spec gate blocks dispatch even when planning docs already exist", () => {
+  withTempDir((repoRoot) => {
+    writeIssueDoc(repoRoot, "demo-change", "ISSUE-001", { includeGateArtifacts: false });
+    initGitRepo(repoRoot);
+    commitAll(repoRoot, "commit planning docs");
+
+    const payload = reconcileChange({ repoRoot, change: "demo-change" });
+
+    assert.equal(payload.next_action, "complete_spec_readiness_gate");
+    assert.equal(payload.recommended_issue_id, "");
+    assert.match(String(payload.reason), /spec_readiness gate 尚未记录通过/);
+    assert.equal((payload.continuation_policy as Record<string, string>).mode, "resolve_or_inspect");
+  });
+});
+
+test("missing issue_planning gate blocks first dispatch after design gate", () => {
+  withTempDir((repoRoot) => {
+    writeIssueDoc(repoRoot, "demo-change", "ISSUE-001", { includeGateArtifacts: false });
+    writePhaseGateArtifact(repoRoot, "demo-change", "spec_readiness");
+    initGitRepo(repoRoot);
+    commitAll(repoRoot, "commit planning docs");
+
+    const payload = reconcileChange({ repoRoot, change: "demo-change" });
+
+    assert.equal(payload.next_action, "complete_issue_planning_gate");
+    assert.equal(payload.recommended_issue_id, "ISSUE-001");
+    assert.match(String(payload.reason), /issue_planning gate 尚未记录通过/);
+    assert.equal((payload.continuation_policy as Record<string, string>).mode, "resolve_or_inspect");
+  });
+});
+
+test("team dispatch issue requires review gate before auto accept", () => {
+  withTempDir((repoRoot) => {
+    const change = "demo-change";
+    const issueId = "ISSUE-001";
+    writeIssueDoc(repoRoot, change, issueId);
+    fs.writeFileSync(
+      path.join(repoRoot, "openspec", "changes", change, "issues", `${issueId}.team.dispatch.md`),
+      "# team dispatch\n"
+    );
+    writeIssueProgress(repoRoot, change, {
+      issueId,
+      status: "completed",
+      boundaryStatus: "review_required",
+      nextAction: "coordinator_review",
+      validation: { "pnpm lint": "passed", "pnpm type-check": "passed" },
+      updatedAt: "2026-03-30T10:00:00+08:00"
+    });
+    const progressPath = path.join(repoRoot, "openspec", "changes", change, "issues", `${issueId}.progress.json`);
+    const progress = JSON.parse(fs.readFileSync(progressPath, "utf8")) as Record<string, unknown>;
+    progress.run_id = `RUN-${issueId}`;
+    fs.writeFileSync(progressPath, JSON.stringify(progress, null, 2));
+
+    const payload = reconcileChange({ repoRoot, change });
+
+    assert.equal(payload.next_action, "complete_issue_review_gate");
+    assert.equal(payload.recommended_issue_id, issueId);
+    assert.match(String(payload.reason), /team dispatch/);
+  });
+});
+
+test("team dispatch issue can auto accept after review gate passes", () => {
+  withTempDir((repoRoot) => {
+    const change = "demo-change";
+    const issueId = "ISSUE-001";
+    writeIssueDoc(repoRoot, change, issueId);
+    fs.writeFileSync(
+      path.join(repoRoot, "openspec", "changes", change, "issues", `${issueId}.team.dispatch.md`),
+      "# team dispatch\n"
+    );
+    writeIssueProgress(repoRoot, change, {
+      issueId,
+      status: "completed",
+      boundaryStatus: "review_required",
+      nextAction: "coordinator_review",
+      validation: { "pnpm lint": "passed", "pnpm type-check": "passed" },
+      updatedAt: "2026-03-30T10:00:00+08:00"
+    });
+    const progressPath = path.join(repoRoot, "openspec", "changes", change, "issues", `${issueId}.progress.json`);
+    const progress = JSON.parse(fs.readFileSync(progressPath, "utf8")) as Record<string, unknown>;
+    progress.run_id = `RUN-${issueId}`;
+    fs.writeFileSync(progressPath, JSON.stringify(progress, null, 2));
+    writeIssueReviewArtifact(repoRoot, change, issueId);
+
+    const payload = reconcileChange({ repoRoot, change });
+
+    assert.equal(payload.next_action, "auto_accept_issue");
+    assert.equal(payload.recommended_issue_id, issueId);
   });
 });
 

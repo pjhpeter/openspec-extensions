@@ -6,6 +6,9 @@ import test from "node:test";
 import { execFileSync } from "node:child_process";
 
 import { renderLifecycleDispatch } from "../../src/renderers/lifecycle-dispatch";
+import { phaseGateArtifactPath, phaseGateScopeToJson, type PhaseGate } from "../../src/domain/change-coordinator";
+
+const GATE_UPDATED_AT = "2099-01-01T00:00:00+00:00";
 
 function withTempDir(run: (repoRoot: string) => void): void {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-lifecycle-dispatch-"));
@@ -29,6 +32,17 @@ function initGitRepo(repoRoot: string): void {
 function commitAll(repoRoot: string, message: string): void {
   git(repoRoot, "add", ".");
   git(repoRoot, "commit", "-m", message);
+}
+
+function writePhaseGateArtifact(repoRoot: string, change: string, phase: PhaseGate, status = "passed"): void {
+  const artifactPath = phaseGateArtifactPath(repoRoot, change, phase);
+  fs.mkdirSync(path.dirname(artifactPath), { recursive: true });
+  fs.writeFileSync(artifactPath, JSON.stringify({
+    phase,
+    status,
+    updated_at: GATE_UPDATED_AT,
+    gate_scope: phaseGateScopeToJson(repoRoot, change, phase)
+  }, null, 2));
 }
 
 test("detects spec_readiness when core docs are missing", () => {
@@ -109,6 +123,8 @@ validation:
 ---
 `);
     initGitRepo(repoRoot);
+    writePhaseGateArtifact(repoRoot, "demo-change", "spec_readiness");
+    writePhaseGateArtifact(repoRoot, "demo-change", "issue_planning");
 
     const payload = renderLifecycleDispatch({
       repoRoot,
@@ -123,6 +139,87 @@ validation:
     assert.match(payload.phase_reason, /尚未提交/);
     assert.match(dispatchText, /先把 proposal \/ design \/ tasks \/ issue 文档提交成一次独立 commit/);
     assert.match(dispatchText, /提交 proposal \/ design \/ tasks \/ issue 文档/);
+  });
+});
+
+test("spec_readiness still blocks when planning docs exist but design gate is missing", () => {
+  withTempDir((repoRoot) => {
+    const changeDir = path.join(repoRoot, "openspec", "changes", "demo-change");
+    const issuesDir = path.join(changeDir, "issues");
+    fs.mkdirSync(issuesDir, { recursive: true });
+
+    fs.writeFileSync(path.join(changeDir, "proposal.md"), "# proposal\n");
+    fs.writeFileSync(path.join(changeDir, "design.md"), "# design\n");
+    fs.writeFileSync(path.join(changeDir, "tasks.md"), "- [ ] 1.1 ship issue flow\n");
+    fs.writeFileSync(path.join(issuesDir, "INDEX.md"), "- `ISSUE-001` `1.1`\n");
+    fs.writeFileSync(path.join(issuesDir, "ISSUE-001.md"), `---
+issue_id: ISSUE-001
+title: 生命周期执行
+worker_worktree: .
+allowed_scope:
+  - src/demo.ts
+out_of_scope:
+  - electron/
+done_when:
+  - 输出 issue team packet
+validation:
+  - pnpm lint
+---
+`);
+
+    const payload = renderLifecycleDispatch({
+      repoRoot,
+      change: "demo-change",
+      phase: "auto",
+      issueId: "",
+      dryRun: false
+    });
+
+    assert.equal(payload.phase, "spec_readiness");
+    assert.match(payload.phase_reason, /即使 tasks \/ issue 文档已经存在/);
+    assert.match(payload.phase_reason, /SPEC-READINESS\.json/);
+  });
+});
+
+test("issue_planning still blocks when planning gate is missing", () => {
+  withTempDir((repoRoot) => {
+    const changeDir = path.join(repoRoot, "openspec", "changes", "demo-change");
+    const issuesDir = path.join(changeDir, "issues");
+    fs.mkdirSync(issuesDir, { recursive: true });
+
+    fs.writeFileSync(path.join(changeDir, "proposal.md"), "# proposal\n");
+    fs.writeFileSync(path.join(changeDir, "design.md"), "# design\n");
+    fs.writeFileSync(path.join(changeDir, "tasks.md"), "- [ ] 1.1 ship issue flow\n");
+    fs.writeFileSync(path.join(issuesDir, "INDEX.md"), "- `ISSUE-001` `1.1`\n");
+    fs.writeFileSync(path.join(issuesDir, "ISSUE-001.md"), `---
+issue_id: ISSUE-001
+title: 生命周期执行
+worker_worktree: .
+allowed_scope:
+  - src/demo.ts
+out_of_scope:
+  - electron/
+done_when:
+  - 输出 issue team packet
+validation:
+  - pnpm lint
+---
+`);
+    writePhaseGateArtifact(repoRoot, "demo-change", "spec_readiness");
+    initGitRepo(repoRoot);
+    commitAll(repoRoot, "commit planning docs");
+
+    const payload = renderLifecycleDispatch({
+      repoRoot,
+      change: "demo-change",
+      phase: "auto",
+      issueId: "",
+      dryRun: false
+    });
+
+    assert.equal(payload.phase, "issue_planning");
+    assert.match(payload.phase_reason, /issue_planning gate 还没有记录通过/);
+    assert.match(payload.phase_reason, /ISSUE-PLANNING\.json/);
   });
 });
 
@@ -173,6 +270,8 @@ validation:
 - 继续 ISSUE-001
 `);
     initGitRepo(repoRoot);
+    writePhaseGateArtifact(repoRoot, "demo-change", "spec_readiness");
+    writePhaseGateArtifact(repoRoot, "demo-change", "issue_planning");
     commitAll(repoRoot, "commit planning docs");
 
     const payload = renderLifecycleDispatch({
@@ -192,6 +291,9 @@ validation:
     assert.match(lifecycleText, /ISSUE-001\.team\.dispatch\.md/);
     assert.match(lifecycleText, /Gate-bearing seats for this phase/);
     assert.match(lifecycleText, /issue_execution` 仍然一次只处理一个 approved issue/);
+    assert.match(lifecycleText, /只负责实现和 progress start\/checkpoint/);
+    assert.match(lifecycleText, /只把相关 validation 回写成 `pending`/);
+    assert.doesNotMatch(lifecycleText, /局部验证/);
     assert.match(lifecycleText, /不要读取 `node_modules`、`dist`、`build`、`\.next`、`coverage`/);
     assert.match(issueTeamText, /Development group: 3 subagents/);
     assert.match(issueTeamText, /Check group: 2 subagents/);
@@ -208,6 +310,59 @@ validation:
     assert.equal(payload.team_topology[1]?.reasoning_effort, "medium");
     assert.equal(payload.team_topology[1]?.count, 2);
     assert.equal(payload.team_topology[2]?.count, 1);
+  });
+});
+
+test("completed team dispatch issue stays in issue_execution until review gate exists", () => {
+  withTempDir((repoRoot) => {
+    const changeDir = path.join(repoRoot, "openspec", "changes", "demo-change");
+    const issuesDir = path.join(changeDir, "issues");
+    fs.mkdirSync(issuesDir, { recursive: true });
+
+    fs.writeFileSync(path.join(changeDir, "proposal.md"), "# proposal\n");
+    fs.writeFileSync(path.join(changeDir, "design.md"), "# design\n");
+    fs.writeFileSync(path.join(changeDir, "tasks.md"), "- [x] 1.1 ship issue flow\n");
+    fs.writeFileSync(path.join(issuesDir, "INDEX.md"), "- `ISSUE-001` `1.1`\n");
+    fs.writeFileSync(path.join(issuesDir, "ISSUE-001.md"), `---
+issue_id: ISSUE-001
+title: 生命周期执行
+worker_worktree: .
+allowed_scope:
+  - src/demo.ts
+out_of_scope:
+  - electron/
+done_when:
+  - 输出 issue team packet
+validation:
+  - pnpm lint
+---
+`);
+    fs.writeFileSync(path.join(issuesDir, "ISSUE-001.team.dispatch.md"), "# team dispatch\n");
+    fs.writeFileSync(path.join(issuesDir, "ISSUE-001.progress.json"), JSON.stringify({
+      issue_id: "ISSUE-001",
+      status: "completed",
+      boundary_status: "review_required",
+      next_action: "coordinator_review",
+      changed_files: ["src/demo.ts"],
+      validation: { lint: "passed" },
+      updated_at: "2026-03-30T10:00:00+08:00"
+    }, null, 2));
+    writePhaseGateArtifact(repoRoot, "demo-change", "spec_readiness");
+    writePhaseGateArtifact(repoRoot, "demo-change", "issue_planning");
+    initGitRepo(repoRoot);
+    commitAll(repoRoot, "commit planning docs");
+
+    const payload = renderLifecycleDispatch({
+      repoRoot,
+      change: "demo-change",
+      phase: "auto",
+      issueId: "",
+      dryRun: false
+    });
+
+    assert.equal(payload.phase, "issue_execution");
+    assert.equal(payload.focus_issue_id, "ISSUE-001");
+    assert.match(payload.phase_reason, /checker\/reviewer gate/);
   });
 });
 
@@ -270,6 +425,8 @@ validation:
         auto_archive_after_verify: true
       }
     }, null, 2));
+    writePhaseGateArtifact(repoRoot, "demo-change", "spec_readiness");
+    writePhaseGateArtifact(repoRoot, "demo-change", "issue_planning");
 
     const payload = renderLifecycleDispatch({
       repoRoot,
@@ -337,6 +494,8 @@ validation:
         auto_archive_after_verify: true
       }
     }, null, 2));
+    writePhaseGateArtifact(repoRoot, "demo-change", "spec_readiness");
+    writePhaseGateArtifact(repoRoot, "demo-change", "issue_planning");
 
     const payload = renderLifecycleDispatch({
       repoRoot,
@@ -388,6 +547,8 @@ validation:
       next_action: "",
       updated_at: "2026-03-30T10:00:00+08:00"
     }, null, 2));
+    writePhaseGateArtifact(repoRoot, "demo-change", "spec_readiness");
+    writePhaseGateArtifact(repoRoot, "demo-change", "issue_planning");
 
     const payload = renderLifecycleDispatch({
       repoRoot,

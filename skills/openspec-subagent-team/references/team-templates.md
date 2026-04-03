@@ -116,6 +116,7 @@ Fast-path activation:
 - issue progress artifact 里的 `changed_files`
 - 如果还没有，则看 `allowed_scope`
 - 再看 issue validation 和当前 round backlog
+- 需要时运行或复核这些 validation，并把结果作为 gate evidence 回交主控
 
 只有为确认 blocker 或 direct dependency 回归时，才允许扩到相邻调用链。
 
@@ -145,8 +146,12 @@ Fast-path activation:
 - 先完成当前 issue 范围内的开发，再处理 coordinator 批准进入本轮 backlog 的问题
 - 最小改动
 - 明确列出修改文件
-- 明确说明验证方式
+- 明确说明受影响的 validation 和待后续验证项
 - 如果要实现代码，必须遵守 issue dispatch 里的 progress/run artifact 规则
+- 如果你是 subagent-team 的 development seat，只允许写 `update-progress start` 或 `checkpoint`；不要自己写 `stop`，也不要把 issue 标成 `completed + review_required`
+- 如果当前改动让既有校验失效，只把相关 validation 标记回 `pending`，不要在 development seat 内宣称 `passed`
+- development seat 不是当前 issue 的 validation / check / review owner；这些结论留给 checker / reviewer / coordinator 收敛
+- checker / reviewer 通过后，由 coordinator 统一写 `runs/ISSUE-REVIEW-<issue>.json`，再把 issue progress 收敛到可 merge 状态
 ```
 
 ## Review Prompt

@@ -63,6 +63,9 @@ openspec/changes/<change-name>/
 │   ├── ISSUE-001.progress.json
 │   └── ISSUE-002.progress.json
 └── runs/
+    ├── ISSUE-REVIEW-ISSUE-001.json
+    ├── SPEC-READINESS.json
+    ├── ISSUE-PLANNING.json
     ├── CHANGE-REVIEW.json
     ├── RUN-20260325T103000-ISSUE-001.json
     └── RUN-20260325T111500-ISSUE-002.json
@@ -89,7 +92,7 @@ If repo config is missing, compatibility fallback remains shared workspace mode 
 6. Default decisions:
    - unresolved `Must fix now` items in the active control backlog -> stop and resolve them before dispatch, verify, or archive
    - any `blocked` -> stop and resolve blocker
-   - any `review_required` -> if `subagent_team.auto_accept_issue_review=true` and issue-local validation passed, accept/commit it automatically; otherwise review it in the coordinator session first
+   - any `review_required` -> if `subagent_team.auto_accept_issue_review=true`, issue-local validation passed, and the team-dispatch issue review gate (when required) also passed, accept/commit it automatically; otherwise review it in the coordinator session first
    - after an issue is accepted, its code should already be captured in exactly one coordinator-owned commit before the next issue dispatch or change-level verify
    - if the accepted issue used a reusable change worktree, sync that worktree to the latest accepted commit before dispatching the next issue
    - if the first issue has not started yet and planning docs are still dirty in git -> create the coordinator-owned planning-doc commit first
@@ -102,6 +105,9 @@ If repo config is missing, compatibility fallback remains shared workspace mode 
 
 - In subagent-team flow, launched design-review, check, and review seats are gate-bearing participants for the current phase.
 - The coordinator must record seat ownership, agent ids, and running/completed status for those gate-bearing subagents.
+- `spec_readiness` only passes after the coordinator has normalized the current gate verdicts into `runs/SPEC-READINESS.json`.
+- `issue_planning` only passes after the coordinator has normalized the current gate verdicts into `runs/ISSUE-PLANNING.json`.
+- When an issue is executed through `ISSUE-*.team.dispatch.md`, merge readiness also depends on a current passed `runs/ISSUE-REVIEW-<issue>.json` recorded after checker/reviewer finish.
 - `auto_accept_*` only skips human chat confirmation after the required gate-bearing subagents have all completed and their verdicts have been normalized.
 - When reconcile emits `dispatch_next_issue`, the coordinator must continue immediately; this is not a terminal checkpoint and must not be rewritten as "control-plane ready, waiting for instruction".
 - When reconcile emits `commit_planning_docs`, the coordinator must commit the planning docs first and rerun reconcile before starting the first issue execution.
@@ -115,7 +121,7 @@ If repo config is missing, compatibility fallback remains shared workspace mode 
 1. Read change artifacts and the assigned issue boundary.
 2. Write or refresh the issue progress artifact at task start.
 3. Implement only the assigned issue inside the assigned worker workspace.
-4. Run required validation.
+4. In the explicit issue-only worker path, run required validation. In team-dispatch `issue_execution`, development seats only hand off changed files and pending validation updates; checker/reviewer plus the coordinator own the validation/review gate.
 5. Update the issue progress artifact and run artifact before stopping.
 6. Do not self-accept or create the final git commit.
 7. Report the artifact paths back to the coordinator.
@@ -158,6 +164,8 @@ Team dispatch artifacts are the coordinator handoff state for the default subage
 In issue mode, accepted code lands through coordinator review plus coordinator-owned acceptance commit, not through worker self-management.
 When a change-level worktree is reused across serial issues, that worktree must be synced to the latest accepted commit after each accepted issue so later issues inherit the already-landed code.
 The first issue execution also depends on a prior coordinator-owned planning-doc commit for `proposal.md` / `design.md` / `tasks.md` / `issues/INDEX.md` / `ISSUE-*.md`.
+It also depends on a current passed `runs/ISSUE-PLANNING.json`; stale or missing planning gate artifacts mean the change is still in `issue_planning`.
+When the issue is running under team dispatch, development seats do not close the issue on their own and are not the validation owner; they hand off changed files plus any validation entries reset to `pending`, then the coordinator records `runs/ISSUE-REVIEW-<issue>.json` after checker/reviewer pass and marks the issue `completed + review_required`.
 Before verify, the coordinator must also write a current `runs/CHANGE-REVIEW.json` artifact from a change-level `/review` of the current change diff.
 After successful archive of a change that used change scope, the reusable worktree should be removed as part of archive cleanup.
 When `subagent_team.auto_accept_*` is enabled, the gate is still coordinator-owned; it simply no longer waits for human chat confirmation before the coordinator accepts it.

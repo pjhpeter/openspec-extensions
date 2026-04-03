@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
+import { issueReviewArtifactPath } from "../domain/change-coordinator";
 import {
   loadIssueModeConfig,
   issueWorkerWorktreeSetting,
@@ -451,6 +452,8 @@ ${codeBulletList(currentChangedFiles)}
 ${codeBulletList(currentFocus)}
 ${excludedReviewPathsSection}- Latest issue-local validation snapshot:
 ${bulletList(currentValidation)}
+- Coordinator review gate artifact:
+  - \`${displayPath(input.repoRoot, issueReviewArtifactPath(input.repoRoot, input.change, input.issueId))}\`
 - Allowed scope:
 ${codeBulletList(input.allowedScope)}
 - Out of scope:
@@ -511,6 +514,7 @@ ${bulletList(input.validation)}
 - \u68c0\u67e5\u7ec4\u7ed3\u679c\u5fc5\u987b\u5148\u7edf\u4e00\u5f52\u5e76\uff0c\u518d\u4ea4\u7ed9\u5f00\u53d1\u7ec4\u4fee\u590d\uff1b\u4e0d\u8981\u628a\u539f\u59cb\u68c0\u67e5\u788e\u7247\u76f4\u63a5\u4e0b\u53d1\u3002
 - \u5ba1\u67e5\u7ec4\u8d1f\u8d23\u6700\u7ec8\u901a\u8fc7/\u4e0d\u901a\u8fc7\u5224\u65ad\uff1b\u5ba1\u67e5\u4e0d\u901a\u8fc7\u5c31\u56de\u5230\u5f00\u53d1\u7ec4\u5f00\u59cb\u4e0b\u4e00\u8f6e\u3002
 - \u4efb\u4e00 required gate-bearing subagent \u4ecd\u5728\u8fd0\u884c\u65f6\uff0c\u4e0d\u5141\u8bb8 accept \u5f53\u524d round\uff0c\u4e5f\u4e0d\u5141\u8bb8\u5173\u95ed\u8fd9\u4e9b subagent\u3002
+- checker / reviewer \u901a\u8fc7\u540e\uff0ccoordinator \u8981\u5148\u628a\u5f53\u524d round \u7ed3\u8bba\u5f52\u4e00\u5230 \`ISSUE-REVIEW-${input.issueId}.json\`\uff0c\u7136\u540e\u518d\u628a issue progress \u5199\u6210 \`completed + review_required\`\u3002
 - coordinator \u7ee7\u7eed\u62e5\u6709\uff1a
   - \`control/BACKLOG.md\`
   - latest \`control/ROUND-*.md\`
@@ -536,6 +540,7 @@ ${bulletList(deferredItems)}
   - \`changed_files\`\uff08\u82e5 progress artifact \u5df2\u8bb0\u5f55\uff09
   - \u5426\u5219\u770b \`allowed_scope\`
   - \u518d\u770b issue validation \u548c\u5f53\u524d round backlog
+- \u9700\u8981\u65f6\u7531 checker \u8fd0\u884c\u6216\u590d\u6838 issue validation\uff0c\u5e76\u628a\u7ed3\u679c\u4e0e\u8bc1\u636e\u56de\u4f20 coordinator\u3002
 - \u9ed8\u8ba4\u6392\u9664 \`node_modules\`\u3001\`dist\`\u3001\`build\`\u3001\`.next\`\u3001\`coverage\` \u8fd9\u7c7b\u76ee\u5f55\uff1b\u53ea\u6709\u5f53\u524d issue \u660e\u786e\u628a\u8fd9\u4e9b\u8def\u5f84\u5199\u8fdb \`allowed_scope\` \u65f6\u624d\u5141\u8bb8\u68c0\u67e5\u3002
 - \u53ea\u6709\u4e3a\u786e\u8ba4 blocker \u6216\u76f4\u63a5\u4f9d\u8d56\u56de\u5f52\u65f6\uff0c\u624d\u5141\u8bb8\u6269\u5230\u76f8\u90bb\u8c03\u7528\u94fe\u3002
 - \u53ea\u8f93\u51fa\uff1a
@@ -552,10 +557,13 @@ ${bulletList(deferredItems)}
 - \u5148\u5b8c\u6210\u5f53\u524d issue \u8303\u56f4\u5185\u7684\u5f00\u53d1\uff0c\u518d\u53ea\u5904\u7406 coordinator \u6279\u51c6\u8fdb\u5165\u672c\u8f6e backlog \u7684\u95ee\u9898\u3002
 - \u5c3d\u91cf\u6309\u6587\u4ef6/\u6a21\u5757 ownership \u5206\u914d\uff0c\u51cf\u5c11\u5199\u96c6\u91cd\u53e0\u3002
 - \u8d1f\u8d23\u5b9e\u73b0\u6216\u4fee\u590d repo \u4ee3\u7801\u7684 development subagent \u5fc5\u987b\u663e\u5f0f\u4f7f\u7528 \`reasoning_effort=xhigh\`\u3002
-- \u6267\u884c\u4ee3\u7801\u5b9e\u73b0\u7684 subagent \u5fc5\u987b\u5148\u5199\uff1a
+- \u9996\u4e2a\u771f\u6b63\u5f00\u59cb\u5199\u4ee3\u7801\u7684 development seat \u5148\u5199\uff1a
   - \`openspec-extensions execute update-progress start --repo-root "${input.repoRoot}" --change "${input.change}" --issue-id "${input.issueId}" --status in_progress --boundary-status working --next-action continue_issue --summary "\u5df2\u8fdb\u5165 subagent team repair round\u3002"\`
-- \u505c\u6b62\u524d\u5fc5\u987b\u5199\uff1a
-  - \`openspec-extensions execute update-progress stop --repo-root "${input.repoRoot}" --change "${input.change}" --issue-id "${input.issueId}" --status completed --boundary-status review_required --next-action coordinator_review --summary "issue \u8fb9\u754c\u5185\u4fee\u590d\u5df2\u5b8c\u6210\uff0c\u7b49\u5f85 coordinator \u6536\u655b\u3002" --validation "lint=<pending-or-passed>" --validation "typecheck=<pending-or-passed>" --changed-file "<path>"\`
+- development seat \u8fd4\u56de\u524d\u53ea\u5141\u8bb8\u5199 checkpoint\uff1a
+  - \`openspec-extensions execute update-progress checkpoint --repo-root "${input.repoRoot}" --change "${input.change}" --issue-id "${input.issueId}" --status in_progress --boundary-status working --next-action continue_issue --summary "development seat \u5df2\u5b8c\u6210\u5f53\u524d\u5b9e\u73b0\uff0c\u7b49\u5f85 checker / reviewer\u3002" --validation "<repo-validation-command>=pending" --changed-file "<path>"\`
+- development seat \u4e0d\u5141\u8bb8\u81ea\u5df1\u5199 \`stop\` \u6216\u628a issue \u6807\u6210 \`completed + review_required\`\uff1b\u90a3\u4e2a\u72b6\u6001\u53ea\u80fd\u7531 coordinator \u5728 checker / reviewer gate \u901a\u8fc7\u540e\u7edf\u4e00\u843d\u76d8\u3002
+- development seat \u53ea\u8d1f\u8d23\u5b9e\u73b0\u3001changed_files \u548c progress checkpoint\uff1b\u5982\u679c\u5f53\u524d\u6539\u52a8\u4f1a\u4f7f\u5df2\u6709\u6821\u9a8c\u7ed3\u8bba\u5931\u6548\uff0c\u5c31\u628a\u76f8\u5173 validation \u6807\u8bb0\u56de \`pending\`\uff0c\u4e0d\u8981\u5728\u672c seat \u5185\u5ba3\u79f0 \`passed\`\u3002
+- development seat \u4e0d\u662f\u5f53\u524d issue \u7684 validation / check / review owner\uff1b\u8fd9\u4e9b\u7ed3\u8bba\u7531 checker / reviewer / coordinator \u5728\u540e\u7eed gate \u91cc\u6536\u655b\u3002
 - \u4e0d\u8981\u81ea\u5408\u5e76\uff0c\u4e0d\u8981\u66f4\u65b0 \`tasks.md\`\u3002
 
 ## Review Packet Rules

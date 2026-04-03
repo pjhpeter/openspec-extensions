@@ -6,10 +6,12 @@ import path from "node:path";
 import test from "node:test";
 
 import { main } from "../../src/cli/index";
+import { phaseGateArtifactPath, phaseGateScopeToJson, type PhaseGate } from "../../src/domain/change-coordinator";
 
 const PACKAGE_VERSION = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "package.json"), "utf8")) as {
   version?: unknown;
 };
+const GATE_UPDATED_AT = "2099-01-01T00:00:00+00:00";
 
 function git(repoRoot: string, ...args: string[]): string {
   return execFileSync("git", args, { cwd: repoRoot, encoding: "utf8" }).trim();
@@ -19,6 +21,17 @@ function initGitRepo(repoRoot: string): void {
   git(repoRoot, "init");
   git(repoRoot, "config", "user.name", "Test User");
   git(repoRoot, "config", "user.email", "test@example.com");
+}
+
+function writePhaseGateArtifact(repoRoot: string, change: string, phase: PhaseGate): void {
+  const artifactPath = phaseGateArtifactPath(repoRoot, change, phase);
+  fs.mkdirSync(path.dirname(artifactPath), { recursive: true });
+  fs.writeFileSync(artifactPath, JSON.stringify({
+    phase,
+    status: "passed",
+    updated_at: GATE_UPDATED_AT,
+    gate_scope: phaseGateScopeToJson(repoRoot, change, phase)
+  }, null, 2));
 }
 
 function captureStdout(run: () => Promise<number>): Promise<{ exitCode: number; stdout: string }> {
@@ -144,8 +157,13 @@ test("cli dispatch lifecycle routes to renderer", async () => {
 
 test("cli reconcile change routes to command", async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-cli-reconcile-"));
-  const issuePath = path.join(repoRoot, "openspec", "changes", "demo-change", "issues", "ISSUE-001.md");
+  const changeDir = path.join(repoRoot, "openspec", "changes", "demo-change");
+  const issuePath = path.join(changeDir, "issues", "ISSUE-001.md");
   fs.mkdirSync(path.dirname(issuePath), { recursive: true });
+  fs.writeFileSync(path.join(changeDir, "proposal.md"), "# proposal\n");
+  fs.writeFileSync(path.join(changeDir, "design.md"), "# design\n");
+  fs.writeFileSync(path.join(changeDir, "tasks.md"), "- [ ] 1.1 reconcile\n");
+  fs.writeFileSync(path.join(changeDir, "issues", "INDEX.md"), "- `ISSUE-001` `1.1`\n");
   fs.writeFileSync(issuePath, `---
 issue_id: ISSUE-001
 title: Reconcile change
@@ -157,6 +175,8 @@ done_when:
   - reconcile rendered
 ---
 `);
+  writePhaseGateArtifact(repoRoot, "demo-change", "spec_readiness");
+  writePhaseGateArtifact(repoRoot, "demo-change", "issue_planning");
   initGitRepo(repoRoot);
 
   const result = await captureStdout(() =>

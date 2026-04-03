@@ -44,7 +44,7 @@ If this file is missing, the helpers fall back to these defaults:
 - `rra.gate_mode`: `advisory` or `enforce`.
 - `subagent_team.auto_accept_spec_readiness`: automatically accept the spec-readiness gate once proposal/design have passed the dedicated `1` author + `2` reviewers design review, then continue into task splitting / issue planning without waiting for human sign-off.
 - `subagent_team.auto_accept_issue_planning`: automatically accept the issue-planning gate once `tasks.md` plus INDEX/ISSUE docs are dispatch-ready, then commit the planning docs and dispatch the approved issue set without waiting for human sign-off.
-- `subagent_team.auto_accept_issue_review`: automatically accept an eligible `review_required` issue after its issue-local validation passes, then merge/commit it and continue to the next issue or change acceptance. This is enabled in the shipped default config so each accepted issue lands as its own coordinator commit.
+- `subagent_team.auto_accept_issue_review`: automatically accept an eligible `review_required` issue after its issue-local validation passes and, for team-dispatch issues, the current `runs/ISSUE-REVIEW-<issue>.json` gate also passed; then merge/commit it and continue to the next issue or change acceptance. This is enabled in the shipped default config so each accepted issue lands as its own coordinator commit.
 - `subagent_team.auto_accept_change_acceptance`: automatically accept the change-acceptance gate and continue into change-level verify.
 - `subagent_team.auto_archive_after_verify`: continue from a passed verify result into archive automatically.
 

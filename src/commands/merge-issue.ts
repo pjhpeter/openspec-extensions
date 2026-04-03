@@ -3,6 +3,10 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 
 import {
+  issueReviewArtifactIsCurrent,
+  issueReviewArtifactPath,
+  issueReviewStatus,
+  issueTeamDispatchPath,
   nowIso,
   readJson,
   writeJson,
@@ -125,6 +129,35 @@ function ensureReviewReady(progress: JsonRecord, issueId: string, force: boolean
   }
 }
 
+function ensureIssueTeamReviewReady(
+  repoRoot: string,
+  change: string,
+  issueId: string,
+  progress: JsonRecord,
+  force: boolean
+): void {
+  if (force || !fs.existsSync(issueTeamDispatchPath(repoRoot, change, issueId))) {
+    return;
+  }
+
+  const artifactPath = issueReviewArtifactPath(repoRoot, change, issueId);
+  const artifact = readJson(artifactPath);
+  const status = issueReviewStatus(artifact);
+  const current = Object.keys(artifact).length > 0 && issueReviewArtifactIsCurrent(progress, artifact);
+  if (current && status.passed) {
+    return;
+  }
+
+  const displayPath = path.relative(repoRoot, artifactPath).split(path.sep).join("/");
+  if (current && status.failed) {
+    throw new Error(`${issueId} checker/reviewer gate failed; fix findings and refresh ${displayPath} before merge.`);
+  }
+  if (Object.keys(artifact).length > 0) {
+    throw new Error(`${issueId} checker/reviewer gate is stale; refresh ${displayPath} before merge.`);
+  }
+  throw new Error(`${issueId} requires a passed checker/reviewer gate artifact before merge: ${displayPath}.`);
+}
+
 type IssueCommitContext = {
   doneWhen: string[];
   title: string;
@@ -216,6 +249,7 @@ export function mergeIssue(args: ParsedMergeIssueArgs): JsonRecord {
   }
   const progress = readJson(progressPath);
   ensureReviewReady(progress, args.issueId, args.force);
+  ensureIssueTeamReviewReady(args.repoRoot, args.change, args.issueId, progress, args.force);
 
   const workerPatch = buildWorkerPatch(args.repoRoot, workerWorktree);
   if (workerPatch.patch.length === 0 || workerPatch.patch.toString("utf8").trim() === "") {

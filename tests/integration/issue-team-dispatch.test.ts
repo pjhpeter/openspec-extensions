@@ -139,8 +139,13 @@ validation:
   assert.match(dispatchText, /ISSUE-001/);
   assert.match(dispatchText, /pnpm lint/);
   assert.match(dispatchText, /\u4fee\u590d ISSUE-001 gate/);
+  assert.match(dispatchText, /ISSUE-REVIEW-ISSUE-001\.json/);
   assert.match(dispatchText, /openspec-extensions execute update-progress start --repo-root/);
-  assert.match(dispatchText, /openspec-extensions execute update-progress stop --repo-root/);
+  assert.match(dispatchText, /openspec-extensions execute update-progress checkpoint --repo-root/);
+  assert.match(dispatchText, /development seat \u4e0d\u5141\u8bb8\u81ea\u5df1\u5199 `stop`/);
+  assert.match(dispatchText, /\u628a\u76f8\u5173 validation \u6807\u8bb0\u56de `pending`/);
+  assert.match(dispatchText, /development seat \u4e0d\u662f\u5f53\u524d issue \u7684 validation \/ check \/ review owner/);
+  assert.doesNotMatch(dispatchText, /\u5c40\u90e8 validation|\u5c40\u90e8\u6821\u9a8c/);
   assert.doesNotMatch(dispatchText, /python3 \.codex\/skills/);
 });
 

@@ -3,13 +3,21 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 
 import {
+  issueReviewArtifactIsCurrent,
+  issueReviewArtifactPath,
+  issueReviewStatus,
+  issueTeamDispatchPath,
   nowIso,
   planningDocStatus,
+  phaseGateArtifactIsCurrent,
+  phaseGateArtifactPath,
+  phaseGateStatus,
   readJson,
   reviewArtifactIsCurrent,
   reviewArtifactPath,
   verificationArtifactIsCurrent,
   verifyArtifactPath,
+  type PhaseGate,
   type JsonRecord
 } from "../domain/change-coordinator";
 import {
@@ -220,6 +228,48 @@ function currentReviewState(repoRoot: string, change: string, issues: IssuePaylo
   };
 }
 
+function currentPhaseGateState(repoRoot: string, change: string, phase: PhaseGate): JsonRecord {
+  const artifact = readJson(phaseGateArtifactPath(repoRoot, change, phase));
+  const status = phaseGateStatus(artifact);
+  const current = Object.keys(artifact).length > 0 && phaseGateArtifactIsCurrent(repoRoot, change, phase, artifact);
+  return {
+    artifact,
+    current,
+    path: displayPath(repoRoot, phaseGateArtifactPath(repoRoot, change, phase)),
+    status: status.status,
+    passed: current && status.passed,
+    failed: current && status.failed
+  };
+}
+
+function currentIssueReviewGateState(repoRoot: string, change: string, issue: IssuePayload): JsonRecord {
+  const issueId = String(issue.issue_id ?? "").trim();
+  if (!issueId || !fs.existsSync(issueTeamDispatchPath(repoRoot, change, issueId))) {
+    return {
+      artifact: {},
+      current: true,
+      failed: false,
+      passed: true,
+      path: "",
+      required: false,
+      status: "not_required"
+    };
+  }
+
+  const artifact = readJson(issueReviewArtifactPath(repoRoot, change, issueId));
+  const status = issueReviewStatus(artifact);
+  const current = Object.keys(artifact).length > 0 && issueReviewArtifactIsCurrent(issue, artifact);
+  return {
+    artifact,
+    current,
+    failed: current && status.failed,
+    passed: current && status.passed,
+    path: displayPath(repoRoot, issueReviewArtifactPath(repoRoot, change, issueId)),
+    required: true,
+    status: status.status
+  };
+}
+
 function focusIssueId(issues: IssuePayload[]): string {
   const predicates = [
     (issue: IssuePayload) => issue.status === "blocked",
@@ -250,6 +300,7 @@ function determinePhase(
   const designPath = path.join(changeDir, "design.md");
   const tasksPath = path.join(changeDir, "tasks.md");
   const issuesIndexPath = path.join(changeDir, "issues", "INDEX.md");
+  const issueDocs = issues.filter((issue) => issue.issue_path);
 
   const missingCore = [proposalPath, designPath]
     .filter((currentPath) => !fs.existsSync(currentPath))
@@ -257,20 +308,54 @@ function determinePhase(
   if (missingCore.length > 0) {
     return ["spec_readiness", "", `变更基础文档未齐全：${missingCore.join(", ")}。`];
   }
-  if (!fs.existsSync(tasksPath)) {
+  // 后续 planning / issue 文档即使已经存在，也不能跳过前置文档门禁。
+  const specReadinessGate = currentPhaseGateState(repoRoot, change, "spec_readiness");
+  if (specReadinessGate.failed === true) {
+    return ["spec_readiness", "", `最近一次 spec_readiness gate 未通过；需先修订 proposal / design，并重新收敛 design author + review verdict，再更新 \`${specReadinessGate.path}\`。`];
+  }
+  if (specReadinessGate.passed !== true) {
+    const hasLaterPlanningArtifacts = fs.existsSync(tasksPath) || fs.existsSync(issuesIndexPath) || issueDocs.length > 0;
+    if (Object.keys(specReadinessGate.artifact as JsonRecord).length > 0 && specReadinessGate.current !== true) {
+      return [
+        "spec_readiness",
+        "",
+        `proposal / design 在最近一次 spec_readiness gate 后发生了变化；必须先重新完成 design review，并刷新 \`${specReadinessGate.path}\`，之后才能进入 issue planning。`
+      ];
+    }
     return [
       "spec_readiness",
       "",
-      "设计文档已齐全，但必须先经过 1 个设计作者和 2 个设计评审组成的 subagent team；评审通过后才能进行任务拆分。"
+      hasLaterPlanningArtifacts
+        ? `设计文档已齐全，但 spec_readiness gate 还没有记录通过；即使 tasks / issue 文档已经存在，也必须先完成 1 个设计作者 + 2 个设计评审的门禁，并写入 \`${specReadinessGate.path}\`。`
+        : `设计文档已齐全，但必须先经过 1 个设计作者和 2 个设计评审组成的 subagent team；评审通过并写入 \`${specReadinessGate.path}\` 后，才能进行任务拆分。`
     ];
   }
 
-  const issueDocs = issues.filter((issue) => issue.issue_path);
   if (!fs.existsSync(issuesIndexPath) || issueDocs.length === 0) {
     return [
       "issue_planning",
       "",
       "任务拆分 / issue 规划工件未完成，需先产出或修订 tasks.md、INDEX 和 ISSUE 文档。"
+    ];
+  }
+
+  // 首个 issue execution 之前，必须有 planning gate 的显式通过记录。
+  const issuePlanningGate = currentPhaseGateState(repoRoot, change, "issue_planning");
+  if (issuePlanningGate.failed === true) {
+    return ["issue_planning", "", `最近一次 issue_planning gate 未通过；需先修订 tasks / INDEX / ISSUE 文档，并重新收敛 planning verdict，再更新 \`${issuePlanningGate.path}\`。`];
+  }
+  if (issuePlanningGate.passed !== true) {
+    if (Object.keys(issuePlanningGate.artifact as JsonRecord).length > 0 && issuePlanningGate.current !== true) {
+      return [
+        "issue_planning",
+        "",
+        `规划文档在最近一次 issue_planning gate 后发生了变化；必须先重新完成 planning review，并刷新 \`${issuePlanningGate.path}\`，之后才能开始首个 issue execution。`
+      ];
+    }
+    return [
+      "issue_planning",
+      "",
+      `tasks / INDEX / ISSUE 文档已存在，但 issue_planning gate 还没有记录通过；必须先完成 planning/check/review 门禁，并写入 \`${issuePlanningGate.path}\`，之后才能提交规划文档或派发首个 issue。`
     ];
   }
 
@@ -284,6 +369,19 @@ function determinePhase(
   }
 
   const selectedIssueId = explicitIssueId.trim() || focusIssueId(issues);
+  const reviewRequiredIssue = issues.find((issue) => issue.boundary_status === "review_required" || issue.next_action === "coordinator_review");
+  if (reviewRequiredIssue) {
+    const reviewGate = currentIssueReviewGateState(repoRoot, change, reviewRequiredIssue);
+    if (reviewGate.required && reviewGate.failed === true) {
+      return ["issue_execution", String(reviewRequiredIssue.issue_id ?? ""), `当前 issue 的 checker/reviewer gate 未通过；需先修复问题并重新更新 \`${reviewGate.path}\`。`];
+    }
+    if (reviewGate.required && reviewGate.passed !== true) {
+      if (Object.keys(reviewGate.artifact as JsonRecord).length > 0 && reviewGate.current !== true) {
+        return ["issue_execution", String(reviewRequiredIssue.issue_id ?? ""), `当前 issue 的 checker/reviewer gate 已过期；需先重新收敛检查/审查结论并刷新 \`${reviewGate.path}\`。`];
+      }
+      return ["issue_execution", String(reviewRequiredIssue.issue_id ?? ""), `当前 issue 使用了 team dispatch；在 merge 前必须先完成 checker/reviewer gate，并写入 \`${reviewGate.path}\`。`];
+    }
+  }
   const incomplete = issues.filter((issue) => String(issue.status ?? "").trim() !== "completed");
   if (incomplete.length > 0) {
     return ["issue_execution", selectedIssueId, "仍有 issue 未完成，继续执行当前 issue 回合。"];
@@ -362,7 +460,8 @@ function phaseAcceptanceCriteria(phase: string, issueId: string, issues: IssuePa
     return [
       "proposal / design 齐全且相互一致",
       "范围、约束、非目标足够清楚，足以进入任务拆分",
-      "2 个 design review subagent 都给出通过结论，允许进入 plan-issues"
+      "2 个 design review subagent 都给出通过结论，允许进入 plan-issues",
+      "`runs/SPEC-READINESS.json` 是当前 proposal / design 的最新通过门禁"
     ];
   }
   if (phase === "issue_planning") {
@@ -370,6 +469,7 @@ function phaseAcceptanceCriteria(phase: string, issueId: string, issues: IssuePa
       "tasks.md、INDEX 和 ISSUE 文档齐全且相互一致",
       "INDEX 和 ISSUE 文档可由新鲜 worker 直接消费",
       "每个 issue 的边界、ownership、validation 明确",
+      "`runs/ISSUE-PLANNING.json` 是当前 planning 文档的最新通过门禁",
       "proposal / design / tasks / issue 文档已先由 coordinator 提交",
       "当前 round 已批准可派发 issue"
     ];
@@ -378,7 +478,8 @@ function phaseAcceptanceCriteria(phase: string, issueId: string, issues: IssuePa
     return [
       `${issueId || "当前 issue"} 的目标范围达成`,
       "检查组发现的问题已被修复或显式降级",
-      "审查组给出 pass 或 pass with noted debt"
+      "审查组给出 pass 或 pass with noted debt",
+      "team dispatch issue 已写入当前通过的 `runs/ISSUE-REVIEW-<issue>.json`"
     ];
   }
   if (phase === "change_acceptance") {
@@ -649,10 +750,23 @@ function phaseRequiredOutput(phase: string): string[] {
     return [
       "Phase target",
       "Gate-bearing subagent roster with seat / agent_id / status",
+      "Gate artifact: runs/SPEC-READINESS.json",
       "Design author changes completed",
       "Reviewer 1 verdict",
       "Reviewer 2 verdict",
       "Normalized review gaps",
+      "Next action"
+    ];
+  }
+  if (phase === "issue_planning") {
+    return [
+      "Phase target",
+      "Gate-bearing subagent roster with seat / agent_id / status",
+      "Gate artifact: runs/ISSUE-PLANNING.json",
+      "Normalized backlog",
+      "Development changes completed",
+      "Check result",
+      "Review verdict",
       "Next action"
     ];
   }
@@ -779,6 +893,7 @@ function renderPhasePacket(
         "Design author 负责补 proposal / design，不在 design review 通过前做任务拆分。",
         "Design author 启动时使用 `reasoning_effort=xhigh`；2 个 design review subagent 使用 `reasoning_effort=medium`。",
         "2 个 design review subagent 直接给出 pass / fail 和 blocking gap，不单独再设 check group。",
+        "coordinator 只有在收齐 gate-bearing verdict 并写入 `runs/SPEC-READINESS.json` 后，才允许把 spec_readiness 视为通过。",
         "只有 2 个 reviewer 都通过，才允许进入 plan-issues / 任务拆分。",
         autoAcceptSpecReadiness
           ? "当 `auto_accept_spec_readiness=true` 时，coordinator 在 gate-bearing 设计评审 subagent 全部完成并收齐通过结论后，不等待人工签字，直接把 design review 视为通过并进入 plan-issues。"
@@ -790,6 +905,7 @@ function renderPhasePacket(
           "issue planning 不以写 repo 代码为目标，本 phase 默认使用 2 个开发 seat + 1 个 checker + 1 个 reviewer 的快路径，全部使用 `reasoning_effort=medium`。",
           "检查组确认 allowed_scope / out_of_scope / done_when / validation 可执行。",
           "planning check/review 默认只看 tasks.md、INDEX、ISSUE frontmatter 和当前 round contract，不做无关扩展阅读。",
+          "coordinator 只有在收齐 gate-bearing verdict 并写入 `runs/ISSUE-PLANNING.json` 后，才允许把 issue_planning 视为通过。",
           "issue planning 通过后，coordinator 必须先把 proposal / design / tasks / issue 文档提交成一次独立 commit，然后才允许开始首个 issue execution。",
           "如果 reconcile 先给出 `commit_planning_docs`，那表示必须先提交规划文档；只有提交完成后，后续 `dispatch_next_issue` 才表示立即继续派发，不要把 `control-plane ready` 当作 terminal checkpoint。",
           autoAcceptIssuePlanning
@@ -800,11 +916,13 @@ function renderPhasePacket(
         ? [
             "开发组可以按 issue team dispatch 调起实现型 subagent。",
             "issue round 默认使用 3 个开发 seat + 2 个 checker + 1 个 reviewer 的快路径；编码型开发 subagent 使用 `reasoning_effort=xhigh`，检查组和审查组使用 `reasoning_effort=medium`。",
+            "team dispatch 下的 development seat 只负责实现和 progress start/checkpoint；如果当前改动让既有校验失效，只把相关 validation 回写成 `pending`，不要在该 seat 内完成 validation / check / review，也不要自己把 issue 标成 `completed + review_required`。",
             "checker / reviewer 必须先看 `changed_files`（若 progress artifact 已记录），没有时先看 `allowed_scope` 和 issue validation，再按需扩到直接依赖面。",
             "默认不要读取 `node_modules`、`dist`、`build`、`.next`、`coverage` 这类生成/供应商目录；只有当前 issue 明确把这些路径写进 `allowed_scope` 时才允许查看。",
             "不要把 issue check/review 扩成 repo-wide 扫描；只有出现跨边界架构风险或证据争议时，coordinator 才升级更多 checker / reviewer seat。",
+            "checker / reviewer 全部通过后，coordinator 必须先写当前通过的 `runs/ISSUE-REVIEW-<issue>.json`，再把 issue 收敛到 `review_required` 并决定是否 merge。",
             autoAcceptIssueReview
-              ? "当 `auto_accept_issue_review=true` 时，coordinator 会在 gate-bearing check/review subagent 全部完成且 issue-local validation 全部通过后自动接受并 merge 当前 issue，再继续后续 phase。"
+              ? "当 `auto_accept_issue_review=true` 时，coordinator 会在 gate-bearing check/review subagent 全部完成、`runs/ISSUE-REVIEW-<issue>.json` 已通过且 issue-local validation 全部通过后自动接受并 merge 当前 issue，再继续后续 phase。"
               : "审查组通过后默认停住，让 coordinator 先确认是否派发下一个 issue。",
             "审查组不通过则回到开发组下一轮。"
           ]
