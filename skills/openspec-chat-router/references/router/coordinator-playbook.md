@@ -51,6 +51,8 @@ This is the normal flow when the runtime supports delegation and the user wants 
 - do not pass a gate while any required reviewer/checker for that gate is still running
 - do not close unfinished gate-bearing subagents early
 - gate-bearing review/check subagents must not be treated as `explorer` sidecars
+- the lifecycle packet is coordinator-only; when spawning design-author / design-review / planning / check / review seats, give them a seat-local handoff instead of the full coordinator packet
+- once a seat subagent exists, it must not self-promote to coordinator, apply the "no delegation fallback" to itself, or continue later phases on its own
 - checker/reviewer should be scope-first and diff-first; start from `changed_files` or `allowed_scope`, then expand only to direct dependencies when needed
 - do not let issue rounds turn into repo-wide review sweeps by default
 - do not let issue-round checker/reviewer read `node_modules`, `dist`, `build`, `.next`, `coverage`, or other generated/vendor trees unless the issue explicitly scopes them in

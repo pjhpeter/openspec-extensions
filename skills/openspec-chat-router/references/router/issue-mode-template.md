@@ -22,6 +22,8 @@
    - 不要把这些 gate-bearing subagent 当成 `explorer` sidecar
    - checker / reviewer 默认先看 `changed_files`，没有时先看 `allowed_scope` 和 issue validation；只有为确认 direct dependency 风险时才允许向外扩，不要默认做 repo-wide 扫描
    - 对前端项目，默认不要读取 `node_modules`、`dist`、`build`、`.next`、`coverage`，除非当前 issue 明确把这些路径放进 `allowed_scope`
+   - lifecycle packet 只给主会话 coordinator；给各个 seat subagent 的应是 seat-local handoff，不要把整份 packet 原样塞给 design reviewer / author
+   - 一旦 seat subagent 已成功拉起，它就不能把“无 delegation 时主会话串行推进”的 fallback 套到自己头上，更不能自己继续到 issue planning / issue execution
 7. 只有在显式收窄到单个 issue-only subagent 时，才让一个 issue 开一个 subagent，并且只在该 worktree 内工作
 8. issue 执行 subagent 只写 issue-local progress 和 run 工件，不直接合并、不直接提交
 9. 主会话用 reconcile 收敛状态；如果 `auto_accept_issue_review=true` 且 issue-local validation 通过，主会话应在 gate-bearing 审查 subagent 全部完成后直接自动 merge/commit 并继续下一轮。若当前 issue 使用的是 change 级 worktree，merge/commit 后还要把该 worktree 同步到最新接受 commit，再开始后续 issue

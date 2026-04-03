@@ -75,6 +75,10 @@ test("detects spec_readiness when core docs are missing", () => {
     assert.match(dispatchText, /using shared-workspace fallback defaults/);
     assert.match(dispatchText, /1 个设计作者和 2 个设计评审全部完成并收齐通过结论后暂停/);
     assert.match(dispatchText, /subagent_team\.auto_accept_spec_readiness=false/);
+    assert.match(dispatchText, /## Seat Handoff Guardrails/);
+    assert.match(dispatchText, /这份 lifecycle packet 只给主控 coordinator 使用/);
+    assert.match(dispatchText, /spec_readiness 的任一 seat 都不允许运行 `openspec-extensions worktree create`/);
+    assert.match(dispatchText, /design reviewer 只输出 verdict、evidence、blocking gap/);
   });
 });
 

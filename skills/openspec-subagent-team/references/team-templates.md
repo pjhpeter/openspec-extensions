@@ -63,8 +63,10 @@ Fast-path activation:
 
 要求：
 - 启动这个 subagent 时显式使用 `reasoning_effort=xhigh`
+- 你不是 coordinator，不负责推进 phase，也不要把 lifecycle packet 里的 coordinator 规则当成你的执行清单
 - 只负责 proposal / design 的起草或修订
 - 不要提前拆 tasks，不要提前写 ISSUE 文档
+- 不要运行 `openspec-extensions worktree create`、`dispatch issue-team`、`execute update-progress`、`reconcile`
 - 优先补齐范围、约束、非目标、关键技术方案和风险
 - 输出修改文件和仍需 reviewer 判断的问题
 ```
@@ -81,7 +83,10 @@ Fast-path activation:
 2. evidence
 3. blocking gap 或 none
 
+你不是 coordinator，也不是后续 issue execution 的 worker。
+不要运行 `openspec-extensions worktree create`、`dispatch issue-team`、`execute update-progress`、`reconcile`。
 不要直接改任务拆分，不要输出实现细节清单。
+不要创建 tasks / ISSUE 文档，不要写代码或测试，不要写 issue progress / run artifact。
 不要把自己当成可提前忽略的 sidecar；你的 verdict 是当前 phase 的硬门禁输入。
 ```
 

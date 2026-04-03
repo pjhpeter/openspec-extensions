@@ -61,6 +61,7 @@ Read these first:
    - when an enabled `auto_accept_*` gate becomes eligible, continue immediately instead of asking the user to review first
    - if reconcile emits `commit_planning_docs`, run the coordinator-owned planning-doc commit immediately before any first issue dispatch
    - if reconcile emits `dispatch_next_issue`, treat it as a continuation command, not a terminal control-plane checkpoint
+   - the lifecycle packet is coordinator-only; when spawning a seat subagent, pass a seat-local handoff instead of pasting the entire lifecycle packet as its executable task
 8. Use a phase-specific topology:
    - `spec_readiness`: 1 design author (`reasoning_effort=xhigh`) + 2 design reviewers (`reasoning_effort=medium`)
    - `issue_planning`: fast path is `2 development + 1 check + 1 review`, all `reasoning_effort=medium`
@@ -83,6 +84,7 @@ Read these first:
    - it does not mean "spawned already, so the phase may pass"
    - it does not allow skipping review/check verdict collection
    - it does not allow closing unfinished gate-bearing subagents early
+   - it does not allow a seat subagent to self-promote into coordinator and continue later phases on its own
 13. Run the loop:
    - development
    - check
@@ -102,7 +104,9 @@ Read these first:
 - `subagent_team.*` now controls full-process auto-accept and continuation, not just the design-review checkpoint.
 - `semi_auto` means the lifecycle still keeps manual gates for design / planning / change acceptance / archive. It may still auto-accept validated issues one by one so each issue lands as its own commit. `full_auto` means the lifecycle auto-continues across `spec_readiness -> issue_planning -> issue_execution -> change_acceptance -> change_verify -> archive` while still respecting RRA gates.
 - `spec_readiness` is the design-review gate in the complex-change path: proposal/design are prepared first, then a dedicated `1` author + `2` reviewers subagent team must pass it before task splitting begins.
+- design-author / design-review seats are not coordinator substitutes: they must not create worktrees, write issue progress artifacts, dispatch issues, or continue into issue execution.
 - `issue_planning` starts after design review passes, and is where coordinator-owned `tasks.md` plus `issues/INDEX.md` and `ISSUE-*.md` are produced/reviewed.
+- if a seat subagent was successfully launched, the fallback rule "main session continues serially when delegation is unavailable" no longer applies to that seat; only the coordinator may use that fallback.
 - Before the first issue dispatch, the coordinator must first commit `proposal.md`, `design.md`, `tasks.md`, `issues/INDEX.md`, and `ISSUE-*.md` as a dedicated planning-doc commit.
 - When `issue_planning` is auto-accepted and reconcile emits `commit_planning_docs`, the coordinator must commit those planning docs immediately, rerun reconcile, and then honor `dispatch_next_issue`.
 - `issue_planning` and `issue_execution` should start with the lighter fast path first; only escalate more check/review seats when the current round surfaces cross-boundary risk or unresolved evidence gaps.

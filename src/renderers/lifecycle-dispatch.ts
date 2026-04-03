@@ -667,6 +667,36 @@ function phaseRequiredOutput(phase: string): string[] {
   ];
 }
 
+function phaseSeatGuardrails(phase: string): string[] {
+  const guardrails = [
+    "这份 lifecycle packet 只给主控 coordinator 使用；不要把整份 packet 原样转发给任一 seat subagent 当作可执行清单。",
+    "已被拉起的 seat subagent 不是 coordinator；它们只能完成当前 seat 的局部目标，然后把结果交回主控会话。",
+    "“如果 runtime 不支持 delegation，则由主会话串行推进” 这条 fallback 只适用于没有成功拉起 subagent 的主控会话，不适用于已启动的 seat subagent。"
+  ];
+
+  if (phase === "spec_readiness") {
+    return [
+      ...guardrails,
+      "spec_readiness 的 design author / reviewers 只允许处理 proposal / design / spec 评审，不允许提前拆 tasks 或创建 ISSUE 文档。",
+      "spec_readiness 的任一 seat 都不允许运行 `openspec-extensions worktree create`、`dispatch issue-team`、`execute update-progress`、`reconcile`、`review change`、`verify change` 或 `archive change`。",
+      "design reviewer 只输出 verdict、evidence、blocking gap；不要写代码、不要创建 worktree、不要写 issue progress / run 工件，也不要自行进入 issue execution。"
+    ];
+  }
+
+  if (phase === "issue_planning") {
+    return [
+      ...guardrails,
+      "issue_planning seat 只允许修订 planning 文档和给出 planning verdict；不要写 repo 产品代码，不要创建 issue worktree，不要启动 issue execution。",
+      "只有主控 coordinator 才能在 planning 通过后提交规划文档，并决定是否继续 dispatch 下一个 issue。"
+    ];
+  }
+
+  return [
+    ...guardrails,
+    "issue / acceptance / verify / archive 阶段的 seat 也不得自我升级成 coordinator；创建或复用 worktree、merge/commit、phase accept、verify、archive 一律由主控会话决定。"
+  ];
+}
+
 function renderPhasePacket(
   repoRoot: string,
   change: string,
@@ -697,6 +727,8 @@ function renderPhasePacket(
   const autoArchiveAfterVerify = config.subagent_team.auto_archive_after_verify;
   const automationMode = automationProfile(config);
   const commandHints = phaseCommandHints(repoRoot, change, phase);
+  // spec_readiness packet 常被主控摘给 seat subagent，看清 coordinator/seat 边界能避免 reviewer 越权推进后续 phase。
+  const seatGuardrails = phaseSeatGuardrails(phase);
   const coordinatorCommandsSection = commandHints.length > 0
     ? `## Coordinator Commands\n\n${bulletList(commandHints)}\n\n`
     : "";
@@ -866,6 +898,9 @@ ${renderGateBearingSeats(teamTopology)}
   - \`subagent_team.auto_accept_change_acceptance=${String(autoAcceptChangeAcceptance).toLowerCase()}\`
   - \`subagent_team.auto_archive_after_verify=${String(autoArchiveAfterVerify).toLowerCase()}\`
   - \`rra.gate_mode=${config.rra.gate_mode}\`
+
+## Seat Handoff Guardrails
+${bulletList(seatGuardrails)}
 
 ## Current Backlog
 
