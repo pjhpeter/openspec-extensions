@@ -110,6 +110,29 @@ openspec/changes/*/runs/CHANGE-REVIEW.json
 
 ## 我推荐的工作方式
 
+### 自动判断复杂度
+
+可以让 AI 先判断需求复杂度，再自行选择简单流程还是复杂流程；但不要用“拍脑袋判断”，而要用一组可解释的启发式规则。
+
+- 满足这些特征时，默认走简单流程：范围集中、边界清楚、不需要 issue 拆分、不需要多轮 gate、通常一轮实现加 change-level review 就能收尾。
+- 满足这些特征时，默认走复杂流程：跨模块、需求或设计不确定、需要 design review、需要拆 issue、多阶段验证成本高、或用户明确要求长生命周期/无人值守推进。
+- 如果介于两者之间，先走 `new` 或 `ff` 把 proposal/design 补清楚，再重新判断，不要一开始就强行进入 issue-mode。
+- 如果简单流程做着做着发现已经跨模块、需要多轮 review、或者已经自然形成 issue 边界，就应当显式升级到复杂流程，而不是硬撑在短链路里。
+
+我建议把这套选择解释成一句短话，例如：
+
+- `先按简单流程走，因为范围集中且不需要 issue 拆分。`
+- `改走复杂流程，因为已经跨模块，并且需要 design review 和 issue 拆分。`
+
+如果你希望 AI 不只是判断复杂度，还在判定为复杂流程时直接使用 `subagent-team`，最好把授权写进提示词里，例如：
+
+```text
+进入 OpenSpec 模式。
+你自己判断需求复杂度；如果属于复杂流程，自动启用 subagent-team 推进，不用再单独问我。
+如需 spawned subagent，请显式使用 `<指定模型>`。
+需求：<需求描述>
+```
+
 ### 简单任务
 
 如果任务足够小，我建议直接走 OpenSpec 的短链路：创建 change、补齐 proposal/design/tasks、完成实现、跑 change-level review、再 verify 和 archive。这个仓库不会强迫你把所有事情都拆成多 issue。

@@ -104,6 +104,29 @@ openspec/changes/*/runs/CHANGE-REVIEW.json
 
 ## The Working Style I Recommend
 
+### Automatic Complexity Triage
+
+You can let the AI choose between the short path and the complex path, but it should do so through explainable heuristics instead of a vague gut feeling.
+
+- Default to the short path when the scope is concentrated, the boundaries are clear, issue splitting is unnecessary, and one implementation pass plus change-level review is likely enough.
+- Default to the complex path when the work crosses modules, the design is still uncertain, design review is needed, issue splitting is likely, validation is multi-stage or expensive, or the user explicitly wants a long-running unattended lifecycle.
+- For borderline cases, prefer `new` or `ff` first so proposal/design become clearer, then re-evaluate instead of forcing issue-mode too early.
+- If a short-path execution reveals cross-module scope, repeated review loops, or natural issue boundaries, explicitly upgrade to the complex path and state why.
+
+The route explanation should stay short and concrete, for example:
+
+- `Start with the short path because the scope is concentrated and does not need issue splitting.`
+- `Switch to the complex path because the change already crosses modules and needs design review plus issue splitting.`
+
+If you want the AI to do more than classify complexity and to directly use `subagent-team` when the result is complex, put that authorization into the prompt itself, for example:
+
+```text
+Enter OpenSpec mode.
+Judge the requirement complexity yourself; if it belongs to the complex path, automatically enable subagent-team and proceed without asking me again.
+If spawned subagents are needed, explicitly use `<specified-model>`.
+Requirement: <requirement-description>
+```
+
 ### Small Changes
 
 If the task is small enough, I recommend staying on the short OpenSpec path: create a change, fill in proposal/design/tasks, implement it, run change-level review, then verify and archive. This repository does not force every task into multi-issue execution.

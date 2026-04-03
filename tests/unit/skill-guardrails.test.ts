@@ -26,6 +26,7 @@ test("chat-router agent prompt does not reroute spawned seat sessions", () => {
   assert.match(prompt, /explicit seat-local spawned-subagent handoff/);
   assert.match(prompt, /do not apply coordinator fallback rules/);
   assert.match(prompt, /do not fork the full coordinator thread\/context into them/);
+  assert.match(prompt, /你自己判断复杂度, 复杂时自动启用 subagent-team/);
 });
 
 test("mode cheat sheet includes unattended kickoff with explicit model and requirement placeholders", () => {
@@ -35,6 +36,25 @@ test("mode cheat sheet includes unattended kickoff with explicit model and requi
   assert.match(template, /subagent-team/);
   assert.match(template, /<指定模型>/);
   assert.match(template, /需求：<需求描述>/);
+});
+
+test("chat-router skill defines explainable complexity triage before choosing simple or complex flow", () => {
+  const skill = readRepoFile("skills/openspec-chat-router/SKILL.md");
+
+  assert.match(skill, /## Complexity Triage/);
+  assert.match(skill, /0-1/);
+  assert.match(skill, /2-3/);
+  assert.match(skill, /4\+/);
+  assert.match(skill, /Existing issue artifacts on disk override a fresh simple-flow guess; reconcile first/);
+  assert.match(skill, /explicitly upgrade to the complex flow and state why/);
+  assert.match(skill, /complex -> auto subagent-team/);
+});
+
+test("mode cheat sheet includes auto-subagent authorization wording for complex flow", () => {
+  const template = readRepoFile("skills/openspec-chat-router/references/router/mode-cheatsheet.md");
+
+  assert.match(template, /自动启用 subagent-team 推进，不用再单独问我/);
+  assert.match(template, /如需 spawned subagent，请显式使用 `<指定模型>`/);
 });
 
 test("team templates require seat contracts to override inherited coordinator context", () => {

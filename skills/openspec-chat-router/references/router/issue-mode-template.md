@@ -52,6 +52,15 @@
 需求：<需求描述>
 ```
 
+0b. 让 agent 先判断复杂度，复杂时自动启用 `subagent-team`
+
+```text
+进入 OpenSpec 模式。
+你自己判断需求复杂度；如果属于复杂流程，自动启用 subagent-team 推进，不用再单独问我。
+如需 spawned subagent，请显式使用 `<指定模型>`。
+需求：<需求描述>
+```
+
 1. 进入 OpenSpec 模式
 
 ```text

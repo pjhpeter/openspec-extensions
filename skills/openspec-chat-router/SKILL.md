@@ -40,6 +40,8 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - Do not stop at explaining which OpenSpec action matches. Execute the mapped workflow unless blocked.
 - Keep the user-facing response natural and brief: first state the action you are taking, then proceed.
 - If the user explicitly names a stage or command, that overrides heuristic routing.
+- When the user does not explicitly choose simple vs complex flow, run a lightweight complexity triage first and make the default route explainable in one short sentence.
+- If the user explicitly says "你自己判断复杂度，复杂时自动启用 subagent-team" or an equivalent instruction, treat that as permission for the main coordinator session to use delegation when the triage selects the complex flow.
 - If the user asks to enter OpenSpec mode, print the OpenSpec mode cheat sheet instead of running a workflow stage.
 - For large or complex work, prefer issue-based execution plus a change-level review/repair/re-review/acceptance loop rather than one long-running session.
 - If the current session already carries an explicit spawned-seat handoff, do not route again through chat-router heuristics; that seat contract overrides inherited coordinator defaults.
@@ -60,6 +62,33 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - For long-running gate-bearing subagents, prefer blocking waits up to 1 hour instead of short polling.
 - Do not launch gate-bearing review/check seats as `explorer`, and do not close them while their phase still depends on their verdicts.
 - If the intent is still ambiguous after doing all non-blocked work, ask exactly one short targeted question.
+
+## Complexity Triage
+
+Use this triage only when the user did not already force a specific stage or mode.
+
+Score the request from the requirement text plus current repo artifacts:
+
+- `+1` if the change likely spans multiple modules, directories, or subsystems.
+- `+1` if proposal/design work is still materially unknown and should be reviewed before coding.
+- `+1` if the work likely needs issue splitting, round-based coordination, or more than one execution seat.
+- `+1` if validation, review, or acceptance is likely multi-stage or expensive.
+- `+1` if the change touches public specs, release flow, migrations, permissions, or other high-risk boundaries.
+- `+1` if the user explicitly says the work is complex, long-running, or should be unattended across phases.
+
+Route based on the total:
+
+- `0-1` -> simple flow: prefer `propose` / `apply` / change-level `review` / `verify` / `archive`
+- `2-3` -> borderline: prefer `new` or `ff`, then re-evaluate after proposal/design context is clearer; ask one short question only if the route is still materially ambiguous
+- `4+` -> complex flow: prefer `issue-mode`, then default the coordinator entry to `subagent-team`
+
+Guardrails:
+
+- Existing issue artifacts on disk override a fresh simple-flow guess; reconcile first.
+- A single-file or tightly bounded change should not be promoted to issue-mode without concrete evidence from the request or artifacts.
+- If a simple-flow execution uncovers cross-module scope, repeated review loops, or clear issue boundaries, explicitly upgrade to the complex flow and state why.
+- If the user already authorized "complex -> auto subagent-team", do not ask again before using `subagent-team` in the main coordinator session once the triage lands on the complex path.
+- The route explanation should be short and concrete, for example: "先按简单流程走，因为范围集中且不需要 issue 拆分。" or "改为复杂流程，因为已经跨模块并且需要 design review + issue 拆分。"
 
 ## Intent Routing
 
@@ -87,8 +116,9 @@ Prefer the project-local companion skill first when the route becomes concrete:
 ## Default Heuristics
 
 - “没想清楚 / 先聊聊 / 先梳理一下” -> `explore`
-- Small task -> `propose` -> `apply` -> review current code -> `verify` -> `archive`
-- Large task -> `new` -> `ff` -> `apply` -> review current code -> `verify` -> `archive`
+- Default to `complexity triage` before choosing the simple or complex path when the user only describes the requirement.
+- Small task after triage -> `propose` -> `apply` -> review current code -> `verify` -> `archive`
+- Large task after triage -> `new` -> `ff` -> `plan-issues` / `subagent-team` -> reconcile -> review current code -> `verify` -> `archive`
 - “继续刚才那个 / 继续这个 change / 下一个文档” -> `continue`
 - “开始做 / 开始实现 / 直接落地” -> `apply`
 - “拆成 issue / 给出 issue 边界 / 生成 issue 文档” -> `plan-issues`
@@ -99,6 +129,8 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - “看看做完没有 / 能不能验收 / 能不能归档” -> `verify`
 - “进入 openspec 模式 / 给我 openspec 话术模板 / 把命令表打出来” -> `mode`
 - “这个任务很复杂 / 按 issue 模式继续 / 给我多会话模板” -> `issue-mode`，随后默认进入 `subagent-team`
+- “你自己判断复杂度 / 自己选简单还是复杂流程” -> run `complexity triage`, briefly explain the chosen route, then execute it
+- “你自己判断复杂度，复杂时自动启用 subagent-team / 自动使用多 agent 编排” -> run `complexity triage`; if the result is complex and delegation is available, enter `issue-mode -> subagent-team` without asking again
 
 ## Complex Change Rules
 

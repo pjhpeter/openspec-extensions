@@ -32,6 +32,15 @@
 需求：<需求描述>
 ```
 
+如果你希望 agent 先自行判断复杂度，并在判定为复杂流程时自动启用 `subagent-team`，可以直接这样说：
+
+```text
+进入 OpenSpec 模式。
+你自己判断需求复杂度；如果属于复杂流程，自动启用 subagent-team 推进，不用再单独问我。
+如需 spawned subagent，请显式使用 `<指定模型>`。
+需求：<需求描述>
+```
+
 ### 简单任务短链路
 
 1. 进入 OpenSpec 模式
@@ -94,6 +103,15 @@
 ```text
 进入 OpenSpec 模式。
 创建新 change，使用 subagent-team 工作，并为所有 spawned subagent 显式指定 `<指定模型>`。
+需求：<需求描述>
+```
+
+如果你更希望把“复杂度判断 + 自动启用 subagent-team”合成一条启动话术，也可以直接这样写：
+
+```text
+进入 OpenSpec 模式。
+你自己判断需求复杂度；如果属于复杂流程，自动启用 subagent-team 推进，不用再单独问我。
+如需 spawned subagent，请显式使用 `<指定模型>`。
 需求：<需求描述>
 ```
 
