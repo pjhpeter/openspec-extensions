@@ -429,6 +429,7 @@ flowchart TD
 - 某些 agent runtime 会把“真的拉起 subagent / delegation”视为更高权限动作，需要用户再明确授权一次。
 - 某些 runtime 会让 spawned subagent 继承默认模型或默认 `reasoning_effort`。如果你在意结果质量或成本，最好显式指定。
 - 对 gate-bearing 的 check/review subagent，真正无人值守通常需要长阻塞等待，而不是 30 秒短轮询。
+- 如果当前 round 会连续拉起很多 seat，coordinator 还需要在结果归并落盘后及时关闭已完成的 subagent；否则历史 seat 会持续占用 agent 配额。
 
 如果当前 agent 或 runtime 根本不支持 delegation，我的建议不是硬拉 `subagent-team`，而是直接退回主会话串行 issue path：
 

@@ -96,6 +96,7 @@ Read these first:
    - use `default` or `worker` style delegation for these gate-bearing seats; do not launch check/review gate seats as `explorer`
    - when the phase depends on their verdicts, wait up to 1 hour for completion instead of short polling
    - do not accept the phase, mark it passed, or close those subagents while any required gate-bearing seat is still running
+   - once a gate-bearing seat reaches a final status and its verdict / blocker / artifact update has been normalized into round output or a gate artifact, close that finished subagent before launching more seats so old seats do not consume the agent cap
    - if a launched gate-bearing seat cannot return a stable result, treat that as a phase blocker; relaunch or stop, but do not self-certify the missing verdict and do not downgrade that same gate into serial fallback
 13. `auto_accept_*` only removes human chat sign-off after the gate team has finished:
    - it does not mean "spawned already, so the phase may pass"
@@ -138,6 +139,7 @@ Read these first:
 - If `openspec/issue-mode.json` changed mid-run, the latest file contents override the coordinator's previous assumptions about automation, validation, worktree scope, and gate mode.
 - Do not mark a phase passed while any gate-bearing reviewer/checker for that phase is still running.
 - Do not close unfinished gate-bearing subagents just because the coordinator thinks the phase outcome is obvious.
+- 对已经进入最终态、且结果已归并落盘的 gate-bearing subagent，要尽快关闭；不要把 completed / failed / cancelled 的 seat 长时间挂着占用 agent 配额。
 - Gate-bearing review/check subagents must not be launched as `explorer`; treat them as gate owners whose completion status must be collected explicitly.
 - 在 `issue_execution` 里，开发组 / 检查组 / 审查组仍沿用 `rra` 的 lens 家族，但默认快路径只激活最小必要 seat：
   - Development 1/2/3 = core implementation / dependent integration / tests-cleanup

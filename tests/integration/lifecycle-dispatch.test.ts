@@ -81,6 +81,9 @@ test("detects spec_readiness when core docs are missing", () => {
     assert.match(dispatchText, /Design author: 1 required completion/);
     assert.match(dispatchText, /Design review: 2 required completions/);
     assert.match(dispatchText, /最长 1 小时的 blocking wait/);
+    assert.match(dispatchText, /一旦进入最终态/);
+    assert.match(dispatchText, /就应尽快关闭/);
+    assert.match(dispatchText, /agent 配额/);
     assert.match(dispatchText, /不要当作 `explorer` sidecar/);
     assert.match(dispatchText, /Before starting this phase, reread `openspec\/issue-mode\.json` if it exists/);
     assert.match(dispatchText, /开始当前 phase 前必须重新读取 `openspec\/issue-mode\.json`/);
@@ -300,6 +303,7 @@ validation:
     assert.match(lifecycleText, /issue_execution` 仍然一次只处理一个 approved issue/);
     assert.match(lifecycleText, /只负责实现和 progress start\/checkpoint/);
     assert.match(lifecycleText, /只把相关 validation 回写成 `pending`/);
+    assert.match(lifecycleText, /当前 phase 的 seat 结果一旦已经归并进 round 输出 \/ gate artifact/);
     assert.doesNotMatch(lifecycleText, /局部验证/);
     assert.match(lifecycleText, /不要读取 `node_modules`、`dist`、`build`、`\.next`、`coverage`/);
     assert.match(issueTeamText, /Development group: 3 subagents/);

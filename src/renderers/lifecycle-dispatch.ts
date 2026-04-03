@@ -998,6 +998,7 @@ ${renderGateBearingSeats(teamTopology)}
   - 对 gate-bearing subagent 使用最长 1 小时的 blocking wait，不要 30 秒短轮询。
   - 任一 required gate-bearing subagent 仍在运行时，不允许提前通过当前 phase。
   - 任一 required gate-bearing subagent 仍在运行时，不允许提前关闭它。
+  - gate-bearing subagent 一旦进入最终态，且其 verdict / blocker / artifact 更新已经被主控收敛并落盘，就应尽快关闭，避免历史 seat 持续占用 agent 配额。
   - design review / check / review 这类 gate-bearing seat 不要当作 \`explorer\` sidecar。
   - \`auto_accept_*\` 只跳过人工签字，不跳过 gate-bearing subagent 的完成等待。
 
@@ -1014,6 +1015,7 @@ ${renderGateBearingSeats(teamTopology)}
 - 审查通过才允许进入下一 phase。
 - 审查不通过则回到开发组下一轮。
 - 任一 required gate-bearing subagent 仍在运行时，不允许 accept 当前 phase，也不允许关闭这些 subagent。
+- 当前 phase 的 seat 结果一旦已经归并进 round 输出 / gate artifact，且后续不再需要继续追问该 seat，就应主动关闭已完成的 subagent，再启动下一轮或下一 phase 的新 seat。
 - backlog / round / stop decision 必须落盘，不留在聊天里。
 - 如果当前 runtime 不支持 delegation / subagent，不要阻塞在 team topology；把当前 packet 当作主会话的本地 coordinator playbook，按同样的 phase 规则串行推进。
 - 无 delegation 时，\`issue_execution\` 仍然一次只处理一个 approved issue；主会话自己执行 development / check / repair / review，并继续写 issue-local progress / run 工件。

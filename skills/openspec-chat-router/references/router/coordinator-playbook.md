@@ -28,6 +28,7 @@ This is the normal flow when the runtime supports delegation and the user wants 
    - use `default` or `worker` style delegation for those gate seats; do not use `explorer` for design-review, check, or review gates
    - if unattended progression matters, wait up to 1 hour for those gate-bearing subagents instead of short polling
    - do not advance, auto-accept, or close the phase while any required gate-bearing subagent is still running
+   - once a seat reaches a final status and its verdict / blocker / artifact update has been normalized into round output or a gate artifact, close that finished subagent before launching more seats
 10. Checker/reviewer should start from `changed_files` in the issue progress artifact when available; otherwise start from `allowed_scope`, issue validation, and the approved round target.
 11. Only expand checker/reviewer reading to direct dependencies or direct call chains when needed to prove a blocker or regression risk; do not default to repo-wide scanning or generated/vendor folders such as `node_modules`, `dist`, `build`, `.next`, or `coverage`.
 12. For bounded implementation slices that are explicitly narrowed to one issue-only execution subagent, spawn exactly one issue-only subagent for one approved issue.
@@ -51,6 +52,7 @@ This is the normal flow when the runtime supports delegation and the user wants 
 - if reconcile emits `dispatch_next_issue`, the next approved issue should be rendered and dispatched immediately; this is not a terminal checkpoint
 - do not pass a gate while any required reviewer/checker for that gate is still running
 - do not close unfinished gate-bearing subagents early
+- after a gate-bearing seat reaches a final status and its result has been collected, do not keep that finished seat open longer than needed; close it before the next round or phase spawns more seats
 - gate-bearing review/check subagents must not be treated as `explorer` sidecars
 - the lifecycle packet is coordinator-only; when spawning design-author / design-review / planning / check / review seats, give them a seat-local handoff instead of the full coordinator packet
 - do not fork the full coordinator thread/context into gate-bearing seats; seat-local handoff plus minimal file references must remain the only executable context for that seat

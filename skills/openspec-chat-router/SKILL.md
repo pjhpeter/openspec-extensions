@@ -206,6 +206,7 @@ Summary rule:
 - if delegation is unavailable, keep the same packet and round contract but run it serially in the main session
 - use role-based launch settings: design-author and code-writing subagents `high`, all other subagents `medium`
 - keep gate-bearing review/check subagents alive until their completion states and verdicts are explicitly collected
+- once a seat reaches final status and its result is written into the round output or gate artifact, close that finished subagent before launching more seats
 
 ## Special Path: `reconcile`
 

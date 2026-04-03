@@ -138,6 +138,7 @@ If repo config is missing, compatibility fallback remains shared workspace mode 
 - When reconcile emits `commit_planning_docs`, the coordinator must commit the planning docs first and rerun reconcile before starting the first issue execution.
 - A phase must not pass while any required gate-bearing subagent for that phase is still running.
 - Gate-bearing subagents must not be closed early before their completion state and verdict are collected.
+- Once a gate-bearing subagent reaches a final status and its result has been normalized into the current round output or gate artifact, the coordinator should close that finished subagent before spawning more seats.
 - Gate-bearing design-review / check / review seats must not be treated as `explorer` sidecars.
 - For unattended progression, prefer up to 1 hour blocking waits for gate-bearing subagents instead of short polling.
 

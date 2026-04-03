@@ -123,6 +123,9 @@ validation:
   assert.match(dispatchText, /## Gate Barrier/);
   assert.match(dispatchText, /\u6700\u957f 1 \u5c0f\u65f6\u7684 blocking wait/);
   assert.match(dispatchText, /\u4e0d\u8981\u5f53\u4f5c `explorer` sidecar/);
+  assert.match(dispatchText, /final status/);
+  assert.match(dispatchText, /\u5c31\u5e94\u5c3d\u5feb\u5173\u95ed/);
+  assert.match(dispatchText, /agent \u914d\u989d/);
   assert.match(dispatchText, /agent \/ runtime \u4e0d\u652f\u6301 subagent \u6216 delegation/);
   assert.match(dispatchText, /\u4e32\u884c round contract/);
   assert.match(dispatchText, /development -> check -> repair -> review/);
@@ -150,6 +153,7 @@ validation:
   assert.match(dispatchText, /development seat \u4e0d\u5141\u8bb8\u81ea\u5df1\u5199 `stop`/);
   assert.match(dispatchText, /\u628a\u76f8\u5173 validation \u6807\u8bb0\u56de `pending`/);
   assert.match(dispatchText, /development seat \u4e0d\u662f\u5f53\u524d issue \u7684 validation \/ check \/ review owner/);
+  assert.match(dispatchText, /\u5f53\u524d round \u7684 seat \u7ed3\u679c\u4e00\u65e6\u5df2\u7ecf\u5f52\u5e76\u8fdb round output \u6216 gate artifact/);
   assert.doesNotMatch(dispatchText, /\u5c40\u90e8 validation|\u5c40\u90e8\u6821\u9a8c/);
   assert.doesNotMatch(dispatchText, /python3 \.codex\/skills/);
   assert.match(seatHandoffsText, /# Seat Handoffs for ISSUE-001/);

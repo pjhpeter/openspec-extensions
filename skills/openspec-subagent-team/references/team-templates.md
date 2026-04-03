@@ -17,6 +17,7 @@ Gate barrier policy:
 - 对 gate-bearing subagent 使用最长 1 小时的 blocking wait，不要 30 秒短轮询
 - 任一 required gate-bearing subagent 仍在运行时，不允许提前通过当前 phase
 - 任一 required gate-bearing subagent 仍在运行时，不允许提前关闭它
+- gate-bearing subagent 一旦进入最终态，且其 verdict / blocker / artifact 更新已经被主控归并落盘，就应尽快关闭，避免旧 seat 长时间占用 agent 配额
 - gate-bearing design review / check / review subagent 不要用 `explorer` 身份启动
 
 Seat override policy:
