@@ -286,12 +286,16 @@ validation:
     });
     const lifecycleText = fs.readFileSync(path.join(repoRoot, payload.lifecycle_dispatch_path), "utf8");
     const issueTeamText = fs.readFileSync(path.join(repoRoot, payload.issue_team_dispatch_path), "utf8");
+    const issueSeatHandoffsText = fs.readFileSync(path.join(repoRoot, payload.issue_team_seat_handoffs_path), "utf8");
 
     assert.equal(payload.phase, "issue_execution");
     assert.equal(payload.focus_issue_id, "ISSUE-001");
     assert.match(payload.issue_team_dispatch_path, /ISSUE-001\.team\.dispatch\.md$/);
+    assert.match(payload.issue_team_seat_handoffs_path, /ISSUE-001\.seat-handoffs\.md$/);
     assert.match(lifecycleText, /Current issue packet/);
     assert.match(lifecycleText, /ISSUE-001\.team\.dispatch\.md/);
+    assert.match(lifecycleText, /Seat-local handoff packet for spawned seats/);
+    assert.match(lifecycleText, /ISSUE-001\.seat-handoffs\.md/);
     assert.match(lifecycleText, /Gate-bearing seats for this phase/);
     assert.match(lifecycleText, /issue_execution` 仍然一次只处理一个 approved issue/);
     assert.match(lifecycleText, /只负责实现和 progress start\/checkpoint/);
@@ -307,6 +311,8 @@ validation:
     assert.match(issueTeamText, /Excluded incidental paths from review focus:/);
     assert.match(issueTeamText, /`node_modules\/vue\/index\.js`/);
     assert.match(issueTeamText, /默认排除 `node_modules`、`dist`、`build`、`\.next`、`coverage`/);
+    assert.match(issueSeatHandoffsText, /## Development 2 \(dependent module or integration owner\)/);
+    assert.match(issueSeatHandoffsText, /只处理依赖模块、集成接缝和当前 issue 直接相关的兼容性问题/);
     assert.equal(payload.team_topology[0]?.label, "Development group");
     assert.equal(payload.team_topology[0]?.count, 3);
     assert.equal(payload.team_topology[0]?.reasoning_effort, "xhigh");

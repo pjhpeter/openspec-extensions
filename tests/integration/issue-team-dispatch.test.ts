@@ -101,14 +101,19 @@ validation:
   );
   const payload = JSON.parse(stdout.trim()) as Record<string, unknown>;
   const dispatchPath = path.join(repoRoot, String(payload.team_dispatch_path));
+  const seatHandoffsPath = path.join(repoRoot, String(payload.seat_handoffs_path));
   const dispatchText = fs.readFileSync(dispatchPath, "utf8");
+  const seatHandoffsText = fs.readFileSync(seatHandoffsPath, "utf8");
 
   assert.equal(exitCode, 0);
   assert.equal((payload.control_state as { latest_round: { target_mode: string } }).latest_round.target_mode, "quality");
   assert.equal((payload.reasoning_policy as { development_group: string }).development_group, "xhigh");
   assert.equal((payload.reasoning_policy as { check_group: string }).check_group, "medium");
   assert.equal((payload.reasoning_policy as { review_group: string }).review_group, "medium");
+  assert.match(String(payload.seat_handoffs_path), /ISSUE-001\.seat-handoffs\.md$/);
   assert.match(dispatchText, /subagent team \u4e3b\u94fe/);
+  assert.match(dispatchText, /Seat Handoff Source/);
+  assert.match(dispatchText, /Spawned seat subagent \u5fc5\u987b\u4f7f\u7528\u5355\u72ec\u7684 seat handoff artifact/);
   assert.match(dispatchText, /Development group: 3 subagents/);
   assert.match(dispatchText, /Check group: 2 subagents/);
   assert.match(dispatchText, /Review group: 1 subagent/);
@@ -147,6 +152,16 @@ validation:
   assert.match(dispatchText, /development seat \u4e0d\u662f\u5f53\u524d issue \u7684 validation \/ check \/ review owner/);
   assert.doesNotMatch(dispatchText, /\u5c40\u90e8 validation|\u5c40\u90e8\u6821\u9a8c/);
   assert.doesNotMatch(dispatchText, /python3 \.codex\/skills/);
+  assert.match(seatHandoffsText, /# Seat Handoffs for ISSUE-001/);
+  assert.match(seatHandoffsText, /seat-local source of truth/);
+  assert.match(seatHandoffsText, /## Development 2 \(dependent module or integration owner\)/);
+  assert.match(seatHandoffsText, /\u4f60\u4e0d\u662f coordinator/);
+  assert.match(seatHandoffsText, /\u4e0d\u8981\u81ea\u884c\u62c9\u8d77\u3001\u66ff\u6362\u6216\u534f\u8c03\u5176\u4ed6 development \/ check \/ review seat/);
+  assert.match(seatHandoffsText, /`openspec-extensions dispatch lifecycle`/);
+  assert.match(seatHandoffsText, /\u4f9d\u8d56\u6a21\u5757 \/ \u96c6\u6210\u5c42\u53d8\u66f4\u6458\u8981/);
+  assert.match(seatHandoffsText, /\u4e0d\u8981\u51b3\u5b9a\u662f\u5426\u9700\u8981\u989d\u5916 checker \/ reviewer/);
+  assert.match(seatHandoffsText, /## Checker 1 \(functional correctness \/ main path \/ edge cases\)/);
+  assert.match(seatHandoffsText, /## Reviewer 1 \(scope-first pass \/ fail owner\)/);
 });
 
 test("falls back to issue-local round contract when latest round is still planning", () => {
@@ -204,6 +219,7 @@ validation:
   );
   const payload = JSON.parse(stdout.trim()) as Record<string, unknown>;
   const dispatchText = fs.readFileSync(path.join(repoRoot, String(payload.team_dispatch_path)), "utf8");
+  const seatHandoffsText = fs.readFileSync(path.join(repoRoot, String(payload.seat_handoffs_path)), "utf8");
 
   assert.match(dispatchText, /\u63a8\u8fdb ISSUE-001 \u5b8c\u6210\u5f00\u53d1\u3001\u68c0\u67e5\u3001\u4fee\u590d\u3001\u5ba1\u67e5\u56de\u5408\u3002/);
   assert.match(dispatchText, /`ISSUE-001`/);
@@ -212,4 +228,7 @@ validation:
   assert.doesNotMatch(dispatchText, /proposal \/ design \/ tasks \/ issue \u6587\u6863\u4ee5 coordinator commit \u56fa\u5316/);
   assert.doesNotMatch(dispatchText, /`proposal.md`/);
   assert.doesNotMatch(dispatchText, /commit planning docs/);
+  assert.match(seatHandoffsText, /## Development 1 \(core implementation owner\)/);
+  assert.doesNotMatch(seatHandoffsText, /dispatch_next_issue/);
+  assert.doesNotMatch(seatHandoffsText, /control-plane ready/);
 });

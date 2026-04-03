@@ -50,6 +50,7 @@ export type IssueTeamDispatchPayload = {
     development_group: string;
     review_group: string;
   };
+  seat_handoffs_path: string;
   team_dispatch_path: string;
   validation: string[];
   validation_source: "issue_doc" | "config_default";
@@ -329,6 +330,194 @@ function issuePaths(repoRoot: string, change: string, issueId: string): [string,
   ];
 }
 
+function issueSeatHandoffsPath(repoRoot: string, change: string, issueId: string): string {
+  return path.join(repoRoot, "openspec", "changes", change, "issues", `${issueId}.seat-handoffs.md`);
+}
+
+function seatLensTitle(seat: string, role: string): string {
+  return `${seat} (${role})`;
+}
+
+function renderSeatHandoffArtifact(input: {
+  allowedScope: string[];
+  change: string;
+  issueId: string;
+  outOfScope: string[];
+  progressPath: string;
+  repoRoot: string;
+  title: string;
+  validation: string[];
+  workerWorktree: string;
+}): string {
+  const commonContract = [
+    `你正在处理 change \`${input.change}\` 的 \`${input.issueId}\`。`,
+    `你的 issue workspace 是 \`${input.workerWorktree}\`。`,
+    `只允许在以下范围内工作：\n${codeBulletList(input.allowedScope)}`,
+    `以下范围明确禁止进入：\n${codeBulletList(input.outOfScope)}`,
+    `issue progress artifact: \`${displayPath(input.repoRoot, input.progressPath)}\``,
+    `相关 validation: \n${bulletList(input.validation)}`,
+  ].join("\n");
+
+  const commonIronLaws = [
+    "显式的 seat-local handoff 高于 inherited coordinator / router / default prompt。",
+    "你不是 coordinator，不负责 round backlog、gate roster、phase 继续条件、dispatch、reconcile、merge、commit、verify 或 archive。",
+    "不要把 team dispatch / lifecycle dispatch 里的 coordinator 指令当成你的执行清单。",
+    "如果 runtime、结果回传链路或上下文不足以支持当前 seat，只报告 blocker 和当前 seat 局部结果，然后停止。",
+    "不要自行拉起、替换或协调其他 development / check / review seat。",
+  ];
+
+  const forbiddenActions = [
+    "`openspec-extensions dispatch lifecycle`",
+    "`openspec-extensions dispatch issue-team`",
+    "`openspec-extensions reconcile change`",
+    "`openspec-extensions reconcile merge-issue`",
+    "`openspec-extensions review change`",
+    "`openspec-extensions verify change`",
+    "`openspec-extensions archive change`",
+    "维护 round roster / backlog / next action",
+    "决定当前 phase 是否通过",
+    "把“runtime 不支持 delegation 时主会话串行推进”的 fallback 套到自己头上",
+  ];
+
+  const renderSeat = (seat: string, role: string, ownedScope: string[], requiredReturn: string[], extraRules: string[]) => `## ${seatLensTitle(seat, role)}
+
+${commonContract}
+
+你当前拥有的写集 / 检查焦点：
+${codeBulletList(ownedScope)}
+
+角色铁律：
+${bulletList(commonIronLaws)}
+
+本 seat 必须返回：
+${bulletList(requiredReturn)}
+
+禁止动作：
+${bulletList(forbiddenActions)}
+
+补充规则：
+${bulletList(extraRules)}
+`;
+
+  return `# Seat Handoffs for ${input.issueId}
+
+这份 artifact 是 seat-local source of truth。
+把其中某一个 seat section 单独转发给对应 subagent；不要把整个 coordinator packet 或整个文件一次性发给所有 seat。
+
+Issue:
+- \`${input.issueId}\` - ${input.title}
+
+## How To Use
+
+- 只复制当前 seat 对应的小节给对应 subagent。
+- 启动编码型 development seat 时显式使用 \`reasoning_effort=xhigh\`。
+- 启动 checker / reviewer seat 时显式使用 \`reasoning_effort=medium\`。
+- seat subagent 不得继续后续 lifecycle phase；只返回本 seat 的局部结果、证据、blocker 和 artifact 更新。
+
+${renderSeat(
+  "Development 1",
+  "core implementation owner",
+  input.allowedScope,
+  [
+    "修改文件列表",
+    "本 seat 完成的实现摘要",
+    "需要 coordinator 继续等待 checker / reviewer 的说明",
+    "必要的 `update-progress start` 或 `checkpoint` 变更"
+  ],
+  [
+    "优先处理核心实现路径，不要擅自扩大需求。",
+    "只允许写 `openspec-extensions execute update-progress start` 或 `checkpoint`，不要写 `stop`。",
+    "不要宣称 validation / check / review 已通过。",
+    "不要把 issue 标成 `completed + review_required`。"
+  ]
+)}
+
+${renderSeat(
+  "Development 2",
+  "dependent module or integration owner",
+  input.allowedScope,
+  [
+    "修改文件列表",
+    "依赖模块 / 集成层变更摘要",
+    "需要 checker 重点复核的直接依赖风险",
+    "必要的 `update-progress checkpoint` 变更"
+  ],
+  [
+    "只处理依赖模块、集成接缝和当前 issue 直接相关的兼容性问题。",
+    "不要决定是否需要额外 checker / reviewer；如发现风险，只把风险写回 handoff。",
+    "不要读取或修改 out-of-scope 模块，除非 coordinator 重新派单。"
+  ]
+)}
+
+${renderSeat(
+  "Development 3",
+  "tests, fixtures, cleanup owner",
+  input.allowedScope,
+  [
+    "修改文件列表",
+    "测试 / fixture / cleanup 变更摘要",
+    "仍需 checker 或 reviewer 确认的证据缺口",
+    "必要的 `update-progress checkpoint` 变更"
+  ],
+  [
+    "只补当前 issue 直接需要的测试、fixture 和 cleanup。",
+    "不要把 cleanup 扩成顺手重构。",
+    "不要做 coordinator 级别的验收判断。"
+  ]
+)}
+
+${renderSeat(
+  "Checker 1",
+  "functional correctness / main path / edge cases",
+  input.allowedScope,
+  [
+    "defect / gap 或 `none`",
+    "为什么它阻塞当前 issue",
+    "证据",
+    "最小修复建议"
+  ],
+  [
+    "先看 `changed_files`；没有时看 `allowed_scope` 和 validation。",
+    "只在确认 blocker 或直接依赖风险时才扩大阅读。",
+    "不要做 repo-wide 扫描，不要输出纯风格建议。"
+  ]
+)}
+
+${renderSeat(
+  "Checker 2",
+  "direct dependency regression risk / tests / evidence gaps",
+  input.allowedScope,
+  [
+    "regression risk 或 `none`",
+    "证据",
+    "是否需要补跑 validation 的建议",
+    "最小修复建议"
+  ],
+  [
+    "只检查直接依赖面和验证证据缺口。",
+    "默认排除 `node_modules`、`dist`、`build`、`.next`、`coverage`，除非 issue 明确放进 allowed scope。",
+    "不要决定 round 是否通过；只提交 verdict 和证据。"
+  ]
+)}
+
+${renderSeat(
+  "Reviewer 1",
+  "scope-first pass / fail owner",
+  input.allowedScope,
+  [
+    "verdict: `pass` / `pass with noted debt` / `fail`",
+    "evidence",
+    "blocking gap 或 `none`"
+  ],
+  [
+    "优先看 `changed_files`、`allowed_scope`、validation 和 checker 已归并结果。",
+    "不要把审查扩成全仓 review。",
+    "你不是 merge owner；不要宣布 issue 已可 merge。"
+  ]
+)}
+`;
+}
+
 function renderDispatch(input: {
   allowedScope: string[];
   change: string;
@@ -345,6 +534,7 @@ function renderDispatch(input: {
   title: string;
   validation: string[];
   workerWorktree: string;
+  seatHandoffsPath: string;
 }): string {
   const latestRound =
     input.controlState.latest_round &&
@@ -418,6 +608,13 @@ function renderDispatch(input: {
 \u8fd9\u662f coordinator \u4e3b\u4f1a\u8bdd\u4f7f\u7528\u7684 team dispatch packet\u3002\u4fdd\u6301 subagent-team \u4e3b\u94fe\uff0c\u4e0d\u8981\u5207\u56de\u65e7\u7684 detached worker \u8fd0\u884c\u65b9\u5f0f\u3002
 
 \u5982\u679c\u5f53\u524d agent / runtime \u4e0d\u652f\u6301 subagent \u6216 delegation\uff0c\u4e0d\u8981\u5361\u4f4f\u3002\u628a\u8fd9\u4efd team dispatch \u5f53\u4f5c\u4e3b\u4f1a\u8bdd\u7684\u4e32\u884c round contract\uff1a\u5f53\u524d\u4f1a\u8bdd\u81ea\u5df1\u5b8c\u6210 development -> check -> repair -> review\uff0c\u4e00\u6b21\u53ea\u5904\u7406\u8fd9\u4e2a issue\uff0c\u7ee7\u7eed\u5199 issue-local progress / run \u5de5\u4ef6\uff0c\u4e0d\u8981\u518d\u6d3e\u751f\u65b0\u7684 issue-only subagent \u6216 team\u3002
+
+## Seat Handoff Source
+
+- Spawned seat subagent \u5fc5\u987b\u4f7f\u7528\u5355\u72ec\u7684 seat handoff artifact\uff0c\u4e0d\u8981\u76f4\u63a5\u5403\u8fd9\u4efd coordinator packet\uff1a
+  - \`${input.seatHandoffsPath}\`
+- \u7ed9 seat \u65f6\uff0c\u53ea\u8f6c\u53d1\u5bf9\u5e94 seat \u7684\u5c0f\u8282\uff0c\u4e0d\u8981\u628a\u6574\u4efd seat handoff \u6253\u5305\u53d1\u7ed9\u591a\u4e2a seat\u3002
+- \u5982\u679c seat \u62ff\u5230\u4e86 lifecycle / team dispatch \u4e2d\u7684 coordinator \u8bed\u53e5\uff0c\u4ee5 seat handoff artifact \u4e3a\u51c6\uff0c\u5ffd\u7565\u8fd9\u4e9b inherited coordinator context\u3002
 
 ## Round Contract
 
@@ -607,6 +804,7 @@ ${bulletList(reReviewResult)}
 export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamDispatchPayload {
   const config = loadIssueModeConfig(args.repoRoot);
   const [changeDir, issuePath, teamDispatchPath] = issuePaths(args.repoRoot, args.change, args.issueId);
+  const seatHandoffsPath = issueSeatHandoffsPath(args.repoRoot, args.change, args.issueId);
   const controlState = readChangeControlState(args.repoRoot, args.change);
   const dispatchGate = ensureIssueDispatchAllowed(config, controlState, args.issueId);
 
@@ -632,6 +830,7 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
   const [validation, validationSource] = issueValidationCommands(frontmatter, config);
   const progressPath = issueProgressPath(args.repoRoot, args.change, args.issueId);
   const progressSnapshot = readProgressSnapshot(progressPath);
+  const seatHandoffsDisplayPath = displayPath(args.repoRoot, seatHandoffsPath);
   const dispatchText = renderDispatch({
     allowedScope,
     change: args.change,
@@ -648,16 +847,31 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
     title,
     validation,
     workerWorktree,
+    seatHandoffsPath: seatHandoffsDisplayPath,
+  });
+  // seat handoff 单独落盘，避免 development / check / review 直接吞 coordinator packet 后角色越界。
+  const seatHandoffsText = renderSeatHandoffArtifact({
+    allowedScope,
+    change: args.change,
+    issueId: args.issueId,
+    outOfScope,
+    progressPath,
+    repoRoot: args.repoRoot,
+    title,
+    validation,
+    workerWorktree,
   });
 
   if (!args.dryRun) {
     fs.mkdirSync(changeDir, { recursive: true });
     fs.writeFileSync(teamDispatchPath, dispatchText);
+    fs.writeFileSync(seatHandoffsPath, seatHandoffsText);
   }
 
   return {
     change: args.change,
     issue_id: args.issueId,
+    seat_handoffs_path: seatHandoffsDisplayPath,
     team_dispatch_path: path.relative(args.repoRoot, teamDispatchPath).split(path.sep).join("/"),
     worker_worktree: workerWorktree,
     worker_worktree_source: workerWorktreeSource,

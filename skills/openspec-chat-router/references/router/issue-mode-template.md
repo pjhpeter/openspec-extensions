@@ -33,6 +33,15 @@
 11. 所有 issue 都被主会话接受后，先对当前 change 修改的代码运行一次 `/review`，把结果落成 `runs/CHANGE-REVIEW.json`
 12. change-level `/review` 通过后，再做一轮 change 级 acceptance；如果 `auto_accept_change_acceptance=true`，这一关不需要人工签字，然后进入 verify / archive。对于 change 级 worktree，archive 时应一起清理对应 `.worktree/<change>`
 
+所有 subagent 都要遵守下面这组角色铁律：
+
+- 显式的 seat-local handoff 高于继承上下文；不要拿 coordinator 默认规则覆盖当前 seat 合同
+- 只有主会话 coordinator 能维护 round/backlog、决定下一 phase、拉起或替换其他 seat、做 reconcile、merge、commit、verify、archive
+- 已成功拉起的 seat 不得自升格成 coordinator，不得把“无法 delegation 时主会话串行推进”的 fallback 套到自己头上
+- development seat 只负责实现、changed_files / pending-validation handoff 和 progress checkpoint；不负责拉 checker/reviewer，不负责 gate verdict，不负责宣布 issue 已过校验
+- design / planning / check / review seat 只产出当前 phase 的结论和证据，不继续推进后续 phase
+- 任一 seat 如果缺上下文、结果回传异常或 runtime 不稳定，应该报告 blocker 并停止，不要私自改 topology、补开 worker 或扩大 scope
+
 如果你要的是“从进入 OpenSpec 模式开始”的复杂任务完整链路，直接复制下面这一套：
 
 1. 进入 OpenSpec 模式

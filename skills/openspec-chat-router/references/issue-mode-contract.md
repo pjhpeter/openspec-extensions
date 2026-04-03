@@ -45,6 +45,31 @@ Helper scripts may fall back to the repo config when those fields are missing.
 Workers must not directly update `tasks.md`.
 Workers must not self-merge or create the final git commit for the issue.
 
+## Subagent Role Iron Laws
+
+- Seat-local handoff beats inherited context. If the current subagent receives an explicit seat, scope, or ownership handoff, that handoff overrides inherited router defaults, coordinator habits, and generic workflow prompts.
+- Only the coordinator owns control-plane actions:
+  - render or refresh lifecycle / issue-team dispatch packets
+  - define round scope, backlog, and continuation decisions
+  - launch, replace, or close gate-bearing seats
+  - reconcile disk state and decide whether a phase passes
+  - merge, commit, verify, archive, and change-level review
+  - use the "runtime cannot delegate, so continue serially" fallback
+- A seat subagent must not self-promote into coordinator. If a seat was already launched successfully, it must not start coordinating sibling seats, running later phases, or applying coordinator-only fallback rules to itself.
+- If a seat lacks required context or hits a runtime/result-return blocker, it must report the blocker and stop. It must not invent a new topology, spawn replacement workers on its own, or silently widen scope.
+- Design-author, design-review, planning, check, and review seats are verdict producers for their current phase only. They must not continue into issue execution, issue acceptance, verify, or archive.
+- Team-dispatch development seats are implementation-only seats:
+  - write code only inside the assigned issue workspace and allowed scope
+  - update issue progress / changed-files / pending-validation handoff
+  - do not spawn or coordinate other development, check, repair, or review seats
+  - do not claim validation or review passed
+  - do not mark the issue `completed + review_required`
+- Explicit issue-only execution subagents may run the bounded issue flow end to end inside their assigned issue workspace, but they still must not self-merge, create the final coordinator commit, or continue into change-level review / verify / archive.
+- Checker and reviewer seats are scope-first readers:
+  - start from `changed_files`, `allowed_scope`, issue validation, and approved round target
+  - only expand to direct dependencies when needed to prove a blocker
+  - do not default to repo-wide review sweeps
+
 ## Directory Layout
 
 For change `<change-name>`:

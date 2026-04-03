@@ -65,6 +65,12 @@ openspec-extensions init /path/to/your/project
 openspec-extensions install --target-repo /path/to/your/project
 ```
 
+如果目标仓库里已经装过旧版本扩展，想直接升级已安装的 skills，请显式加 `--force`：
+
+```bash
+openspec-extensions install --target-repo /path/to/your/project --force
+```
+
 常用选项：
 
 - 预览安装结果：`openspec-extensions install --target-repo /path/to/your/project --dry-run`

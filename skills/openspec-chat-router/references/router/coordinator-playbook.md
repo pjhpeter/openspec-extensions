@@ -54,8 +54,11 @@ This is the normal flow when the runtime supports delegation and the user wants 
 - gate-bearing review/check subagents must not be treated as `explorer` sidecars
 - the lifecycle packet is coordinator-only; when spawning design-author / design-review / planning / check / review seats, give them a seat-local handoff instead of the full coordinator packet
 - do not fork the full coordinator thread/context into gate-bearing seats; seat-local handoff plus minimal file references must remain the only executable context for that seat
+- every seat handoff should explicitly restate: role name, owned scope, out-of-scope actions, expected artifact updates, and what the seat must return before stopping
 - once a seat subagent exists, it must not self-promote to coordinator, apply the "no delegation fallback" to itself, or continue later phases on its own
 - if a launched gate-bearing seat does not return stable results, treat that as a blocker; do not self-certify the gate from missing verdicts and do not continue later phases until the seat is relaunched or the blocker is handled
+- do not ask a development seat to coordinate sibling seats, collect gate verdicts, or choose the next lifecycle step; those remain coordinator-only actions
+- do not ask design/check/review seats to "continue the workflow"; ask only for their seat-local verdict, evidence, and artifact handoff
 - checker/reviewer should be scope-first and diff-first; start from `changed_files` or `allowed_scope`, then expand only to direct dependencies when needed
 - do not let issue rounds turn into repo-wide review sweeps by default
 - do not let issue-round checker/reviewer read `node_modules`, `dist`, `build`, `.next`, `coverage`, or other generated/vendor trees unless the issue explicitly scopes them in

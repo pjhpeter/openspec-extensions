@@ -76,6 +76,7 @@ export type LifecycleDispatchPayload = {
   issue_count: number;
   issue_team_dispatch: IssueTeamDispatchPayload | Record<string, never>;
   issue_team_dispatch_path: string;
+  issue_team_seat_handoffs_path: string;
   latest_round_path: string;
   lifecycle_dispatch_path: string;
   phase: string;
@@ -826,7 +827,8 @@ function renderPhasePacket(
   controlState: JsonRecord,
   config: IssueModeConfig,
   issues: IssuePayload[],
-  issueTeamDispatchPath: string
+  issueTeamDispatchPath: string,
+  issueTeamSeatHandoffsPath: string
 ): string {
   const latestRound = (controlState.latest_round as JsonRecord | undefined) ?? {};
   const backlog = (controlState.backlog as JsonRecord | undefined) ?? {};
@@ -957,7 +959,7 @@ function renderPhasePacket(
               ];
 
   const issueTeamSection = issueTeamDispatchPath
-    ? `## Issue Team Dispatch\n\n- Current issue packet:\n  - \`${issueTeamDispatchPath}\`\n\n`
+    ? `## Issue Team Dispatch\n\n- Current issue packet:\n  - \`${issueTeamDispatchPath}\`\n${issueTeamSeatHandoffsPath ? `- Seat-local handoff packet for spawned seats:\n  - \`${issueTeamSeatHandoffsPath}\`\n- 当 development / check / review seat 已经缩窄到单个 seat-local 任务时，只传这个 handoff packet 里的对应小节，不要再把 coordinator packet 原样转发给它们。\n` : ""}\n`
     : "";
 
   return `继续 OpenSpec change \`${change}\`，以 subagent team 主链推进整个复杂变更生命周期。
@@ -1065,6 +1067,7 @@ export function renderLifecycleDispatch(args: ParsedArgs): LifecycleDispatchPayl
 
   const focusIssue = args.issueId.trim() || detectedIssueId;
   let issueTeamDispatchPath = "";
+  let issueTeamSeatHandoffsPath = "";
   let issueTeamDispatch: IssueTeamDispatchPayload | Record<string, never> = {};
 
   if (phase === "issue_execution" && focusIssue) {
@@ -1077,6 +1080,7 @@ export function renderLifecycleDispatch(args: ParsedArgs): LifecycleDispatchPayl
       dryRun: args.dryRun
     });
     issueTeamDispatchPath = String(issueTeamDispatch.team_dispatch_path ?? "").trim();
+    issueTeamSeatHandoffsPath = String(issueTeamDispatch.seat_handoffs_path ?? "").trim();
   }
 
   const lifecyclePacketPath = path.join(controlDir, "SUBAGENT-TEAM.dispatch.md");
@@ -1089,7 +1093,8 @@ export function renderLifecycleDispatch(args: ParsedArgs): LifecycleDispatchPayl
     controlState,
     config,
     issues,
-    issueTeamDispatchPath
+    issueTeamDispatchPath,
+    issueTeamSeatHandoffsPath
   );
 
   if (!args.dryRun) {
@@ -1106,6 +1111,7 @@ export function renderLifecycleDispatch(args: ParsedArgs): LifecycleDispatchPayl
     focus_issue_id: focusIssue,
     lifecycle_dispatch_path: displayPath(args.repoRoot, lifecyclePacketPath),
     issue_team_dispatch_path: issueTeamDispatchPath,
+    issue_team_seat_handoffs_path: issueTeamSeatHandoffsPath,
     issue_team_dispatch: issueTeamDispatch,
     latest_round_path: latestRoundPath ? displayPath(args.repoRoot, latestRoundPath) : "",
     automation: {

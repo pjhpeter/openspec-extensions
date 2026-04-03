@@ -13,6 +13,8 @@ test("subagent-team agent prompt scopes coordinator defaults to the main session
   assert.match(prompt, /only when this session is the main coordinator session/);
   assert.match(prompt, /explicit seat-local handoff or role instruction/);
   assert.match(prompt, /do not apply serial fallback/);
+  assert.match(prompt, /rendered seat-handoff artifact exists/);
+  assert.match(prompt, /seat-handoff artifact or the exact seat section from it/);
   assert.match(prompt, /do not fork the full coordinator thread or full chat history/);
   assert.match(prompt, /do not self-certify the gate/);
 });
