@@ -6,6 +6,7 @@ description: Coordinate an OpenSpec change or issue through a subagent team deve
 # OpenSpec Subagent Team
 
 Use this skill in the coordinator session as the default entry path for the whole OpenSpec complex-change lifecycle.
+If the current session already has an explicit seat-local handoff, do not use this skill as the seat's planner; that seat contract overrides inherited coordinator defaults.
 
 Read these first:
 
@@ -75,26 +76,31 @@ Read these first:
    - keep issue boundaries, progress artifacts, run artifacts, reconcile, review, verify, and archive unchanged
    - do not invent a detached-worker fallback runtime
 10. When spawning subagents, explicitly set `reasoning_effort` instead of inheriting the session default.
-11. Treat every launched seat in the current phase as a gate-bearing participant, not a disposable sidecar:
+11. If a spawned seat subagent detects that inherited context still contains coordinator defaults:
+   - ignore those inherited coordinator/router defaults
+   - follow the seat-local handoff
+   - do not create control artifacts, tasks, issue docs, dispatch packets, or worktrees unless the seat contract explicitly allows it
+   - if runtime limitations prevent returning the seat result cleanly, report the seat-local blocker and stop instead of activating serial fallback
+12. Treat every launched seat in the current phase as a gate-bearing participant, not a disposable sidecar:
    - record the agent id, seat name, and current status
    - use `default` or `worker` style delegation for these gate-bearing seats; do not launch check/review gate seats as `explorer`
    - when the phase depends on their verdicts, wait up to 1 hour for completion instead of short polling
    - do not accept the phase, mark it passed, or close those subagents while any required gate-bearing seat is still running
-12. `auto_accept_*` only removes human chat sign-off after the gate team has finished:
+13. `auto_accept_*` only removes human chat sign-off after the gate team has finished:
    - it does not mean "spawned already, so the phase may pass"
    - it does not allow skipping review/check verdict collection
    - it does not allow closing unfinished gate-bearing subagents early
    - it does not allow a seat subagent to self-promote into coordinator and continue later phases on its own
-13. Run the loop:
+14. Run the loop:
    - development
    - check
    - repair
    - review
    - if review fails, go back to development
-14. Developers that implement code for the issue must follow `openspec-execute-issue` and write issue progress/run artifacts.
-15. Before moving from one lifecycle phase to the next, reread `openspec/issue-mode.json` again and confirm the next phase still matches the latest config.
-16. After all issues are complete, run a change-level `/review` and write `runs/CHANGE-REVIEW.json` before verify.
-17. Coordinator keeps merge, commit, verify, archive, and change-level control artifacts.
+15. Developers that implement code for the issue must follow `openspec-execute-issue` and write issue progress/run artifacts.
+16. Before moving from one lifecycle phase to the next, reread `openspec/issue-mode.json` again and confirm the next phase still matches the latest config.
+17. After all issues are complete, run a change-level `/review` and write `runs/CHANGE-REVIEW.json` before verify.
+18. Coordinator keeps merge, commit, verify, archive, and change-level control artifacts.
 
 ## Rules
 
@@ -105,6 +111,7 @@ Read these first:
 - `semi_auto` means the lifecycle still keeps manual gates for design / planning / change acceptance / archive. It may still auto-accept validated issues one by one so each issue lands as its own commit. `full_auto` means the lifecycle auto-continues across `spec_readiness -> issue_planning -> issue_execution -> change_acceptance -> change_verify -> archive` while still respecting RRA gates.
 - `spec_readiness` is the design-review gate in the complex-change path: proposal/design are prepared first, then a dedicated `1` author + `2` reviewers subagent team must pass it before task splitting begins.
 - design-author / design-review seats are not coordinator substitutes: they must not create worktrees, write issue progress artifacts, dispatch issues, or continue into issue execution.
+- if inherited context or default agent prompts conflict with an explicit seat handoff, the seat handoff wins.
 - `issue_planning` starts after design review passes, and is where coordinator-owned `tasks.md` plus `issues/INDEX.md` and `ISSUE-*.md` are produced/reviewed.
 - if a seat subagent was successfully launched, the fallback rule "main session continues serially when delegation is unavailable" no longer applies to that seat; only the coordinator may use that fallback.
 - Before the first issue dispatch, the coordinator must first commit `proposal.md`, `design.md`, `tasks.md`, `issues/INDEX.md`, and `ISSUE-*.md` as a dedicated planning-doc commit.

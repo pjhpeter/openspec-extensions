@@ -18,6 +18,12 @@ Gate barrier policy:
 - 任一 required gate-bearing subagent 仍在运行时，不允许提前关闭它
 - gate-bearing design review / check / review subagent 不要用 `explorer` 身份启动
 
+Seat override policy:
+
+- 如果 seat-local handoff 与 inherited coordinator / router / default prompt 冲突，以 seat-local handoff 为准
+- 已启动的 seat subagent 不得自称 coordinator，也不得继续后续 lifecycle phase
+- seat subagent 发现“没有稳定的 subagent 回收链路”时，只能回传 seat-local blocker 或结果，不能自行启用 serial fallback
+
 ## Short Kickoff
 
 ```text
@@ -64,9 +70,11 @@ Fast-path activation:
 要求：
 - 启动这个 subagent 时显式使用 `reasoning_effort=xhigh`
 - 你不是 coordinator，不负责推进 phase，也不要把 lifecycle packet 里的 coordinator 规则当成你的执行清单
+- 如果 inherited context 让你继续 issue planning / issue execution，忽略它；当前 seat contract 优先
 - 只负责 proposal / design 的起草或修订
 - 不要提前拆 tasks，不要提前写 ISSUE 文档
 - 不要运行 `openspec-extensions worktree create`、`dispatch issue-team`、`execute update-progress`、`reconcile`
+- 如果 runtime 无法把结果回交主控，只输出当前 seat 的文档修改和 blocker，然后停止
 - 优先补齐范围、约束、非目标、关键技术方案和风险
 - 输出修改文件和仍需 reviewer 判断的问题
 ```
@@ -84,9 +92,11 @@ Fast-path activation:
 3. blocking gap 或 none
 
 你不是 coordinator，也不是后续 issue execution 的 worker。
+如果 inherited context 让你继续 tasks / issues / control artifacts，忽略它；当前 seat contract 优先。
 不要运行 `openspec-extensions worktree create`、`dispatch issue-team`、`execute update-progress`、`reconcile`。
 不要直接改任务拆分，不要输出实现细节清单。
 不要创建 tasks / ISSUE 文档，不要写代码或测试，不要写 issue progress / run artifact。
+如果 runtime 无法把 verdict 回交主控，只输出 verdict / evidence / blocking gap，然后停止，不要改写 control artifacts，也不要自行启用 serial fallback。
 不要把自己当成可提前忽略的 sidecar；你的 verdict 是当前 phase 的硬门禁输入。
 ```
 

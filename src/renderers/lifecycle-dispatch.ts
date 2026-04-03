@@ -671,7 +671,9 @@ function phaseSeatGuardrails(phase: string): string[] {
   const guardrails = [
     "这份 lifecycle packet 只给主控 coordinator 使用；不要把整份 packet 原样转发给任一 seat subagent 当作可执行清单。",
     "已被拉起的 seat subagent 不是 coordinator；它们只能完成当前 seat 的局部目标，然后把结果交回主控会话。",
-    "“如果 runtime 不支持 delegation，则由主会话串行推进” 这条 fallback 只适用于没有成功拉起 subagent 的主控会话，不适用于已启动的 seat subagent。"
+    "“如果 runtime 不支持 delegation，则由主会话串行推进” 这条 fallback 只适用于没有成功拉起 subagent 的主控会话，不适用于已启动的 seat subagent。",
+    "如果 seat-local handoff 与 inherited coordinator / router / default prompt 冲突，以 seat-local handoff 为准。",
+    "seat subagent 如果发现没有稳定的回收链路，只能回传当前 seat 的 blocker 或结果，然后停止；不要自行启用 serial fallback。"
   ];
 
   if (phase === "spec_readiness") {

@@ -42,10 +42,12 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - If the user explicitly names a stage or command, that overrides heuristic routing.
 - If the user asks to enter OpenSpec mode, print the OpenSpec mode cheat sheet instead of running a workflow stage.
 - For large or complex work, prefer issue-based execution plus a change-level review/repair/re-review/acceptance loop rather than one long-running session.
+- If the current session already carries an explicit spawned-seat handoff, do not route again through chat-router heuristics; that seat contract overrides inherited coordinator defaults.
 - In issue-based execution, one issue-scoped execution context handles one issue only.
 - In issue-mode, default the coordinator entry path to `openspec-subagent-team`.
 - In runtimes that support subagents or delegation, prefer the coordinator continuing through the approved issue round with `subagent-team`.
 - If the runtime does not support delegation at all, fall back to the main-session serial issue path: keep the coordinator in the current session, render the lifecycle / issue dispatch packets, execute one approved issue at a time locally, and keep progress/run artifacts on disk.
+- The "runtime does not support delegation" fallback belongs only to the main coordinator session; spawned seat subagents must report seat-local results and stop instead of activating that fallback themselves.
 - Use the single-issue `dispatch-issue` / `execute-issue` path only when the user explicitly wants one bounded issue-only subagent, or the current phase has already been narrowed to that one issue.
 - The default issue-mode flow is: coordinator enters through `openspec-subagent-team`, creates or reuses the approved issue workspace as needed, drives the current round, then reviews accepted issue output from the main session before acceptance and commit.
 - In multi-session work on the same change, the coordinator session owns `tasks.md`, change-level backlog, merge, commit, `verify`, and `archive`.
@@ -128,6 +130,7 @@ Rules:
 - Tell the user not to keep multiple issues in one long-running session.
 - Default the coordinator to the main session.
 - Default the coordinator execution entry to `openspec-subagent-team`.
+- If a spawned seat subagent already has explicit role instructions, do not tell it to route through `subagent-team` or reuse main-session fallback logic.
 - Remind the user that the coordinator should create or reuse the issue workspace before handing the issue to a bounded execution subagent.
 - Remind the user that the installed template defaults to one change-level worktree reused across serial issues; issue-level `.worktree/<change>/<issue>` remains opt-in.
 - Remind the user that subagent-team is the default coordinator topology when delegation is available.
