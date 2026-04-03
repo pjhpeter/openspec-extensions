@@ -7,6 +7,10 @@ import test from "node:test";
 
 import { main } from "../../src/cli/index";
 
+const PACKAGE_VERSION = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "package.json"), "utf8")) as {
+  version?: unknown;
+};
+
 function git(repoRoot: string, ...args: string[]): string {
   return execFileSync("git", args, { cwd: repoRoot, encoding: "utf8" }).trim();
 }
@@ -40,6 +44,20 @@ function captureStdout(run: () => Promise<number>): Promise<{ exitCode: number; 
 test("cli help exits successfully", async () => {
   const exitCode = await main(["--help"]);
   assert.equal(exitCode, 0);
+});
+
+test("cli long version flag exits successfully", async () => {
+  const result = await captureStdout(() => main(["--version"]));
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.stdout.trim(), PACKAGE_VERSION.version);
+});
+
+test("cli short version flag exits successfully", async () => {
+  const result = await captureStdout(() => main(["-v"]));
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.stdout.trim(), PACKAGE_VERSION.version);
 });
 
 test("cli init routes to command", async () => {

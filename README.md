@@ -37,6 +37,12 @@ cd /path/to/your/project
 openspec-ex init
 ```
 
+查看当前安装的 CLI 版本：
+
+```bash
+openspec-ex --version
+```
+
 等价写法：
 
 ```bash
@@ -62,6 +68,7 @@ openspec-extensions install --target-repo /path/to/your/project
 - 预览安装结果：`openspec-extensions install --target-repo /path/to/your/project --dry-run`
 - 覆盖同名 skills：`openspec-extensions install --target-repo /path/to/your/project --force`
 - 覆盖 `openspec/issue-mode.json`：`openspec-extensions install --target-repo /path/to/your/project --force-config`
+- 查看 CLI 版本：`openspec-ex -v`、`openspec-ex --version`
 - 升级全局 CLI：`npm install -g openspec-extensions@latest`
 - 升级目标仓库里已安装的扩展 skills：`openspec-ex init --force`，或 `openspec-extensions install --target-repo /path/to/your/project --force`
 - 升级 skills 的同时覆盖新的默认配置模板：`openspec-ex init --force --force-config`

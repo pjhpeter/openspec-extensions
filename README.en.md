@@ -37,6 +37,12 @@ cd /path/to/your/project
 openspec-ex init
 ```
 
+Check the installed CLI version:
+
+```bash
+openspec-ex --version
+```
+
 Equivalent form:
 
 ```bash
@@ -62,6 +68,7 @@ Common options:
 - Preview installation: `openspec-extensions install --target-repo /path/to/your/project --dry-run`
 - Overwrite existing skills: `openspec-extensions install --target-repo /path/to/your/project --force`
 - Overwrite `openspec/issue-mode.json`: `openspec-extensions install --target-repo /path/to/your/project --force-config`
+- Check the CLI version: `openspec-ex -v`, `openspec-ex --version`
 - Upgrade the global CLI: `npm install -g openspec-extensions@latest`
 - Upgrade extension skills already installed in a target repo: `openspec-ex init --force`, or `openspec-extensions install --target-repo /path/to/your/project --force`
 - Upgrade skills and also overwrite the default config template: `openspec-ex init --force --force-config`

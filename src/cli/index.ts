@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { runArchiveCommand } from "../commands/archive";
 import { runDispatchCommand } from "../commands/dispatch";
 import { runInitCommand } from "../commands/init";
@@ -10,9 +13,13 @@ import { runVerifyCommand } from "../commands/verify";
 import { runWorktreeCommand } from "../commands/worktree";
 import { runUpdateProgressCommand } from "../commands/execute/update-progress";
 
+const PACKAGE_VERSION = readPackageVersion();
+
 const HELP_TEXT = `OpenSpec Extensions CLI
 
 Usage:
+  openspec-extensions -v
+  openspec-extensions --version
   openspec-extensions init [path]
   openspec-extensions install [options]
   openspec-extensions dispatch issue [options]
@@ -41,13 +48,29 @@ Commands:
   verify change           Run change-level coordinator verify.
   archive change          Archive a change and clean up change worktree state.
   worktree create         Create or reuse a worker worktree for an issue.
+
+Options:
+  -h, --help              Show help.
+  -v, --version           Show package version.
 `;
+
+function readPackageVersion(): string {
+  const packageJsonPath = path.resolve(__dirname, "../../package.json");
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { version?: unknown };
+  return typeof packageJson.version === "string" ? packageJson.version : "0.0.0";
+}
 
 export async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;
 
   if (!command || command === "-h" || command === "--help") {
     process.stdout.write(`${HELP_TEXT}\n`);
+    return 0;
+  }
+
+  // 兼容常见 CLI 习惯，版本号允许不带子命令直接查询
+  if (command === "-v" || command === "--version") {
+    process.stdout.write(`${PACKAGE_VERSION}\n`);
     return 0;
   }
 
