@@ -82,8 +82,8 @@ Important:
 - when a change-level worktree is in use, archive should normally run through `openspec-extensions archive change --repo-root . --change "<change>"` so the successful archive also cleans up the reusable worktree
 - gate-bearing design-review / check / review seats should not be launched as `explorer`, and should use up to 1 hour blocking waits when unattended progression matters
 - role-based `reasoning_effort` is currently a skill/dispatch contract, not an `issue-mode.json` field:
-  - design-author subagent: `xhigh`
-  - any code-writing implementation or verify-fix subagent: `xhigh`
+  - design-author subagent: `high`
+  - any code-writing implementation or verify-fix subagent: `high`
   - design reviewers, planning authors, checkers, reviewers, and closeout-only subagents: `medium`
   - coordinator should pass these values explicitly when spawning, because many runtimes otherwise inherit the session-wide default
 

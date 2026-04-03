@@ -9,7 +9,7 @@
 - `auto_accept_*` 的真实含义是“收齐当前 gate 所需 subagent verdict 之后，跳过人工签字继续推进”，不是“子代理刚启动就可以直接进入下一阶段”
 - 但某些 runtime 对真实拉起 subagent / delegation 仍要求你在当前会话里显式授权
 - 对长时间 subagent 任务，某些 runtime / session 还可能使用较短等待并提前返回；要真正无人值守，最好显式要求长阻塞等待，例如 1 小时
-- 某些 runtime 还会让 spawned subagent 继承当前会话的全局 `reasoning_effort`；如果你希望非编码 subagent 不要都跑成 `xhigh`，要在 spawn 时显式覆写
+- 某些 runtime 还会让 spawned subagent 继承当前会话的全局 `reasoning_effort`；如果你希望非编码 subagent 不要都跑成 `high`，要在 spawn 时显式覆写
 - 门禁型 design-review / check / review subagent 不应当被当成 `explorer` sidecar；它们必须等到全部完成并收齐 verdict 后，当前 phase 才能通过
 - 如果当前 agent / runtime 根本不支持 subagent 或 delegation，不要卡在 `subagent-team` 名称上；直接退回主会话串行 issue path，一次只处理一个 approved issue，继续写 progress / run 工件，再由 coordinator reconcile / review / verify / archive
 - 如果你希望当前会话一定走多 agent 编排，直接说：
@@ -92,7 +92,7 @@
 ```text
 按当前 openspec/issue-mode.json 配置继续当前 change。
 默认入口使用 subagent-team，按全自动方式推进整个生命周期。
-设计文档编写 subagent 和编码 subagent 使用 xhigh，其他 subagent 使用 Medium。
+设计文档编写 subagent 和编码 subagent 使用 high，其他 subagent 使用 Medium。
 在所有 issues 完成后，先对当前 change 修改的代码执行 /review，通过后再进入 verify。
 对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
 当前 gate 的 review/check subagent 必须等待全部完成并收齐 verdict，禁止提前关闭或提前通过 phase。

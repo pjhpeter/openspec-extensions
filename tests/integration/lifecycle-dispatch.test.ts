@@ -66,7 +66,7 @@ test("detects spec_readiness when core docs are missing", () => {
     assert.equal(payload.automation_profile, "semi_auto");
     assert.equal(payload.team_topology[0]?.label, "Design author");
     assert.equal(payload.team_topology[0]?.count, 1);
-    assert.equal(payload.team_topology[0]?.reasoning_effort, "xhigh");
+    assert.equal(payload.team_topology[0]?.reasoning_effort, "high");
     assert.equal(payload.team_topology[1]?.label, "Design review");
     assert.equal(payload.team_topology[1]?.count, 2);
     assert.equal(payload.team_topology[1]?.reasoning_effort, "medium");
@@ -74,7 +74,7 @@ test("detects spec_readiness when core docs are missing", () => {
     assert.match(dispatchText, /spec_readiness/);
     assert.match(dispatchText, /Design author: 1 subagent/);
     assert.match(dispatchText, /Design review: 2 subagents/);
-    assert.match(dispatchText, /Launch with `reasoning_effort=xhigh`/);
+    assert.match(dispatchText, /Launch with `reasoning_effort=high`/);
     assert.match(dispatchText, /Launch with `reasoning_effort=medium`/);
     assert.match(dispatchText, /当前 phase 的标准循环是：设计编写 -> 双评审 -> 修订 -> 双评审/);
     assert.match(dispatchText, /## Gate Barrier/);
@@ -315,7 +315,7 @@ validation:
     assert.match(issueSeatHandoffsText, /只处理依赖模块、集成接缝和当前 issue 直接相关的兼容性问题/);
     assert.equal(payload.team_topology[0]?.label, "Development group");
     assert.equal(payload.team_topology[0]?.count, 3);
-    assert.equal(payload.team_topology[0]?.reasoning_effort, "xhigh");
+    assert.equal(payload.team_topology[0]?.reasoning_effort, "high");
     assert.equal(payload.team_topology[1]?.reasoning_effort, "medium");
     assert.equal(payload.team_topology[1]?.count, 2);
     assert.equal(payload.team_topology[2]?.count, 1);

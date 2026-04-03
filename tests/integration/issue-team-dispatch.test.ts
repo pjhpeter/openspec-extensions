@@ -107,7 +107,7 @@ validation:
 
   assert.equal(exitCode, 0);
   assert.equal((payload.control_state as { latest_round: { target_mode: string } }).latest_round.target_mode, "quality");
-  assert.equal((payload.reasoning_policy as { development_group: string }).development_group, "xhigh");
+  assert.equal((payload.reasoning_policy as { development_group: string }).development_group, "high");
   assert.equal((payload.reasoning_policy as { check_group: string }).check_group, "medium");
   assert.equal((payload.reasoning_policy as { review_group: string }).review_group, "medium");
   assert.match(String(payload.seat_handoffs_path), /ISSUE-001\.seat-handoffs\.md$/);
@@ -128,7 +128,7 @@ validation:
   assert.match(dispatchText, /development -> check -> repair -> review/);
   assert.match(dispatchText, /\u4e00\u6b21\u53ea\u5904\u7406\u8fd9\u4e2a issue/);
   assert.match(dispatchText, /Gate-bearing subagent roster with seat \/ agent_id \/ status/);
-  assert.match(dispatchText, /Launch with `reasoning_effort=xhigh`/);
+  assert.match(dispatchText, /Launch with `reasoning_effort=high`/);
   assert.match(dispatchText, /Launch with `reasoning_effort=medium`/);
   assert.match(dispatchText, /Current changed-file focus:/);
   assert.match(dispatchText, /Current review starting scope:/);

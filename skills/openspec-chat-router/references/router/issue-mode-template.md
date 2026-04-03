@@ -9,11 +9,11 @@
 
 推荐方式：
 
-1. 主会话先补齐 proposal / design，并做 change 级 design review；这里使用 1 个设计作者 subagent 和 2 个设计评审 subagent。设计作者使用 `reasoning_effort=xhigh`，设计评审使用 `reasoning_effort=medium`。如果 `auto_accept_spec_readiness=true`，这一关不需要人工签字
+1. 主会话先补齐 proposal / design，并做 change 级 design review；这里使用 1 个设计作者 subagent 和 2 个设计评审 subagent。设计作者使用 `reasoning_effort=high`，设计评审使用 `reasoning_effort=medium`。如果 `auto_accept_spec_readiness=true`，这一关不需要人工签字
 2. design review 通过后，再把复杂实现拆成 `tasks.md` 和多个 issue，并对任务拆分边界做一轮 review；在开始首个 issue execution 前，主会话必须先把 `proposal.md`、`design.md`、`tasks.md`、`issues/INDEX.md`、`ISSUE-*.md` 提交成一次独立 commit。如果 `auto_accept_issue_planning=true`，这一关不需要人工签字，但仍要先提交这些文档，再立即派发首个已批准 issue，不要停在 `control-plane ready`
 3. 主会话维护 change 级 backlog / round report，不把门禁判断只留在聊天里
 4. 主会话只为当前 round 已批准的 issue 创建或复用 issue workspace（`worker_worktree`），并渲染 subagent-team lifecycle packet / `ISSUE-*.team.dispatch.md`。安装模板默认是每个 change 复用一个 `.worktree/<change>`，不是每个 issue 单独建一个 worktree
-5. 默认用 subagent team 驱动开发 / 检查 / 修复 / 审查小组，作为整个 complex change 的协调入口；issue planning 默认走 `2 development + 1 check + 1 review`，issue execution 默认走 `3 development + 2 check + 1 review` 的快路径。任何编码 subagent 使用 `reasoning_effort=xhigh`，其余规划/检查/审查 subagent 使用 `reasoning_effort=medium`
+5. 默认用 subagent team 驱动开发 / 检查 / 修复 / 审查小组，作为整个 complex change 的协调入口；issue planning 默认走 `2 development + 1 check + 1 review`，issue execution 默认走 `3 development + 2 check + 1 review` 的快路径。任何编码 subagent 使用 `reasoning_effort=high`，其余规划/检查/审查 subagent 使用 `reasoning_effort=medium`
    - 如果当前 agent / runtime 不支持 subagent / delegation，就退回主会话串行 issue path：仍按同一份 lifecycle / team dispatch 执行，但由主会话自己完成 development / check / repair / review，一次只处理一个 approved issue
 6. 主会话把当前 phase 里真正拉起的 design review / check / review seat 视为 gate-bearing subagent：
    - 记录 agent id、seat 和完成状态
@@ -84,7 +84,7 @@
 ```text
 按当前 openspec/issue-mode.json 配置继续当前 change。
 默认入口使用 subagent-team，按全自动方式推进整个生命周期。
-设计文档编写 subagent 和编码 subagent 使用 xhigh，其他 subagent 使用 Medium。
+设计文档编写 subagent 和编码 subagent 使用 high，其他 subagent 使用 Medium。
 在所有 issues 完成后，先对当前 change 修改的代码执行 /review，通过后再进入 verify。
 对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
 当前 gate 的 review/check subagent 必须等待全部完成并收齐 verdict，禁止提前关闭或提前通过 phase。

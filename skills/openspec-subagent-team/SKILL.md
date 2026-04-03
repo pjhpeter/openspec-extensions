@@ -65,11 +65,11 @@ Read these first:
    - the lifecycle packet is coordinator-only; when spawning a seat subagent, pass a seat-local handoff instead of pasting the entire lifecycle packet as its executable task
    - when spawning a design-author / design-review / planning / check / review seat, do not fork the full coordinator thread/context; use `fork_context=false` and pass only the seat-local handoff plus minimal relevant file references
 8. Use a phase-specific topology:
-   - `spec_readiness`: 1 design author (`reasoning_effort=xhigh`) + 2 design reviewers (`reasoning_effort=medium`)
+   - `spec_readiness`: 1 design author (`reasoning_effort=high`) + 2 design reviewers (`reasoning_effort=medium`)
    - `issue_planning`: fast path is `2 development + 1 check + 1 review`, all `reasoning_effort=medium`
-   - `issue_execution`: fast path is `3 development + 2 check + 1 review`; code-writing development seats use `reasoning_effort=xhigh`, check/review use `reasoning_effort=medium`
+   - `issue_execution`: fast path is `3 development + 2 check + 1 review`; code-writing development seats use `reasoning_effort=high`, check/review use `reasoning_effort=medium`
    - `change_acceptance` / `ready_for_archive`: fast path is `1 development + 1 check + 1 review`, all `reasoning_effort=medium`
-   - `change_verify`: fast path is `2 development + 1 check + 1 review`; code-fix development seats use `reasoning_effort=xhigh`, check/review use `reasoning_effort=medium`
+   - `change_verify`: fast path is `2 development + 1 check + 1 review`; code-fix development seats use `reasoning_effort=high`, check/review use `reasoning_effort=medium`
 9. If the current runtime does not support delegation at all:
    - keep the main session as both coordinator and executor
    - treat the rendered lifecycle packet and issue team packet as the source of truth for the current round
@@ -136,8 +136,8 @@ Read these first:
   - Review 1/2/3 = target path / regression-operational escalation / evidence completeness escalation
 - checker / reviewer 默认先看 `changed_files`（若已有 progress artifact），没有时再看 `allowed_scope` 和 issue validation；只有确认 direct dependency 风险时才允许向外扩。
 - issue round 的 check/review 默认不做 repo-wide 扫描，也不要读取 `node_modules`、`dist`、`build`、`.next`、`coverage` 这类目录，除非当前 issue 明确把这些路径放进 `allowed_scope`。
-- design-author subagents use `reasoning_effort=xhigh`.
-- code-writing subagents use `reasoning_effort=xhigh`.
+- design-author subagents use `reasoning_effort=high`.
+- code-writing subagents use `reasoning_effort=high`.
 - design reviewers, planning authors, checkers, reviewers, and closeout-only subagents use `reasoning_effort=medium`.
 - `auto_accept_spec_readiness=true` means spec-readiness does not wait for human sign-off once proposal/design have passed the `1` author + `2` reviewers design review.
 - `auto_accept_issue_planning=true` means issue planning does not wait for human sign-off once tasks.md plus INDEX/ISSUE docs are dispatch-ready; the coordinator still commits the planning docs before the first issue dispatch.

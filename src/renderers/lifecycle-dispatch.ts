@@ -574,7 +574,7 @@ function phaseTeamTopology(phase: string): TeamTopologyItem[] {
         label: "Design author",
         count: 1,
         responsibility: "负责起草或修订 proposal / design，吸收反馈并提交可评审版本。",
-        reasoning_effort: "xhigh",
+        reasoning_effort: "high",
         reasoning_note: "设计文档编写需要更强的上下文整合、方案权衡和风险推敲。"
       },
       {
@@ -622,7 +622,7 @@ function phaseTeamTopology(phase: string): TeamTopologyItem[] {
         label: "Development group",
         count: 3,
         responsibility: "负责创建或修订当前 phase 所需产物。",
-        reasoning_effort: "xhigh",
+        reasoning_effort: "high",
         reasoning_note: "当前 phase 预期会修改 repo 代码、测试或集成实现。"
       },
       {
@@ -678,7 +678,7 @@ function phaseTeamTopology(phase: string): TeamTopologyItem[] {
         label: "Development group",
         count: 2,
         responsibility: "负责创建或修订当前 phase 所需产物。",
-        reasoning_effort: "xhigh",
+        reasoning_effort: "high",
         reasoning_note: "verify 修复默认保留实现与测试两个开发 seat，避免重型多席位 closeout。"
       },
       {
@@ -897,7 +897,7 @@ function renderPhasePacket(
     ? [
         "spec_readiness 使用专用拓扑，不复用通用的 3-3-3 team shape。",
         "Design author 负责补 proposal / design，不在 design review 通过前做任务拆分。",
-        "Design author 启动时使用 `reasoning_effort=xhigh`；2 个 design review subagent 使用 `reasoning_effort=medium`。",
+        "Design author 启动时使用 `reasoning_effort=high`；2 个 design review subagent 使用 `reasoning_effort=medium`。",
         "2 个 design review subagent 直接给出 pass / fail 和 blocking gap，不单独再设 check group。",
         "coordinator 只有在收齐 gate-bearing verdict 并写入 `runs/SPEC-READINESS.json` 后，才允许把 spec_readiness 视为通过。",
         "只有 2 个 reviewer 都通过，才允许进入 plan-issues / 任务拆分。",
@@ -921,7 +921,7 @@ function renderPhasePacket(
       : phase === "issue_execution"
         ? [
             "开发组可以按 issue team dispatch 调起实现型 subagent。",
-            "issue round 默认使用 3 个开发 seat + 2 个 checker + 1 个 reviewer 的快路径；编码型开发 subagent 使用 `reasoning_effort=xhigh`，检查组和审查组使用 `reasoning_effort=medium`。",
+            "issue round 默认使用 3 个开发 seat + 2 个 checker + 1 个 reviewer 的快路径；编码型开发 subagent 使用 `reasoning_effort=high`，检查组和审查组使用 `reasoning_effort=medium`。",
             "team dispatch 下的 development seat 只负责实现和 progress start/checkpoint；如果当前改动让既有校验失效，只把相关 validation 回写成 `pending`，不要在该 seat 内完成 validation / check / review，也不要自己把 issue 标成 `completed + review_required`。",
             "checker / reviewer 必须先看 `changed_files`（若 progress artifact 已记录），没有时先看 `allowed_scope` 和 issue validation，再按需扩到直接依赖面。",
             "默认不要读取 `node_modules`、`dist`、`build`、`.next`、`coverage` 这类生成/供应商目录；只有当前 issue 明确把这些路径写进 `allowed_scope` 时才允许查看。",
@@ -947,7 +947,7 @@ function renderPhasePacket(
             ? [
                 "进入 verify 前，change-level /review 必须已经通过；该 review 的范围是当前分支未 push 的代码，并排除 `openspec/changes/**`。",
                 "开发组只处理 verify 失败所暴露的缺口，不再随意新增 issue。",
-                "verify 默认使用 2 个开发 seat + 1 个 checker + 1 个 reviewer 的快路径；如果 verify 暴露出代码/测试缺口，开发组 subagent 使用 `reasoning_effort=xhigh`，检查组和审查组使用 `reasoning_effort=medium`。",
+                "verify 默认使用 2 个开发 seat + 1 个 checker + 1 个 reviewer 的快路径；如果 verify 暴露出代码/测试缺口，开发组 subagent 使用 `reasoning_effort=high`，检查组和审查组使用 `reasoning_effort=medium`。",
                 "检查组负责运行并检查 repo validation、tasks completion、verify artifact。",
                 autoArchiveAfterVerify ? "verify 通过后自动进入 archive 阶段。" : "verify 通过后默认停住，让 coordinator 先确认是否 archive。"
               ]

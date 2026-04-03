@@ -410,7 +410,7 @@ Issue:
 ## How To Use
 
 - 只复制当前 seat 对应的小节给对应 subagent。
-- 启动编码型 development seat 时显式使用 \`reasoning_effort=xhigh\`。
+- 启动编码型 development seat 时显式使用 \`reasoning_effort=high\`。
 - 启动 checker / reviewer seat 时显式使用 \`reasoning_effort=medium\`。
 - seat subagent 不得继续后续 lifecycle phase；只返回本 seat 的局部结果、证据、blocker 和 artifact 更新。
 
@@ -666,7 +666,7 @@ ${bulletList(input.validation)}
   - Developer 1: core implementation owner
   - Developer 2: dependent module or integration owner
   - Developer 3: tests, fixtures, cleanup owner
-  - Launch with \`reasoning_effort=xhigh\`
+  - Launch with \`reasoning_effort=high\`
   - Why: \u5f53\u524d issue round \u9884\u671f\u4f1a\u4fee\u6539 repo \u4ee3\u7801\u3001\u6d4b\u8bd5\u6216\u96c6\u6210\u5b9e\u73b0\u3002
 - Check group: 2 subagents
   - Checker 1: changed files / allowed scope functional correctness, main path, edge cases
@@ -753,7 +753,7 @@ ${bulletList(deferredItems)}
 
 - \u5148\u5b8c\u6210\u5f53\u524d issue \u8303\u56f4\u5185\u7684\u5f00\u53d1\uff0c\u518d\u53ea\u5904\u7406 coordinator \u6279\u51c6\u8fdb\u5165\u672c\u8f6e backlog \u7684\u95ee\u9898\u3002
 - \u5c3d\u91cf\u6309\u6587\u4ef6/\u6a21\u5757 ownership \u5206\u914d\uff0c\u51cf\u5c11\u5199\u96c6\u91cd\u53e0\u3002
-- \u8d1f\u8d23\u5b9e\u73b0\u6216\u4fee\u590d repo \u4ee3\u7801\u7684 development subagent \u5fc5\u987b\u663e\u5f0f\u4f7f\u7528 \`reasoning_effort=xhigh\`\u3002
+- \u8d1f\u8d23\u5b9e\u73b0\u6216\u4fee\u590d repo \u4ee3\u7801\u7684 development subagent \u5fc5\u987b\u663e\u5f0f\u4f7f\u7528 \`reasoning_effort=high\`\u3002
 - \u9996\u4e2a\u771f\u6b63\u5f00\u59cb\u5199\u4ee3\u7801\u7684 development seat \u5148\u5199\uff1a
   - \`openspec-extensions execute update-progress start --repo-root "${input.repoRoot}" --change "${input.change}" --issue-id "${input.issueId}" --status in_progress --boundary-status working --next-action continue_issue --summary "\u5df2\u8fdb\u5165 subagent team repair round\u3002"\`
 - development seat \u8fd4\u56de\u524d\u53ea\u5141\u8bb8\u5199 checkpoint\uff1a
@@ -881,7 +881,7 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
     control_gate: dispatchGate,
     control_state: controlState,
     reasoning_policy: {
-      development_group: "xhigh",
+      development_group: "high",
       check_group: "medium",
       review_group: "medium"
     },

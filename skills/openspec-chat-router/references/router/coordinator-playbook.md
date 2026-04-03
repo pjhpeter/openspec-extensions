@@ -14,8 +14,8 @@ This is the normal flow when the runtime supports delegation and the user wants 
 5. Create or reuse the worker workspace before handoff. The installed template defaults to one change-level `.worktree/<change>` reused across that change's serial issues. Shared workspace remains the compatibility fallback when repo config is missing, and issue-level `.worktree/<change>/<issue>` stays opt-in for truly parallel work.
 6. By default, render the subagent-team lifecycle packet and use it as the round control packet.
 7. Explicitly set `reasoning_effort` when spawning subagents:
-   - design author: `xhigh`
-   - any code-writing implementation or verify-fix subagent: `xhigh`
+   - design author: `high`
+   - any code-writing implementation or verify-fix subagent: `high`
    - design reviewers, planning authors, checkers, reviewers, and closeout-only subagents: `medium`
 8. Default to the lighter fast path before escalating more seats:
    - issue planning: `2 development + 1 check + 1 review`

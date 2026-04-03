@@ -56,7 +56,7 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - Issue execution subagents must write issue-local progress and run artifacts. They must not directly update `tasks.md`, self-merge, or create the final git commit.
 - Before a coordinator continues a change that already has issue artifacts, reconcile issue state from disk first and read change-level control artifacts if present instead of trusting chat memory.
 - Use `openspec/issue-mode.json` only for active repo defaults: worktree location, validation commands, worktree creation mode, RRA gate mode, and subagent-team auto-accept switches.
-- When delegation is used, explicitly launch the design-author subagent and any code-writing subagent with `reasoning_effort=xhigh`; all other design/planning/check/review/closeout-only subagents should use `reasoning_effort=medium`.
+- When delegation is used, explicitly launch the design-author subagent and any code-writing subagent with `reasoning_effort=high`; all other design/planning/check/review/closeout-only subagents should use `reasoning_effort=medium`.
 - In subagent-team flow, treat gate-bearing design review / check / review seats as hard barrier participants, not sidecar helpers.
 - `auto_accept_*` only skips human chat sign-off after those gate-bearing subagents have finished and their verdicts have been normalized.
 - For long-running gate-bearing subagents, prefer blocking waits up to 1 hour instead of short polling.
@@ -195,7 +195,7 @@ Summary rule:
 - keep the main agent as control plane owner
 - use subagent teams only for the approved round scope
 - if delegation is unavailable, keep the same packet and round contract but run it serially in the main session
-- use role-based launch settings: design-author and code-writing subagents `xhigh`, all other subagents `medium`
+- use role-based launch settings: design-author and code-writing subagents `high`, all other subagents `medium`
 - keep gate-bearing review/check subagents alive until their completion states and verdicts are explicitly collected
 
 ## Special Path: `reconcile`

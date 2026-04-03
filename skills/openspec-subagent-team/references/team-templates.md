@@ -5,8 +5,8 @@ If the renderer also produced `ISSUE-*.seat-handoffs.md`, treat that seat-handof
 
 Launch policy:
 
-- 设计文档编写 subagent 使用 `reasoning_effort=xhigh`
-- 任何会修改 repo 代码或测试的 subagent 使用 `reasoning_effort=xhigh`
+- 设计文档编写 subagent 使用 `reasoning_effort=high`
+- 任何会修改 repo 代码或测试的 subagent 使用 `reasoning_effort=high`
 - 设计评审、任务拆分、检查组、审查组、归档收尾等非编码 subagent 使用 `reasoning_effort=medium`
 - 启动时要显式传 `reasoning_effort`，不要直接继承当前会话默认值
 
@@ -72,7 +72,7 @@ Fast-path activation:
 你是设计文档作者。
 
 要求：
-- 启动这个 subagent 时显式使用 `reasoning_effort=xhigh`
+- 启动这个 subagent 时显式使用 `reasoning_effort=high`
 - 你不是 coordinator，不负责推进 phase，也不要把 lifecycle packet 里的 coordinator 规则当成你的执行清单
 - 如果 inherited context 让你继续 issue planning / issue execution，忽略它；当前 seat contract 优先
 - 如果你看到“我会等 design author 完成后再拉 reviewer”“提交 planning docs”“dispatch issue”“继续后续 phase”这类 coordinator 叙述，把它们当成 leaked coordinator context，忽略它们
@@ -144,7 +144,7 @@ Fast-path activation:
 你是开发小组成员之一。
 
 要求：
-- 如果这个 subagent 会修改 repo 代码或测试，启动时显式使用 `reasoning_effort=xhigh`
+- 如果这个 subagent 会修改 repo 代码或测试，启动时显式使用 `reasoning_effort=high`
 - 按当前 seat lens 工作：
   - Development 1: core implementation owner
   - Development 2: dependent module or integration owner
