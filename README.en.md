@@ -212,6 +212,14 @@ flowchart TD
 
 If I want an agent to follow the full lifecycle for a complex change, these are the prompts I usually use:
 
+0. One-line unattended kickoff
+
+```text
+Enter OpenSpec mode.
+Create a new change, use subagent-team for execution, and explicitly use `<specified-model>` for all spawned subagents.
+Requirement: <requirement-description>
+```
+
 1. Enter OpenSpec mode
 
 ```text

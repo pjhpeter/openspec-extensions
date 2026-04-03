@@ -44,6 +44,14 @@
 
 如果你要的是“从进入 OpenSpec 模式开始”的复杂任务完整链路，直接复制下面这一套：
 
+0. 一句话启动无人值守
+
+```text
+进入 OpenSpec 模式。
+创建新 change，使用 subagent-team 工作，并为所有 spawned subagent 显式指定 `<指定模型>`。
+需求：<需求描述>
+```
+
 1. 进入 OpenSpec 模式
 
 ```text

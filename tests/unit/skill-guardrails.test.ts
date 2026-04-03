@@ -28,6 +28,15 @@ test("chat-router agent prompt does not reroute spawned seat sessions", () => {
   assert.match(prompt, /do not fork the full coordinator thread\/context into them/);
 });
 
+test("mode cheat sheet includes unattended kickoff with explicit model and requirement placeholders", () => {
+  const template = readRepoFile("skills/openspec-chat-router/references/router/mode-cheatsheet.md");
+
+  assert.match(template, /创建新 change/);
+  assert.match(template, /subagent-team/);
+  assert.match(template, /<指定模型>/);
+  assert.match(template, /需求：<需求描述>/);
+});
+
 test("team templates require seat contracts to override inherited coordinator context", () => {
   const template = readRepoFile("skills/openspec-subagent-team/references/team-templates.md");
 

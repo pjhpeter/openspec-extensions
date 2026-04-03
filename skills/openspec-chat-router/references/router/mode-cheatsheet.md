@@ -22,6 +22,16 @@
 
 完整链路案例：
 
+### 启动无人值守
+
+如果你想在进入 OpenSpec 模式后，直接给出一条可复制的无人值守启动话术，可以直接这样说：
+
+```text
+进入 OpenSpec 模式。
+创建新 change，使用 subagent-team 工作，并为所有 spawned subagent 显式指定 `<指定模型>`。
+需求：<需求描述>
+```
+
 ### 简单任务短链路
 
 1. 进入 OpenSpec 模式
@@ -77,6 +87,14 @@
 在所有 issues 完成后，先对当前 change 修改的代码执行 /review，通过后再进入 verify。
 对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
 当前 gate 的 review/check subagent 必须等待全部完成并收齐 verdict，禁止提前关闭或提前通过 phase。
+```
+
+如果你希望把“创建 change + 指定 subagent 模型 + 填需求”合成一条启动话术，也可以直接这样写：
+
+```text
+进入 OpenSpec 模式。
+创建新 change，使用 subagent-team 工作，并为所有 spawned subagent 显式指定 `<指定模型>`。
+需求：<需求描述>
 ```
 
 5. 如果你想先看设计评审和任务拆分
