@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
+import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 
 import {
@@ -11,10 +12,17 @@ import {
 } from "./install";
 
 const OPENSPEC_NPM_PACKAGE = "@fission-ai/openspec@1.2.0";
+const EXTENSIONS_NPM_PACKAGE = "openspec-extensions";
+const SELF_UPDATE_SKIP_ENV = "OPENSPEC_EXTENSIONS_SKIP_SELF_UPDATE_CHECK";
+const PACKAGE_VERSION = readPackageVersion();
 
 const INIT_HELP_TEXT = `Usage:
   openspec-extensions init [path] [--source-repo <path>] [--force] [--force-config] [--skip-gitignore] [--dry-run] [--openspec-tools <tools>] [--openspec-profile <profile>] [--openspec-force]
   openspec-extensions init --target-repo <path> [--source-repo <path>] [--force] [--force-config] [--skip-gitignore] [--dry-run] [--openspec-tools <tools>] [--openspec-profile <profile>] [--openspec-force]
+
+Notes:
+  Omit --openspec-tools to keep the official OpenSpec tool selector interactive.
+  Interactive terminals may offer to rerun init via the latest openspec-extensions package.
 `;
 
 type InitOptions = InstallOptions & {
@@ -30,12 +38,30 @@ type OpenSpecInitRequest = {
   tools?: string;
 };
 
+type OpenSpecCommandMode = "captured" | "interactive";
+
+type OpenSpecCommandResult = {
+  error?: {
+    code?: string;
+    message: string;
+  };
+  signal?: string | null;
+  status: number | null;
+  stderr?: Buffer | string | null;
+  stdout?: Buffer | string | null;
+};
+
 type OpenSpecInitStatus = {
   command: string[];
   fallback_command: string[];
   reason: string;
   runner: "openspec" | "npx" | "none";
   status: "executed" | "planned" | "skipped";
+};
+
+type PackageUpdateStatus = {
+  current_version: string;
+  latest_version: string;
 };
 
 type InitResult = {
@@ -45,7 +71,20 @@ type InitResult = {
 };
 
 export type InitDependencies = {
+  checkForPackageUpdate?: () => PackageUpdateStatus | null | Promise<PackageUpdateStatus | null>;
+  confirmPackageUpdate?: (status: PackageUpdateStatus) => boolean | Promise<boolean>;
+  isInteractiveTerminal?: () => boolean;
+  relaunchWithLatestVersion?: (argv: string[]) => number | Promise<number>;
   runOpenSpecInit?: (request: OpenSpecInitRequest) => "openspec" | "npx";
+  runOpenSpecCommand?: (
+    command: string[],
+    mode: OpenSpecCommandMode
+  ) => OpenSpecCommandResult;
+};
+
+type ParsedSemver = {
+  core: [number, number, number];
+  prerelease: Array<number | string>;
 };
 
 function buildOpenSpecInitCommands(request: OpenSpecInitRequest): {
@@ -71,29 +110,258 @@ function buildOpenSpecInitCommands(request: OpenSpecInitRequest): {
   };
 }
 
-function runCommand(command: string[]): ReturnType<typeof spawnSync> {
+function readPackageVersion(): string {
+  const packageJsonPath = path.resolve(__dirname, "../../package.json");
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { version?: unknown };
+  return typeof packageJson.version === "string" ? packageJson.version : "0.0.0";
+}
+
+function parseSemver(version: string): ParsedSemver | null {
+  const match = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(version.trim());
+  if (!match) {
+    return null;
+  }
+
+  return {
+    core: [Number(match[1]), Number(match[2]), Number(match[3])],
+    prerelease: match[4]
+      ? match[4].split(".").map((identifier) => (/^\d+$/.test(identifier) ? Number(identifier) : identifier))
+      : []
+  };
+}
+
+function compareSemverIdentifier(left: number | string, right: number | string): number {
+  if (typeof left === "number" && typeof right === "number") {
+    return left - right;
+  }
+  if (typeof left === "number") {
+    return -1;
+  }
+  if (typeof right === "number") {
+    return 1;
+  }
+  return left.localeCompare(right);
+}
+
+function comparePackageVersions(left: string, right: string): number {
+  const parsedLeft = parseSemver(left);
+  const parsedRight = parseSemver(right);
+  if (!parsedLeft || !parsedRight) {
+    return left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" });
+  }
+
+  for (let index = 0; index < parsedLeft.core.length; index += 1) {
+    const difference = parsedLeft.core[index] - parsedRight.core[index];
+    if (difference !== 0) {
+      return difference;
+    }
+  }
+
+  if (parsedLeft.prerelease.length === 0 && parsedRight.prerelease.length === 0) {
+    return 0;
+  }
+  if (parsedLeft.prerelease.length === 0) {
+    return 1;
+  }
+  if (parsedRight.prerelease.length === 0) {
+    return -1;
+  }
+
+  const length = Math.max(parsedLeft.prerelease.length, parsedRight.prerelease.length);
+  for (let index = 0; index < length; index += 1) {
+    const leftIdentifier = parsedLeft.prerelease[index];
+    const rightIdentifier = parsedRight.prerelease[index];
+    if (leftIdentifier === undefined) {
+      return -1;
+    }
+    if (rightIdentifier === undefined) {
+      return 1;
+    }
+
+    const difference = compareSemverIdentifier(leftIdentifier, rightIdentifier);
+    if (difference !== 0) {
+      return difference;
+    }
+  }
+
+  return 0;
+}
+
+function parsePackageVersionOutput(stdout: string): string | null {
+  const trimmed = stdout.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    return typeof parsed === "string" ? parsed : null;
+  } catch {
+    return trimmed;
+  }
+}
+
+function checkForPackageUpdate(): PackageUpdateStatus | null {
+  const result = spawnSync("npm", ["view", EXTENSIONS_NPM_PACKAGE, "version", "--json"], {
+    encoding: "utf8"
+  });
+  if (result.status !== 0) {
+    return null;
+  }
+
+  const latestVersion = parsePackageVersionOutput(result.stdout);
+  if (!latestVersion || comparePackageVersions(latestVersion, PACKAGE_VERSION) <= 0) {
+    return null;
+  }
+
+  return {
+    current_version: PACKAGE_VERSION,
+    latest_version: latestVersion
+  };
+}
+
+function isInteractiveTerminal(): boolean {
+  return Boolean(process.stdin.isTTY && process.stderr.isTTY);
+}
+
+async function confirmPackageUpdate(status: PackageUpdateStatus): Promise<boolean> {
+  const readline = createInterface({
+    input: process.stdin,
+    output: process.stderr
+  });
+
+  try {
+    const answer = (await readline.question(
+      `检测到 ${EXTENSIONS_NPM_PACKAGE} 有新版本 ${status.latest_version}（当前 ${status.current_version}）。是否使用最新版本继续本次 init？[Y/n] `
+    ))
+      .trim()
+      .toLowerCase();
+
+    return answer === "" || answer === "y" || answer === "yes" || answer === "是";
+  } finally {
+    readline.close();
+  }
+}
+
+function relaunchWithLatestVersion(argv: string[]): number {
+  // 用 stderr 做交互提示，避免污染 stdout 的 JSON 输出。
+  process.stderr.write(`将使用最新版本继续本次 init；当前安装不会被自动改写。\n`);
+  const result = spawnSync(
+    "npx",
+    ["--yes", "--package", `${EXTENSIONS_NPM_PACKAGE}@latest`, "openspec-ex", "init", ...argv],
+    {
+      env: {
+        ...process.env,
+        [SELF_UPDATE_SKIP_ENV]: "1"
+      },
+      stdio: "inherit"
+    }
+  );
+
+  if (typeof result.status === "number") {
+    return result.status;
+  }
+  if (result.error?.message) {
+    throw new Error(`Failed to run latest ${EXTENSIONS_NPM_PACKAGE}: ${result.error.message}`);
+  }
+  if (result.signal) {
+    throw new Error(`Latest ${EXTENSIONS_NPM_PACKAGE} init terminated by signal ${result.signal}`);
+  }
+  throw new Error(`Failed to run latest ${EXTENSIONS_NPM_PACKAGE}.`);
+}
+
+async function maybeRelaunchWithLatestVersion(
+  argv: string[],
+  dependencies: InitDependencies
+): Promise<number | null> {
+  if (process.env[SELF_UPDATE_SKIP_ENV] === "1") {
+    return null;
+  }
+
+  const interactiveTerminal = dependencies.isInteractiveTerminal ?? isInteractiveTerminal;
+  if (!interactiveTerminal()) {
+    return null;
+  }
+
+  const resolveUpdate = dependencies.checkForPackageUpdate ?? checkForPackageUpdate;
+  const packageUpdate = await resolveUpdate();
+  if (!packageUpdate) {
+    return null;
+  }
+
+  const confirmUpdate = dependencies.confirmPackageUpdate ?? confirmPackageUpdate;
+  if (!(await confirmUpdate(packageUpdate))) {
+    return null;
+  }
+
+  const relaunch = dependencies.relaunchWithLatestVersion ?? relaunchWithLatestVersion;
+  return relaunch(argv);
+}
+
+// 不显式传工具时把终端直接交给 OpenSpec，让官方选择器继续可用。
+function resolveOpenSpecCommandMode(request: OpenSpecInitRequest): OpenSpecCommandMode {
+  return request.tools ? "captured" : "interactive";
+}
+
+function runCommand(command: string[], mode: OpenSpecCommandMode): OpenSpecCommandResult {
+  if (mode === "interactive") {
+    return spawnSync(command[0], command.slice(1), {
+      stdio: "inherit"
+    });
+  }
+
   return spawnSync(command[0], command.slice(1), {
     encoding: "utf8"
   });
 }
 
-function commandFailureDetails(result: ReturnType<typeof spawnSync>): string {
-  const stderr = typeof result.stderr === "string" ? result.stderr : "";
-  const stdout = typeof result.stdout === "string" ? result.stdout : "";
-  return (stderr || stdout || result.error?.message || "command failed").trim();
+function outputText(output: Buffer | string | null | undefined): string {
+  if (typeof output === "string") {
+    return output;
+  }
+  if (output instanceof Buffer) {
+    return output.toString("utf8");
+  }
+  return "";
 }
 
-function runPreferredOpenSpecInit(request: OpenSpecInitRequest): "openspec" | "npx" {
+function commandFailureDetails(result: OpenSpecCommandResult): string {
+  const stderr = outputText(result.stderr);
+  const stdout = outputText(result.stdout);
+
+  if (stderr || stdout) {
+    return (stderr || stdout).trim();
+  }
+  if (result.error?.message) {
+    return result.error.message.trim();
+  }
+  if (typeof result.status === "number") {
+    return `command failed with exit code ${result.status}`;
+  }
+  if (result.signal) {
+    return `command terminated by signal ${result.signal}`;
+  }
+  return "command failed";
+}
+
+function runPreferredOpenSpecInit(
+  request: OpenSpecInitRequest,
+  runOpenSpecCommand: (
+    command: string[],
+    mode: OpenSpecCommandMode
+  ) => OpenSpecCommandResult = runCommand
+): "openspec" | "npx" {
   const commands = buildOpenSpecInitCommands(request);
-  const primary = runCommand(commands.primaryCommand);
+  const mode = resolveOpenSpecCommandMode(request);
+  const primary = runOpenSpecCommand(commands.primaryCommand, mode);
 
   if (primary.status === 0) {
     return "openspec";
   }
 
-  const primaryError = primary.error as { code?: string } | undefined;
+  const primaryError = primary.error;
   if (primaryError?.code === "ENOENT") {
-    const fallback = runCommand(commands.fallbackCommand);
+    const fallback = runOpenSpecCommand(commands.fallbackCommand, mode);
     if (fallback.status === 0) {
       return "npx";
     }
@@ -153,13 +421,18 @@ function parseInitArgs(argv: string[]): InitOptions | null {
   };
 }
 
-export function runInitCommand(
+export async function runInitCommand(
   argv: string[],
   dependencies: InitDependencies = {}
-): number {
+): Promise<number> {
   const parsed = parseInitArgs(argv);
   if (!parsed) {
     return 0;
+  }
+
+  const relaunchExitCode = await maybeRelaunchWithLatestVersion(argv, dependencies);
+  if (relaunchExitCode !== null) {
+    return relaunchExitCode;
   }
 
   const targetRepo = realpathSync(path.resolve(parsed.targetRepo));
@@ -189,12 +462,15 @@ export function runInitCommand(
       status: "planned"
     };
   } else {
-    const runner = (dependencies.runOpenSpecInit ?? runPreferredOpenSpecInit)(request);
+    const runner =
+      dependencies.runOpenSpecInit ??
+      ((openSpecRequest: OpenSpecInitRequest) =>
+        runPreferredOpenSpecInit(openSpecRequest, dependencies.runOpenSpecCommand));
     openspecInit = {
       command: commands.primaryCommand,
       fallback_command: commands.fallbackCommand,
       reason: "OpenSpec initialization completed before installing extension skills.",
-      runner,
+      runner: runner(request),
       status: "executed"
     };
   }

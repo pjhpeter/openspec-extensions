@@ -45,7 +45,11 @@ openspec-extensions init /path/to/your/project
 
 This command checks whether the target repo already has `openspec/config.yaml`. If it does not, I first call the official `openspec init`. If the global `openspec` CLI is missing, I fall back to `npx @fission-ai/openspec`, then continue with extension installation.
 
-If OpenSpec initialization already selected a toolchain, I follow that choice. I do not assume `.codex` by default anymore. I only pass `--openspec-tools <tools>` through when the user explicitly asks for it.
+If you do not pass `--openspec-tools`, I hand the current terminal straight to the official `openspec init`, so you get the same interactive tool picker as the native command. I only switch to a non-interactive pass-through when the user explicitly provides `--openspec-tools <tools>`.
+
+If OpenSpec initialization already selected a toolchain, I follow that choice. I do not assume `.codex` by default anymore.
+
+When you run `openspec-ex init` in an interactive terminal and the local `openspec-extensions` version is behind npm latest, the command can first ask whether you want the latest package to take over this one `init` run. If you confirm, it continues through `npx`, but it does not rewrite your existing global install automatically.
 
 If the repo is already initialized, you can install just the extensions:
 

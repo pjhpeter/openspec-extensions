@@ -28,7 +28,7 @@ Usage:
   openspec-extensions worktree create [options]
 
 Commands:
-  init                    Initialize OpenSpec when needed, then install extension skills.
+  init                    Initialize OpenSpec when needed, keep the official tool prompt when tools are not preset, and offer a latest-package rerun in interactive terminals.
   install                 Install OpenSpec extension skills into a target repo.
   dispatch issue          Render a single issue dispatch packet.
   dispatch issue-team     Render a subagent-team issue dispatch packet.

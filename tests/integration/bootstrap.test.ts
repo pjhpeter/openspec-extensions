@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { runInitCommand } from "../../src/commands/init";
+import { runInitCommand, type InitDependencies } from "../../src/commands/init";
 
 const EXTENSION_SKILL_NAMES = [
   "openspec-chat-router",
@@ -22,7 +22,7 @@ function expectedSkillDirs(targetSkillRoots: string[]): string[] {
   );
 }
 
-function withCapturedStdout(fn: () => number): { exitCode: number; stdout: string } {
+function withCapturedStdout(fn: () => Promise<number>): Promise<{ exitCode: number; stdout: string }> {
   let stdout = "";
   const originalWrite = process.stdout.write.bind(process.stdout);
   process.stdout.write = ((chunk: string | Uint8Array) => {
@@ -30,20 +30,42 @@ function withCapturedStdout(fn: () => number): { exitCode: number; stdout: strin
     return true;
   }) as typeof process.stdout.write;
 
-  try {
-    return {
-      exitCode: fn(),
+  return fn()
+    .then((exitCode) => ({
+      exitCode,
       stdout
-    };
-  } finally {
-    process.stdout.write = originalWrite;
-  }
+    }))
+    .finally(() => {
+      process.stdout.write = originalWrite;
+    });
+}
+
+function runInitForTest(argv: string[], dependencies: InitDependencies = {}): Promise<number> {
+  return runInitCommand(argv, {
+    // 测试默认关闭交互检查，避免本地 TTY 把用例挂进更新提示。
+    isInteractiveTerminal: () => false,
+    ...dependencies
+  });
 }
 
 function createTargetRepo(): string {
   const targetRepo = mkdtempSync(path.join(os.tmpdir(), "openspec-bootstrap-"));
   writeFileSync(path.join(targetRepo, ".gitignore"), ".cache/\n");
   return realpathSync(targetRepo);
+}
+
+function successfulCommandResult(): {
+  signal: string | null;
+  status: number;
+  stderr: string;
+  stdout: string;
+} {
+  return {
+    signal: null,
+    status: 0,
+    stderr: "",
+    stdout: ""
+  };
 }
 
 function seedOpenSpecRepo(targetRepo: string, targetSkillRoots: string[] = [".claude/skills"]): void {
@@ -57,11 +79,11 @@ function seedOpenSpecRepo(targetRepo: string, targetSkillRoots: string[] = [".cl
   }
 }
 
-test("init initializes OpenSpec before installing extension skills", () => {
+test("init initializes OpenSpec before installing extension skills", async () => {
   const targetRepo = createTargetRepo();
   let initCalls = 0;
 
-  const result = withCapturedStdout(() => runInitCommand([
+  const result = await withCapturedStdout(() => runInitForTest([
     targetRepo
   ], {
     runOpenSpecInit(request) {
@@ -111,11 +133,48 @@ test("init initializes OpenSpec before installing extension skills", () => {
   assert.ok(existsSync(path.join(targetRepo, "openspec", "issue-mode.json")));
 });
 
-test("init preserves explicit openspec tool selection", () => {
+test("init keeps the official OpenSpec tool selector interactive when tools are not preset", async () => {
+  const targetRepo = createTargetRepo();
+  const calls: Array<{ command: string[]; mode: string }> = [];
+
+  const result = await withCapturedStdout(() => runInitForTest([
+    targetRepo
+  ], {
+    runOpenSpecCommand(command, mode) {
+      calls.push({ command, mode });
+      seedOpenSpecRepo(targetRepo, [".claude/skills"]);
+      return successfulCommandResult();
+    }
+  }));
+  const payload = JSON.parse(result.stdout) as {
+    openspec_init: {
+      runner: string;
+      status: string;
+    };
+    install: {
+      installed_skill_dirs: string[];
+      target_skill_roots: string[];
+    };
+  };
+
+  assert.equal(result.exitCode, 0);
+  assert.deepEqual(calls, [
+    {
+      command: ["openspec", "init", targetRepo],
+      mode: "interactive"
+    }
+  ]);
+  assert.equal(payload.openspec_init.status, "executed");
+  assert.equal(payload.openspec_init.runner, "openspec");
+  assert.deepEqual(payload.install.target_skill_roots, [".claude/skills"]);
+  assert.deepEqual(payload.install.installed_skill_dirs, expectedSkillDirs([".claude/skills"]));
+});
+
+test("init preserves explicit openspec tool selection", async () => {
   const targetRepo = createTargetRepo();
   let initCalls = 0;
 
-  const result = withCapturedStdout(() => runInitCommand([
+  const result = await withCapturedStdout(() => runInitForTest([
     targetRepo,
     "--openspec-tools",
     "codex"
@@ -165,11 +224,155 @@ test("init preserves explicit openspec tool selection", () => {
   assert.deepEqual(payload.install.installed_skill_dirs, expectedSkillDirs([".codex/skills"]));
 });
 
-test("init skips OpenSpec init when the repo is already initialized", () => {
+test("init keeps explicit openspec tool selection non-interactive", async () => {
+  const targetRepo = createTargetRepo();
+  const calls: Array<{ command: string[]; mode: string }> = [];
+
+  const result = await withCapturedStdout(() => runInitForTest([
+    targetRepo,
+    "--openspec-tools",
+    "codex"
+  ], {
+    runOpenSpecCommand(command, mode) {
+      calls.push({ command, mode });
+      seedOpenSpecRepo(targetRepo, [".codex/skills"]);
+      return successfulCommandResult();
+    }
+  }));
+  const payload = JSON.parse(result.stdout) as {
+    openspec_init: {
+      runner: string;
+      status: string;
+    };
+    install: {
+      installed_skill_dirs: string[];
+      target_skill_roots: string[];
+    };
+  };
+
+  assert.equal(result.exitCode, 0);
+  assert.deepEqual(calls, [
+    {
+      command: ["openspec", "init", "--tools", "codex", targetRepo],
+      mode: "captured"
+    }
+  ]);
+  assert.equal(payload.openspec_init.status, "executed");
+  assert.equal(payload.openspec_init.runner, "openspec");
+  assert.deepEqual(payload.install.target_skill_roots, [".codex/skills"]);
+  assert.deepEqual(payload.install.installed_skill_dirs, expectedSkillDirs([".codex/skills"]));
+});
+
+test("init relaunches with the latest package when update is accepted", async () => {
+  const targetRepo = createTargetRepo();
+  let initCalls = 0;
+  let relaunchedArgv: string[] | null = null;
+
+  const result = await withCapturedStdout(() => runInitForTest([
+    targetRepo
+  ], {
+    checkForPackageUpdate() {
+      return {
+        current_version: "0.1.6",
+        latest_version: "0.1.7"
+      };
+    },
+    confirmPackageUpdate(status) {
+      assert.equal(status.current_version, "0.1.6");
+      assert.equal(status.latest_version, "0.1.7");
+      return true;
+    },
+    isInteractiveTerminal() {
+      return true;
+    },
+    relaunchWithLatestVersion(argv) {
+      relaunchedArgv = argv;
+      return 0;
+    },
+    runOpenSpecInit() {
+      initCalls += 1;
+      throw new Error("should relaunch latest package first");
+    }
+  }));
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(initCalls, 0);
+  assert.deepEqual(relaunchedArgv, [targetRepo]);
+  assert.equal(result.stdout, "");
+});
+
+test("init continues current version when update is declined", async () => {
+  const targetRepo = createTargetRepo();
+  let initCalls = 0;
+
+  const result = await withCapturedStdout(() => runInitForTest([
+    targetRepo
+  ], {
+    checkForPackageUpdate() {
+      return {
+        current_version: "0.1.6",
+        latest_version: "0.1.7"
+      };
+    },
+    confirmPackageUpdate() {
+      return false;
+    },
+    isInteractiveTerminal() {
+      return true;
+    },
+    runOpenSpecInit() {
+      initCalls += 1;
+      seedOpenSpecRepo(targetRepo, [".claude/skills"]);
+      return "openspec";
+    }
+  }));
+  const payload = JSON.parse(result.stdout) as {
+    openspec_init: {
+      runner: string;
+      status: string;
+    };
+  };
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(initCalls, 1);
+  assert.equal(payload.openspec_init.status, "executed");
+  assert.equal(payload.openspec_init.runner, "openspec");
+});
+
+test("init skips package update check outside interactive terminals", async () => {
+  const targetRepo = createTargetRepo();
+  let checkCalls = 0;
+
+  const result = await withCapturedStdout(() => runInitForTest([
+    targetRepo,
+    "--dry-run"
+  ], {
+    checkForPackageUpdate() {
+      checkCalls += 1;
+      return {
+        current_version: "0.1.6",
+        latest_version: "0.1.7"
+      };
+    }
+  }));
+  const payload = JSON.parse(result.stdout) as {
+    dry_run: boolean;
+    openspec_init: {
+      status: string;
+    };
+  };
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(checkCalls, 0);
+  assert.equal(payload.dry_run, true);
+  assert.equal(payload.openspec_init.status, "planned");
+});
+
+test("init skips OpenSpec init when the repo is already initialized", async () => {
   const targetRepo = createTargetRepo();
   seedOpenSpecRepo(targetRepo, [".claude/skills"]);
 
-  const result = withCapturedStdout(() => runInitCommand([
+  const result = await withCapturedStdout(() => runInitForTest([
     targetRepo,
     "--dry-run"
   ], {
@@ -199,10 +402,10 @@ test("init skips OpenSpec init when the repo is already initialized", () => {
   assert.deepEqual(payload.install.installed_skill_dirs, expectedSkillDirs([".claude/skills"]));
 });
 
-test("init dry-run plans OpenSpec init for clean repos", () => {
+test("init dry-run plans OpenSpec init for clean repos", async () => {
   const targetRepo = createTargetRepo();
 
-  const result = withCapturedStdout(() => runInitCommand([
+  const result = await withCapturedStdout(() => runInitForTest([
     targetRepo,
     "--dry-run"
   ], {
@@ -233,10 +436,10 @@ test("init dry-run plans OpenSpec init for clean repos", () => {
   assert.equal(existsSync(path.join(targetRepo, "openspec", "config.yaml")), false);
 });
 
-test("init dry-run plans skill roots from explicit openspec tool selection", () => {
+test("init dry-run plans skill roots from explicit openspec tool selection", async () => {
   const targetRepo = createTargetRepo();
 
-  const result = withCapturedStdout(() => runInitCommand([
+  const result = await withCapturedStdout(() => runInitForTest([
     targetRepo,
     "--dry-run",
     "--openspec-tools",

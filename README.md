@@ -45,7 +45,11 @@ openspec-extensions init /path/to/your/project
 
 这条命令会先检查目标仓库有没有 `openspec/config.yaml`。如果还没有，我会先调用官方 `openspec init`；如果当前环境没有全局 `openspec` CLI，就回退到 `npx @fission-ai/openspec`，然后继续安装扩展。
 
-如果你已经在 OpenSpec 初始化时选好了工具链，我默认跟随那次选择，不会擅自把 skills 安到 `.codex`。只有当你明确传入 `--openspec-tools <tools>` 时，我才会把这个参数继续传给 OpenSpec。
+如果你没有显式传 `--openspec-tools`，我会把当前终端直接交给官方 `openspec init`，所以你会看到和原生命令一致的工具选择交互；只有当你明确传入 `--openspec-tools <tools>` 时，才会改成无交互透传。
+
+如果你已经在 OpenSpec 初始化时选好了工具链，我默认跟随那次选择，不会擅自把 skills 安到 `.codex`。
+
+如果你是在交互终端里运行 `openspec-ex init`，而当前本地 `openspec-extensions` 版本落后于 npm 最新版，命令会先询问你是否要用最新版接管这一次 `init`。确认后会通过 `npx` 继续本次执行，但不会自动改写你现有的全局安装。
 
 如果仓库已经完成 OpenSpec 初始化，也可以只做扩展安装：
 
