@@ -215,6 +215,7 @@ openspec/changes/*/runs/CHANGE-REVIEW.json
   - skill 认为默认入口应该是 `subagent-team`
   - runtime 仍因为缺少显式授权而退回本地 coordinator 执行路径
 - 这不是 `subagent_team.*` 配置开关失效；而是运行时权限策略高于 repo skill 契约
+- 如果当前 agent / runtime 根本不支持 delegation，就不要再尝试强拉 `subagent-team`；直接退回主会话串行 issue path，一次只处理一个 approved issue，继续写 progress / run 工件，再由 coordinator 做 reconcile / review / verify / archive
 - 如果当前 runtime 仍有这类限制，最稳的用户话术是：
   - `按 issue 模式继续，并启用 subagent-team`
   - `这个 change 用 subagent team 推进`

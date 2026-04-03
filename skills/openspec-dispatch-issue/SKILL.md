@@ -40,7 +40,11 @@ Read `issue-mode-contract.md`, `issue-mode-config.md`, `issue-mode-rra.md`, and 
 8. In runtimes with delegation:
    - default to `ISSUE-*.team.dispatch.md` for the approved issue round
    - use `ISSUE-*.dispatch.md` only when the user explicitly narrowed execution to one issue-only subagent
-9. Keep implementation inside that issue workspace and return review, acceptance, and commit to the coordinator.
+9. If the runtime does not support delegation:
+   - keep the generated team dispatch as the source-of-truth round contract
+   - let the coordinator main session execute that one approved issue locally inside the same workspace boundary
+   - still write issue-local progress / run artifacts before reconcile
+10. Keep implementation inside that issue workspace and return review, acceptance, and commit to the coordinator.
 
 ## Rules
 
@@ -54,7 +58,7 @@ Read `issue-mode-contract.md`, `issue-mode-config.md`, `issue-mode-rra.md`, and 
 - If the active change-level round still has unresolved `Must fix now` items that block dispatch, do not launch issue execution yet.
 - Default to rendering `ISSUE-*.team.dispatch.md`; only use the single-issue dispatch when the user explicitly narrows execution.
 - The coordinator owns handoff, review, merge, and final commit for the issue.
-- Dispatch artifacts are for coordinator-owned subagents; `ISSUE-*.team.dispatch.md` is the default complex-change handoff.
+- Dispatch artifacts are for coordinator-owned execution; `ISSUE-*.team.dispatch.md` is the default complex-change handoff, even when the coordinator must execute the round locally because delegation is unavailable.
 
 ## Output
 

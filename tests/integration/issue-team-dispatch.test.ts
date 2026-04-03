@@ -118,6 +118,10 @@ validation:
   assert.match(dispatchText, /## Gate Barrier/);
   assert.match(dispatchText, /\u6700\u957f 1 \u5c0f\u65f6\u7684 blocking wait/);
   assert.match(dispatchText, /\u4e0d\u8981\u5f53\u4f5c `explorer` sidecar/);
+  assert.match(dispatchText, /agent \/ runtime \u4e0d\u652f\u6301 subagent \u6216 delegation/);
+  assert.match(dispatchText, /\u4e32\u884c round contract/);
+  assert.match(dispatchText, /development -> check -> repair -> review/);
+  assert.match(dispatchText, /\u4e00\u6b21\u53ea\u5904\u7406\u8fd9\u4e2a issue/);
   assert.match(dispatchText, /Gate-bearing subagent roster with seat \/ agent_id \/ status/);
   assert.match(dispatchText, /Launch with `reasoning_effort=xhigh`/);
   assert.match(dispatchText, /Launch with `reasoning_effort=medium`/);

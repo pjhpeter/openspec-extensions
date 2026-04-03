@@ -70,6 +70,8 @@ test("detects spec_readiness when core docs are missing", () => {
     assert.match(dispatchText, /不要当作 `explorer` sidecar/);
     assert.match(dispatchText, /Before starting this phase, reread `openspec\/issue-mode\.json` if it exists/);
     assert.match(dispatchText, /开始当前 phase 前必须重新读取 `openspec\/issue-mode\.json`/);
+    assert.match(dispatchText, /当前 runtime 不支持 delegation \/ subagent/);
+    assert.match(dispatchText, /主会话的本地 coordinator playbook/);
     assert.match(dispatchText, /using shared-workspace fallback defaults/);
     assert.match(dispatchText, /1 个设计作者和 2 个设计评审全部完成并收齐通过结论后暂停/);
     assert.match(dispatchText, /subagent_team\.auto_accept_spec_readiness=false/);
@@ -183,6 +185,7 @@ validation:
     assert.match(lifecycleText, /Current issue packet/);
     assert.match(lifecycleText, /ISSUE-001\.team\.dispatch\.md/);
     assert.match(lifecycleText, /Gate-bearing seats for this phase/);
+    assert.match(lifecycleText, /issue_execution` 仍然一次只处理一个 approved issue/);
     assert.match(lifecycleText, /不要读取 `node_modules`、`dist`、`build`、`\.next`、`coverage`/);
     assert.match(issueTeamText, /Development group: 3 subagents/);
     assert.match(issueTeamText, /Check group: 2 subagents/);

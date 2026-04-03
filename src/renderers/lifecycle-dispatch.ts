@@ -857,6 +857,8 @@ ${renderGateBearingSeats(teamTopology)}
 - 审查不通过则回到开发组下一轮。
 - 任一 required gate-bearing subagent 仍在运行时，不允许 accept 当前 phase，也不允许关闭这些 subagent。
 - backlog / round / stop decision 必须落盘，不留在聊天里。
+- 如果当前 runtime 不支持 delegation / subagent，不要阻塞在 team topology；把当前 packet 当作主会话的本地 coordinator playbook，按同样的 phase 规则串行推进。
+- 无 delegation 时，\`issue_execution\` 仍然一次只处理一个 approved issue；主会话自己执行 development / check / repair / review，并继续写 issue-local progress / run 工件。
 - 当前自动推进开关：
   - \`subagent_team.auto_accept_spec_readiness=${String(autoAcceptSpecReadiness).toLowerCase()}\`
   - \`subagent_team.auto_accept_issue_planning=${String(autoAcceptIssuePlanning).toLowerCase()}\`

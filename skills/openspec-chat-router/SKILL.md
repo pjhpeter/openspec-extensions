@@ -45,6 +45,7 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - In issue-based execution, one issue-scoped execution context handles one issue only.
 - In issue-mode, default the coordinator entry path to `openspec-subagent-team`.
 - In runtimes that support subagents or delegation, prefer the coordinator continuing through the approved issue round with `subagent-team`.
+- If the runtime does not support delegation at all, fall back to the main-session serial issue path: keep the coordinator in the current session, render the lifecycle / issue dispatch packets, execute one approved issue at a time locally, and keep progress/run artifacts on disk.
 - Use the single-issue `dispatch-issue` / `execute-issue` path only when the user explicitly wants one bounded issue-only subagent, or the current phase has already been narrowed to that one issue.
 - The default issue-mode flow is: coordinator enters through `openspec-subagent-team`, creates or reuses the approved issue workspace as needed, drives the current round, then reviews accepted issue output from the main session before acceptance and commit.
 - In multi-session work on the same change, the coordinator session owns `tasks.md`, change-level backlog, merge, commit, `verify`, and `archive`.
@@ -130,6 +131,7 @@ Rules:
 - Remind the user that the coordinator should create or reuse the issue workspace before handing the issue to a bounded execution subagent.
 - Remind the user that the installed template defaults to one change-level worktree reused across serial issues; issue-level `.worktree/<change>/<issue>` remains opt-in.
 - Remind the user that subagent-team is the default coordinator topology when delegation is available.
+- Remind the user that if the current runtime does not support delegation, the fallback is still issue-mode plus one approved issue at a time in the main session, not the old detached-worker runtime.
 - Remind the user that gate-bearing subagents should use up to 1 hour blocking waits, and that auto-accept does not skip waiting for those gate subagents to finish.
 - If `subagent_team.auto_accept_*` is enabled, do not describe those phases as waiting for human sign-off.
 - If the task artifacts are not ready yet, route to `new`, `propose`, or `ff` before encouraging issue execution contexts.
@@ -157,6 +159,7 @@ Summary rule:
 - treat `subagent-team` as the default issue-mode coordinator entry
 - keep the main agent as control plane owner
 - use subagent teams only for the approved round scope
+- if delegation is unavailable, keep the same packet and round contract but run it serially in the main session
 - use role-based launch settings: design-author and code-writing subagents `xhigh`, all other subagents `medium`
 - keep gate-bearing review/check subagents alive until their completion states and verdicts are explicitly collected
 

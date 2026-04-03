@@ -416,6 +416,8 @@ function renderDispatch(input: {
 
 \u8fd9\u662f coordinator \u4e3b\u4f1a\u8bdd\u4f7f\u7528\u7684 team dispatch packet\u3002\u4fdd\u6301 subagent-team \u4e3b\u94fe\uff0c\u4e0d\u8981\u5207\u56de\u65e7\u7684 detached worker \u8fd0\u884c\u65b9\u5f0f\u3002
 
+\u5982\u679c\u5f53\u524d agent / runtime \u4e0d\u652f\u6301 subagent \u6216 delegation\uff0c\u4e0d\u8981\u5361\u4f4f\u3002\u628a\u8fd9\u4efd team dispatch \u5f53\u4f5c\u4e3b\u4f1a\u8bdd\u7684\u4e32\u884c round contract\uff1a\u5f53\u524d\u4f1a\u8bdd\u81ea\u5df1\u5b8c\u6210 development -> check -> repair -> review\uff0c\u4e00\u6b21\u53ea\u5904\u7406\u8fd9\u4e2a issue\uff0c\u7ee7\u7eed\u5199 issue-local progress / run \u5de5\u4ef6\uff0c\u4e0d\u8981\u518d\u6d3e\u751f\u65b0\u7684 issue-only subagent \u6216 team\u3002
+
 ## Round Contract
 
 - Target mode:

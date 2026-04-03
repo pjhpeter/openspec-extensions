@@ -67,31 +67,38 @@ Read these first:
    - `issue_execution`: fast path is `3 development + 2 check + 1 review`; code-writing development seats use `reasoning_effort=xhigh`, check/review use `reasoning_effort=medium`
    - `change_acceptance` / `ready_for_archive`: fast path is `1 development + 1 check + 1 review`, all `reasoning_effort=medium`
    - `change_verify`: fast path is `2 development + 1 check + 1 review`; code-fix development seats use `reasoning_effort=xhigh`, check/review use `reasoning_effort=medium`
-9. When spawning subagents, explicitly set `reasoning_effort` instead of inheriting the session default.
-10. Treat every launched seat in the current phase as a gate-bearing participant, not a disposable sidecar:
+9. If the current runtime does not support delegation at all:
+   - keep the main session as both coordinator and executor
+   - treat the rendered lifecycle packet and issue team packet as the source of truth for the current round
+   - run the same `development -> check -> repair -> review` loop serially in the main session
+   - keep issue boundaries, progress artifacts, run artifacts, reconcile, review, verify, and archive unchanged
+   - do not invent a detached-worker fallback runtime
+10. When spawning subagents, explicitly set `reasoning_effort` instead of inheriting the session default.
+11. Treat every launched seat in the current phase as a gate-bearing participant, not a disposable sidecar:
    - record the agent id, seat name, and current status
    - use `default` or `worker` style delegation for these gate-bearing seats; do not launch check/review gate seats as `explorer`
    - when the phase depends on their verdicts, wait up to 1 hour for completion instead of short polling
    - do not accept the phase, mark it passed, or close those subagents while any required gate-bearing seat is still running
-11. `auto_accept_*` only removes human chat sign-off after the gate team has finished:
+12. `auto_accept_*` only removes human chat sign-off after the gate team has finished:
    - it does not mean "spawned already, so the phase may pass"
    - it does not allow skipping review/check verdict collection
    - it does not allow closing unfinished gate-bearing subagents early
-12. Run the loop:
+13. Run the loop:
    - development
    - check
    - repair
    - review
    - if review fails, go back to development
-13. Developers that implement code for the issue must follow `openspec-execute-issue` and write issue progress/run artifacts.
-14. Before moving from one lifecycle phase to the next, reread `openspec/issue-mode.json` again and confirm the next phase still matches the latest config.
-15. After all issues are complete, run a change-level `/review` and write `runs/CHANGE-REVIEW.json` before verify.
-16. Coordinator keeps merge, commit, verify, archive, and change-level control artifacts.
+14. Developers that implement code for the issue must follow `openspec-execute-issue` and write issue progress/run artifacts.
+15. Before moving from one lifecycle phase to the next, reread `openspec/issue-mode.json` again and confirm the next phase still matches the latest config.
+16. After all issues are complete, run a change-level `/review` and write `runs/CHANGE-REVIEW.json` before verify.
+17. Coordinator keeps merge, commit, verify, archive, and change-level control artifacts.
 
 ## Rules
 
 - This is the default entry path for complex issue-mode execution.
 - Use the single-worker issue path only when the user explicitly narrows execution to one bounded issue worker, or the current step clearly only needs one issue-local implementation context.
+- If the runtime does not support delegation, fall back to the main-session serial issue path instead of blocking on `subagent-team`.
 - `subagent_team.*` now controls full-process auto-accept and continuation, not just the design-review checkpoint.
 - `semi_auto` means the lifecycle still keeps manual gates for design / planning / change acceptance / archive. It may still auto-accept validated issues one by one so each issue lands as its own commit. `full_auto` means the lifecycle auto-continues across `spec_readiness -> issue_planning -> issue_execution -> change_acceptance -> change_verify -> archive` while still respecting RRA gates.
 - `spec_readiness` is the design-review gate in the complex-change path: proposal/design are prepared first, then a dedicated `1` author + `2` reviewers subagent team must pass it before task splitting begins.

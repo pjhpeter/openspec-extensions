@@ -14,6 +14,7 @@
 3. 主会话维护 change 级 backlog / round report，不把门禁判断只留在聊天里
 4. 主会话只为当前 round 已批准的 issue 创建或复用 issue workspace（`worker_worktree`），并渲染 subagent-team lifecycle packet / `ISSUE-*.team.dispatch.md`。安装模板默认是每个 change 复用一个 `.worktree/<change>`，不是每个 issue 单独建一个 worktree
 5. 默认用 subagent team 驱动开发 / 检查 / 修复 / 审查小组，作为整个 complex change 的协调入口；issue planning 默认走 `2 development + 1 check + 1 review`，issue execution 默认走 `3 development + 2 check + 1 review` 的快路径。任何编码 subagent 使用 `reasoning_effort=xhigh`，其余规划/检查/审查 subagent 使用 `reasoning_effort=medium`
+   - 如果当前 agent / runtime 不支持 subagent / delegation，就退回主会话串行 issue path：仍按同一份 lifecycle / team dispatch 执行，但由主会话自己完成 development / check / repair / review，一次只处理一个 approved issue
 6. 主会话把当前 phase 里真正拉起的 design review / check / review seat 视为 gate-bearing subagent：
    - 记录 agent id、seat 和完成状态
    - 对它们使用最长 1 小时的阻塞等待，不要 30 秒短轮询
