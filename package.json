@@ -1,6 +1,6 @@
 {
   "name": "openspec-extensions",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "OpenSpec issue-mode extensions packaged for npm-first distribution.",
   "license": "MIT",
   "repository": {
