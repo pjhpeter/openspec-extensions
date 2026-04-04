@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { runInitCommand, type InitDependencies } from "../../src/commands/init";
+import { readOwnPackageVersion } from "../../src/domain/extensions-metadata";
 
 const EXTENSION_SKILL_NAMES = [
   "openspec-chat-router",
@@ -103,6 +104,23 @@ function readIssueModeConfig(targetRepo: string): {
   };
 }
 
+function readExtensionsMetadata(targetRepo: string): {
+  initialized_version: string;
+  installed_version: string;
+  recorded_by: string;
+} {
+  const payload = JSON.parse(readFileSync(path.join(targetRepo, "openspec", "openspec-extensions.json"), "utf8")) as {
+    initialized_version: string;
+    installed_version: string;
+    recorded_by: string;
+  };
+  return {
+    initialized_version: payload.initialized_version,
+    installed_version: payload.installed_version,
+    recorded_by: payload.recorded_by
+  };
+}
+
 test("init initializes OpenSpec before installing extension skills", async () => {
   const targetRepo = createTargetRepo();
   let initCalls = 0;
@@ -155,6 +173,12 @@ test("init initializes OpenSpec before installing extension skills", async () =>
   assert.deepEqual(payload.install.installed_skill_dirs, expectedSkillDirs([".claude/skills"]));
   assert.ok(existsSync(path.join(targetRepo, "openspec", "config.yaml")));
   assert.ok(existsSync(path.join(targetRepo, "openspec", "issue-mode.json")));
+  assert.ok(existsSync(path.join(targetRepo, "openspec", "openspec-extensions.json")));
+  assert.deepEqual(readExtensionsMetadata(targetRepo), {
+    initialized_version: readOwnPackageVersion(),
+    installed_version: readOwnPackageVersion(),
+    recorded_by: "init"
+  });
 });
 
 test("init keeps the official OpenSpec tool selector interactive when tools are not preset", async () => {
@@ -379,10 +403,13 @@ test("init skips the automation prompt when issue-mode config is preserved", asy
   }));
 
   const config = readIssueModeConfig(targetRepo);
+  const metadata = readExtensionsMetadata(targetRepo);
 
   assert.equal(result.exitCode, 0);
   assert.equal(config.rra.gate_mode, "enforce");
   assert.equal(config.subagent_team.auto_accept_issue_review, true);
+  assert.equal(metadata.installed_version, readOwnPackageVersion());
+  assert.equal(metadata.recorded_by, "init");
 });
 
 test("init upgrades the local package and reruns when update is accepted", async () => {

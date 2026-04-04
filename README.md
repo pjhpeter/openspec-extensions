@@ -83,6 +83,8 @@ openspec-extensions install --target-repo /path/to/your/project --force
 
 如果你只是升级了 npm 包版本，目标仓库里已经存在的同名 skills 默认不会被静默覆盖。我建议先用 `--dry-run` 看安装结果，再用 `--force` 执行升级；如果你还想吃到新的 `openspec/issue-mode.json` 模板，再额外加 `--force-config`。旧版遗留的 detached-worker 相关运行时残留，也会在 `--force` 升级时一起清理。
 
+从 `0.1.20` 之后，`init` 和 `install` 还会在目标仓库写一个 `openspec/openspec-extensions.json`，记录该仓库当前插件版本。后续在 agent 主会话里首次触发 `openspec-extensions` 相关 skill 时，版本提醒会优先拿这个仓库记录版本去和 npm 最新版比较。
+
 ## 它会安装什么
 
 我会把下面这组扩展 skills 安到 OpenSpec 已配置工具对应的 `<toolDir>/skills/` 下：
@@ -99,6 +101,7 @@ openspec-extensions install --target-repo /path/to/your/project --force
 此外还会写入：
 
 - `openspec/issue-mode.json`
+- `openspec/openspec-extensions.json`
 
 并在需要时向目标项目 `.gitignore` 追加：
 

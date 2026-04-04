@@ -11,6 +11,8 @@ Use this skill in one worker subagent context only.
 
 - 如果这个 worker 会话其实是用户直接启动的顶层会话，并且这是当前会话首次触发任一 `openspec-extensions` skill，先做一次非阻塞版本检查，再继续当前 issue 执行。
 - 如果这是 coordinator 派生出来的 seat / worker 子会话，不要重复版本提醒；主会话提醒一次就够了。
+- 如果仓库里有 `openspec/openspec-extensions.json`，先读取其中的 `installed_version` 作为仓库记录版本。
+- 版本检查优先比较 npm 最新版本与仓库记录版本；如果仓库元数据缺失，再退回比较当前已安装 CLI 版本。
 - 版本检查只做 best-effort；检查失败时直接跳过，不要阻塞当前 issue 执行。
 - 如果发现 npm 有更新版本，只打印一条高亮提醒，然后继续执行，不要把升级当成当前 issue 的 blocker。
 - 高亮提醒统一使用这句：

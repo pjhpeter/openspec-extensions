@@ -12,6 +12,11 @@ import {
 import path from "node:path";
 import { parseArgs } from "node:util";
 
+import {
+  writeExtensionsMetadata,
+  type ExtensionsMetadataRecorder
+} from "../domain/extensions-metadata";
+
 const SOURCE_SKILLS_ROOT = "skills";
 const LEGACY_CODEX_SKILLS_ROOT = path.join(".codex", "skills");
 const OPENSPEC_CONFIG_PATH = path.join("openspec", "config.yaml");
@@ -111,6 +116,15 @@ export type InstallResult = {
     path: string;
     status: "installed" | "overwritten" | "preserved";
   };
+  metadata: {
+    initialized_version: string;
+    installed_version: string;
+    invalid_json: boolean;
+    package_name: string;
+    path: string;
+    recorded_by: ExtensionsMetadataRecorder;
+    status: "installed" | "overwritten";
+  };
   dry_run: boolean;
   force: boolean;
   force_config: boolean;
@@ -138,6 +152,7 @@ type InstallExecutionOptions = {
   allowMissingSkillRoots?: boolean;
   configOverrides?: JsonObject;
   plannedOpenSpecTools?: string;
+  recordedBy?: ExtensionsMetadataRecorder;
   skipOpenSpecPreflight?: boolean;
 };
 
@@ -561,6 +576,11 @@ export function installExtensions(
     sourceRepo,
     targetRepo
   });
+  const metadata = writeExtensionsMetadata({
+    dryRun: parsed.dryRun,
+    recordedBy: options.recordedBy ?? "install",
+    targetRepo
+  });
 
   const gitignore = parsed.skipGitignore
     ? {
@@ -576,6 +596,15 @@ export function installExtensions(
       overrides: options.configOverrides ?? {},
       path: config.path,
       status: config.status
+    },
+    metadata: {
+      initialized_version: metadata.metadata.initialized_version,
+      installed_version: metadata.metadata.installed_version,
+      invalid_json: metadata.invalid_json,
+      package_name: metadata.metadata.package_name,
+      path: metadata.path,
+      recorded_by: metadata.metadata.recorded_by,
+      status: metadata.status
     },
     dry_run: parsed.dryRun,
     force: parsed.force,

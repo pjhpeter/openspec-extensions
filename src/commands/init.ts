@@ -1,9 +1,10 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 
+import { readOwnPackageVersion } from "../domain/extensions-metadata";
 import {
   installExtensions,
   isOpenSpecInitialized,
@@ -14,7 +15,7 @@ import {
 const OPENSPEC_NPM_PACKAGE = "@fission-ai/openspec@1.2.0";
 const EXTENSIONS_NPM_PACKAGE = "openspec-extensions";
 const SELF_UPDATE_SKIP_ENV = "OPENSPEC_EXTENSIONS_SKIP_SELF_UPDATE_CHECK";
-const PACKAGE_VERSION = readPackageVersion();
+const PACKAGE_VERSION = readOwnPackageVersion();
 const ISSUE_MODE_CONFIG_PATH = path.join("openspec", "issue-mode.json");
 
 const INIT_HELP_TEXT = `Usage:
@@ -144,12 +145,6 @@ function buildOpenSpecInitCommands(request: OpenSpecInitRequest): {
     fallbackCommand: ["npx", "--yes", OPENSPEC_NPM_PACKAGE, ...sharedArgs],
     primaryCommand: ["openspec", ...sharedArgs]
   };
-}
-
-function readPackageVersion(): string {
-  const packageJsonPath = path.resolve(__dirname, "../../package.json");
-  const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { version?: unknown };
-  return typeof packageJson.version === "string" ? packageJson.version : "0.0.0";
 }
 
 function parseSemver(version: string): ParsedSemver | null {
@@ -592,6 +587,7 @@ export async function runInitCommand(
     allowMissingSkillRoots: openspecInit.status === "planned",
     configOverrides,
     plannedOpenSpecTools: openspecInit.status === "planned" ? parsed.openspecTools : undefined,
+    recordedBy: "init",
     skipOpenSpecPreflight: true
   });
   const result = {

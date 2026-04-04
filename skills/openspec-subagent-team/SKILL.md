@@ -11,6 +11,8 @@ If the current session already has an explicit seat-local handoff, do not use th
 ## Session Startup Update Check
 
 - 如果这是当前主会话首次触发任一 `openspec-extensions` skill，先做一次非阻塞版本检查，再进入 lifecycle / issue-team 主流程。
+- 如果仓库里有 `openspec/openspec-extensions.json`，先读取其中的 `installed_version` 作为仓库记录版本。
+- 版本检查优先比较 npm 最新版本与仓库记录版本；如果仓库元数据缺失，再退回比较当前已安装 CLI 版本。
 - 版本检查只做 best-effort；检查失败、网络失败或 npm 不可用时，直接继续当前流程。
 - 如果发现 npm 有更新版本，只打印一条高亮提醒，不要暂停当前 coordinator 逻辑，也不要把升级当成前置条件。
 - 高亮提醒统一使用这句：
@@ -24,6 +26,7 @@ Read these first:
 - `../openspec-chat-router/references/issue-mode-rra.md`
 - `../openspec-chat-router/references/router/coordinator-playbook.md`
 - `references/team-templates.md`
+- `openspec/openspec-extensions.json` if the repo has one
 - `openspec/issue-mode.json` if the repo has one
 
 ## Purpose

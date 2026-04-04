@@ -14,6 +14,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { runInstallCommand } from "../../src/commands/install";
+import { readOwnPackageVersion } from "../../src/domain/extensions-metadata";
 
 const EXTENSION_SKILL_NAMES = [
   "openspec-chat-router",
@@ -29,6 +30,20 @@ function expectedSkillDirs(targetSkillRoots: string[]): string[] {
   return targetSkillRoots.flatMap((skillsRoot) =>
     EXTENSION_SKILL_NAMES.map((skillName) => `${skillsRoot}/${skillName}`)
   );
+}
+
+function readExtensionsMetadata(targetRepo: string): {
+  initialized_version: string;
+  installed_version: string;
+  package_name: string;
+  recorded_by: string;
+} {
+  return JSON.parse(readFileSync(path.join(targetRepo, "openspec", "openspec-extensions.json"), "utf8")) as {
+    initialized_version: string;
+    installed_version: string;
+    package_name: string;
+    recorded_by: string;
+  };
 }
 
 function withCapturedStdout(fn: () => number): { exitCode: number; stdout: string } {
@@ -127,11 +142,22 @@ test("install writes skills, config, and gitignore entries", () => {
     config: { path: string; status: string };
     gitignore: { added_entries: string[]; updated: boolean };
     installed_skill_dirs: string[];
+    metadata: {
+      installed_version: string;
+      path: string;
+      recorded_by: string;
+      status: string;
+    };
     target_skill_roots: string[];
   };
+  const metadata = readExtensionsMetadata(targetRepo);
 
   assert.equal(result.exitCode, 0);
   assert.equal(payload.config.status, "installed");
+  assert.equal(payload.metadata.status, "installed");
+  assert.equal(payload.metadata.path, "openspec/openspec-extensions.json");
+  assert.equal(payload.metadata.recorded_by, "install");
+  assert.equal(payload.metadata.installed_version, readOwnPackageVersion());
   assert.equal(payload.gitignore.updated, true);
   assert.deepEqual(payload.target_skill_roots, [".claude/skills"]);
   assert.deepEqual(payload.installed_skill_dirs, expectedSkillDirs([".claude/skills"]));
@@ -143,6 +169,10 @@ test("install writes skills, config, and gitignore entries", () => {
   assert.ok(existsSync(path.join(targetRepo, ".claude", "skills", "openspec-chat-router", "SKILL.md")));
   assert.ok(!existsSync(path.join(targetRepo, ".claude", "skills", "openspec-shared")));
   assert.ok(existsSync(path.join(targetRepo, "openspec", "issue-mode.json")));
+  assert.equal(metadata.package_name, "openspec-extensions");
+  assert.equal(metadata.recorded_by, "install");
+  assert.equal(metadata.initialized_version, readOwnPackageVersion());
+  assert.equal(metadata.installed_version, readOwnPackageVersion());
   assert.deepEqual(
     collectRelativeFiles(path.join(targetRepo, ".claude", "skills")).filter((filePath) => filePath.endsWith(".py")),
     []
@@ -203,6 +233,47 @@ test("install --force removes legacy Python runtime paths", () => {
   ]);
   assert.ok(!existsSync(legacySkillDir));
   assert.ok(!existsSync(legacyHeartbeat));
+});
+
+test("install updates repo plugin metadata even when issue-mode config is preserved", () => {
+  const targetRepo = createTargetRepo();
+  seedOpenSpecRepo(targetRepo, [".claude/skills"]);
+  mkdirSync(path.join(targetRepo, "openspec"), { recursive: true });
+  writeFileSync(path.join(targetRepo, "openspec", "issue-mode.json"), JSON.stringify({
+    rra: { gate_mode: "enforce" }
+  }, null, 2));
+  writeFileSync(path.join(targetRepo, "openspec", "openspec-extensions.json"), JSON.stringify({
+    metadata_version: 1,
+    package_name: "openspec-extensions",
+    initialized_version: "0.1.5",
+    installed_version: "0.1.8",
+    updated_at: "2026-01-01T00:00:00.000Z",
+    recorded_by: "install"
+  }, null, 2));
+
+  const result = withCapturedStdout(() => runInstallCommand([
+    "--target-repo",
+    targetRepo
+  ]));
+  const payload = JSON.parse(result.stdout) as {
+    config: { status: string };
+    metadata: {
+      initialized_version: string;
+      installed_version: string;
+      recorded_by: string;
+      status: string;
+    };
+  };
+  const metadata = readExtensionsMetadata(targetRepo);
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(payload.config.status, "preserved");
+  assert.equal(payload.metadata.status, "overwritten");
+  assert.equal(payload.metadata.initialized_version, "0.1.5");
+  assert.equal(payload.metadata.installed_version, readOwnPackageVersion());
+  assert.equal(metadata.initialized_version, "0.1.5");
+  assert.equal(metadata.installed_version, readOwnPackageVersion());
+  assert.equal(metadata.recorded_by, "install");
 });
 
 test("install rejects repos that have not been initialized with OpenSpec", () => {

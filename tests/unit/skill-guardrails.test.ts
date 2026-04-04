@@ -13,6 +13,8 @@ test("subagent-team agent prompt scopes coordinator defaults to the main session
   assert.match(prompt, /only when this session is the main coordinator session/);
   assert.match(prompt, /first openspec-extensions skill activation/);
   assert.match(prompt, /best-effort non-blocking version check/);
+  assert.match(prompt, /openspec\/openspec-extensions\.json/);
+  assert.match(prompt, /repo-recorded plugin version/);
   assert.match(prompt, /npm update -g openspec-extensions/);
   assert.match(prompt, /openspec-ex install --target-repo \/path\/to\/your\/project --force --force-config/);
   assert.match(prompt, /explicit seat-local handoff or role instruction/);
@@ -30,6 +32,8 @@ test("chat-router agent prompt does not reroute spawned seat sessions", () => {
   assert.match(prompt, /only for the main user-facing or coordinator session/);
   assert.match(prompt, /first openspec-extensions skill activation/);
   assert.match(prompt, /best-effort non-blocking version check/);
+  assert.match(prompt, /openspec\/openspec-extensions\.json/);
+  assert.match(prompt, /repo-recorded plugin version/);
   assert.match(prompt, /npm update -g openspec-extensions/);
   assert.match(prompt, /openspec-ex install --target-repo \/path\/to\/your\/project --force --force-config/);
   assert.match(prompt, /explicit seat-local spawned-subagent handoff/);
@@ -82,6 +86,8 @@ test("all installable skills define the same non-blocking update reminder", () =
 
     assert.match(skill, /首次触发任一 `openspec-extensions` skill/);
     assert.match(skill, /非阻塞版本检查/);
+    assert.match(skill, /openspec\/openspec-extensions\.json/);
+    assert.match(skill, /仓库记录版本/);
     assert.match(skill, /npm update -g openspec-extensions/);
     assert.match(skill, /openspec-ex install --target-repo \/path\/to\/your\/project --force --force-config/);
     assert.match(skill, /当前流程继续，不受这条提醒影响/);

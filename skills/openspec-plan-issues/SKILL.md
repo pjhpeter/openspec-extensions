@@ -10,6 +10,8 @@ Use this skill in the coordinator session after the proposal/design review has p
 ## Session Startup Update Check
 
 - 如果这是当前主会话首次触发任一 `openspec-extensions` skill，先做一次非阻塞版本检查，再继续 issue planning。
+- 如果仓库里有 `openspec/openspec-extensions.json`，先读取其中的 `installed_version` 作为仓库记录版本。
+- 版本检查优先比较 npm 最新版本与仓库记录版本；如果仓库元数据缺失，再退回比较当前已安装 CLI 版本。
 - 版本检查只做 best-effort；检查失败时直接跳过，不要影响当前任务拆分。
 - 如果发现 npm 有更新版本，只打印一条高亮提醒，然后继续 issue planning，不要把升级当成前置条件。
 - 高亮提醒统一使用这句：
