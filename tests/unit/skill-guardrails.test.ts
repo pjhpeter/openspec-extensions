@@ -46,6 +46,7 @@ test("chat-router agent prompt does not reroute spawned seat sessions", () => {
 test("mode cheat sheet includes unattended kickoff with explicit model and requirement placeholders", () => {
   const template = readRepoFile("skills/openspec-chat-router/references/router/mode-cheatsheet.md");
 
+  assert.match(template, /常用的话术有哪些/);
   assert.match(template, /创建新 change/);
   assert.match(template, /subagent-team/);
   assert.match(template, /<指定模型>/);

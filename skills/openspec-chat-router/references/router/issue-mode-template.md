@@ -1,6 +1,7 @@
 # OpenSpec Issue Mode Template
 
 已进入 OpenSpec Issue 模式。
+如果你想快速拿可复制提示词，也可以直接问我：常用的话术有哪些？
 
 说明：
 

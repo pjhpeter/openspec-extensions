@@ -1,6 +1,7 @@
 # OpenSpec Mode Cheat Sheet
 
 已进入 OpenSpec 模式。
+你也可以直接问我：常用的话术有哪些？
 
 注意：
 
