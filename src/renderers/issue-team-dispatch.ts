@@ -10,6 +10,16 @@ import {
   readChangeControlState,
   type IssueModeConfig,
 } from "../domain/issue-mode";
+import {
+  ensureActiveSeatDispatch,
+  planActiveSeatDispatch,
+  readSeatStatesForDispatch,
+  seatBarrierModeForGateMode,
+  seatStateDir,
+  summarizeSeatBarrier,
+  type ActiveSeatDefinition,
+  type SeatBarrierSummary,
+} from "../domain/seat-control";
 import { displayPath } from "../utils/path";
 
 type JsonRecord = Record<string, unknown>;
@@ -38,10 +48,12 @@ type ParsedArgs = {
 export type IssueTeamDispatchArgs = ParsedArgs;
 
 export type IssueTeamDispatchPayload = {
+  active_seat_dispatch_path: string;
   change: string;
   config_path: string;
   control_gate: DispatchGate;
   control_state: JsonRecord;
+  dispatch_id: string;
   dry_run: boolean;
   issue_id: string;
   progress_path: string;
@@ -50,7 +62,9 @@ export type IssueTeamDispatchPayload = {
     development_group: string;
     review_group: string;
   };
+  seat_barrier: SeatBarrierSummary;
   seat_handoffs_path: string;
+  seat_state_dir: string;
   team_dispatch_path: string;
   validation: string[];
   validation_source: "issue_doc" | "config_default";
@@ -338,13 +352,27 @@ function seatLensTitle(seat: string, role: string): string {
   return `${seat} (${role})`;
 }
 
+function issueTeamSeats(): ActiveSeatDefinition[] {
+  return [
+    { seat: "Developer 1", role: "core implementation owner", gate_bearing: true, required: true, reasoning_effort: "high" },
+    { seat: "Developer 2", role: "dependent module or integration owner", gate_bearing: true, required: true, reasoning_effort: "high" },
+    { seat: "Developer 3", role: "tests, fixtures, cleanup owner", gate_bearing: true, required: true, reasoning_effort: "high" },
+    { seat: "Checker 1", role: "functional correctness / main path / edge cases", gate_bearing: true, required: true, reasoning_effort: "medium" },
+    { seat: "Checker 2", role: "direct dependency regression risk / tests / evidence gaps", gate_bearing: true, required: true, reasoning_effort: "medium" },
+    { seat: "Reviewer 1", role: "scope-first pass / fail owner", gate_bearing: true, required: true, reasoning_effort: "medium" }
+  ];
+}
+
 function renderSeatHandoffArtifact(input: {
+  activeSeatDispatchPath: string;
   allowedScope: string[];
   change: string;
+  dispatchId: string;
   issueId: string;
   outOfScope: string[];
   progressPath: string;
   repoRoot: string;
+  seatStateDir: string;
   title: string;
   validation: string[];
   workerWorktree: string;
@@ -355,6 +383,9 @@ function renderSeatHandoffArtifact(input: {
     `只允许在以下范围内工作：\n${codeBulletList(input.allowedScope)}`,
     `以下范围明确禁止进入：\n${codeBulletList(input.outOfScope)}`,
     `issue progress artifact: \`${displayPath(input.repoRoot, input.progressPath)}\``,
+    `active seat dispatch: \`${input.activeSeatDispatchPath}\``,
+    `dispatch_id: \`${input.dispatchId}\``,
+    `seat_state_dir: \`${input.seatStateDir}\``,
     `相关 validation: \n${bulletList(input.validation)}`,
   ].join("\n");
 
@@ -519,10 +550,12 @@ ${renderSeat(
 }
 
 function renderDispatch(input: {
+  activeSeatDispatchPath: string;
   allowedScope: string[];
   change: string;
   controlState: JsonRecord;
   dispatchGate: DispatchGate;
+  dispatchId: string;
   doneWhen: string[];
   issueId: string;
   outOfScope: string[];
@@ -535,6 +568,7 @@ function renderDispatch(input: {
   validation: string[];
   workerWorktree: string;
   seatHandoffsPath: string;
+  seatStateDir: string;
 }): string {
   const latestRound =
     input.controlState.latest_round &&
@@ -680,12 +714,19 @@ ${bulletList(input.validation)}
 
 ## Gate Barrier
 
+- Active dispatch:
+  - dispatch_id=\`${input.dispatchId}\`
+  - manifest=\`${input.activeSeatDispatchPath}\`
+  - seat_state_dir=\`${input.seatStateDir}\`
 - Gate-bearing seats for this round:
   - Development group: launched seats must complete or explicitly report no-op before round close
   - Check group: all launched checker seats must complete and be normalized before repair / review decisions
   - Review group: all launched reviewer seats must complete and be collected before the round can pass
 - Barrier rules:
-  - \u8bb0\u5f55\u5f53\u524d round gate-bearing subagent \u7684 seat\u3001\`agent_id\` \u548c\u72b6\u6001\u3002
+  - coordinator 在真正 spawn gate-bearing seat 前，先写一条 \`launching\` seat-state。
+  - seat 接手后立刻把自己的 seat-state 更新为 \`running\`。
+  - seat 结束后必须把自己的 seat-state 更新为 \`completed\`、\`failed\` 或 \`blocked\`。
+  - \u8bb0\u5f55\u5f53\u524d round gate-bearing subagent \u7684 seat\u3001\`agent_id\` \u548c\u72b6\u6001\uff0c\u4e0d\u80fd\u53ea\u7559\u5728\u804a\u5929\u91cc\u3002
   - \u5bf9 gate-bearing subagent \u4f7f\u7528\u6700\u957f 1 \u5c0f\u65f6\u7684 blocking wait\uff0c\u4e0d\u8981 30 \u79d2\u77ed\u8f6e\u8be2\u3002
   - \u4efb\u4e00 required gate-bearing subagent \u4ecd\u5728\u8fd0\u884c\u65f6\uff0c\u4e0d\u5141\u8bb8\u63d0\u524d\u901a\u8fc7\u5f53\u524d round\u3002
   - \u4efb\u4e00 required gate-bearing subagent \u4ecd\u5728\u8fd0\u884c\u65f6\uff0c\u4e0d\u5141\u8bb8\u63d0\u524d\u5173\u95ed\u5b83\u3002
@@ -756,10 +797,16 @@ ${bulletList(deferredItems)}
 - \u5148\u5b8c\u6210\u5f53\u524d issue \u8303\u56f4\u5185\u7684\u5f00\u53d1\uff0c\u518d\u53ea\u5904\u7406 coordinator \u6279\u51c6\u8fdb\u5165\u672c\u8f6e backlog \u7684\u95ee\u9898\u3002
 - \u5c3d\u91cf\u6309\u6587\u4ef6/\u6a21\u5757 ownership \u5206\u914d\uff0c\u51cf\u5c11\u5199\u96c6\u91cd\u53e0\u3002
 - \u8d1f\u8d23\u5b9e\u73b0\u6216\u4fee\u590d repo \u4ee3\u7801\u7684 development subagent \u5fc5\u987b\u663e\u5f0f\u4f7f\u7528 \`reasoning_effort=high\`\u3002
+- coordinator 拉起 development seat 前先写：
+  - \`openspec-extensions execute seat-state set --repo-root "${input.repoRoot}" --change "${input.change}" --dispatch-id "${input.dispatchId}" --phase issue_execution --issue-id "${input.issueId}" --seat "<Developer N>" --status launching --agent-id "<agent_id>" --gate-bearing true --required true --reasoning-effort high\`
 - \u9996\u4e2a\u771f\u6b63\u5f00\u59cb\u5199\u4ee3\u7801\u7684 development seat \u5148\u5199\uff1a
   - \`openspec-extensions execute update-progress start --repo-root "${input.repoRoot}" --change "${input.change}" --issue-id "${input.issueId}" --status in_progress --boundary-status working --next-action continue_issue --summary "\u5df2\u8fdb\u5165 subagent team repair round\u3002"\`
+- development seat 接手后先写：
+  - \`openspec-extensions execute seat-state set --repo-root "${input.repoRoot}" --change "${input.change}" --dispatch-id "${input.dispatchId}" --phase issue_execution --issue-id "${input.issueId}" --seat "<Developer N>" --status running --agent-id "<agent_id>"\`
 - development seat \u8fd4\u56de\u524d\u53ea\u5141\u8bb8\u5199 checkpoint\uff1a
   - \`openspec-extensions execute update-progress checkpoint --repo-root "${input.repoRoot}" --change "${input.change}" --issue-id "${input.issueId}" --status in_progress --boundary-status working --next-action continue_issue --summary "development seat \u5df2\u5b8c\u6210\u5f53\u524d\u5b9e\u73b0\uff0c\u7b49\u5f85 checker / reviewer\u3002" --validation "<repo-validation-command>=pending" --changed-file "<path>"\`
+- development seat 结束前还要回写：
+  - \`openspec-extensions execute seat-state set --repo-root "${input.repoRoot}" --change "${input.change}" --dispatch-id "${input.dispatchId}" --phase issue_execution --issue-id "${input.issueId}" --seat "<Developer N>" --status completed --agent-id "<agent_id>"\`
 - development seat \u4e0d\u5141\u8bb8\u81ea\u5df1\u5199 \`stop\` \u6216\u628a issue \u6807\u6210 \`completed + review_required\`\uff1b\u90a3\u4e2a\u72b6\u6001\u53ea\u80fd\u7531 coordinator \u5728 checker / reviewer gate \u901a\u8fc7\u540e\u7edf\u4e00\u843d\u76d8\u3002
 - development seat \u53ea\u8d1f\u8d23\u5b9e\u73b0\u3001changed_files \u548c progress checkpoint\uff1b\u5982\u679c\u5f53\u524d\u6539\u52a8\u4f1a\u4f7f\u5df2\u6709\u6821\u9a8c\u7ed3\u8bba\u5931\u6548\uff0c\u5c31\u628a\u76f8\u5173 validation \u6807\u8bb0\u56de \`pending\`\uff0c\u4e0d\u8981\u5728\u672c seat \u5185\u5ba3\u79f0 \`passed\`\u3002
 - development seat \u4e0d\u662f\u5f53\u524d issue \u7684 validation / check / review owner\uff1b\u8fd9\u4e9b\u7ed3\u8bba\u7531 checker / reviewer / coordinator \u5728\u540e\u7eed gate \u91cc\u6536\u655b\u3002
@@ -833,11 +880,34 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
   const progressPath = issueProgressPath(args.repoRoot, args.change, args.issueId);
   const progressSnapshot = readProgressSnapshot(progressPath);
   const seatHandoffsDisplayPath = displayPath(args.repoRoot, seatHandoffsPath);
+  const seatManifestInput = {
+    change: args.change,
+    phase: "issue_execution" as const,
+    issue_id: args.issueId,
+    barrier_mode: seatBarrierModeForGateMode(config.rra.gate_mode),
+    packet_path: displayPath(args.repoRoot, teamDispatchPath),
+    seat_handoffs_path: seatHandoffsDisplayPath,
+    seats: issueTeamSeats()
+  };
+  const seatManifest = args.dryRun
+    ? planActiveSeatDispatch(args.repoRoot, seatManifestInput)
+    : ensureActiveSeatDispatch(args.repoRoot, seatManifestInput);
+  const activeSeatDispatchPath = displayPath(
+    args.repoRoot,
+    path.join(args.repoRoot, "openspec", "changes", args.change, "control", "ACTIVE-SEAT-DISPATCH.json")
+  );
+  const seatStateDirPath = displayPath(args.repoRoot, seatStateDir(args.repoRoot, args.change, seatManifest.dispatch_id));
+  const seatBarrier = summarizeSeatBarrier(
+    seatManifest,
+    readSeatStatesForDispatch(args.repoRoot, args.change, seatManifest.dispatch_id)
+  );
   const dispatchText = renderDispatch({
+    activeSeatDispatchPath,
     allowedScope,
     change: args.change,
     controlState,
     dispatchGate,
+    dispatchId: seatManifest.dispatch_id,
     doneWhen,
     issueId: args.issueId,
     outOfScope,
@@ -850,15 +920,19 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
     validation,
     workerWorktree,
     seatHandoffsPath: seatHandoffsDisplayPath,
+    seatStateDir: seatStateDirPath,
   });
   // seat handoff 单独落盘，避免 development / check / review 直接吞 coordinator packet 后角色越界。
   const seatHandoffsText = renderSeatHandoffArtifact({
+    activeSeatDispatchPath,
     allowedScope,
     change: args.change,
+    dispatchId: seatManifest.dispatch_id,
     issueId: args.issueId,
     outOfScope,
     progressPath,
     repoRoot: args.repoRoot,
+    seatStateDir: seatStateDirPath,
     title,
     validation,
     workerWorktree,
@@ -871,9 +945,12 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
   }
 
   return {
+    active_seat_dispatch_path: activeSeatDispatchPath,
     change: args.change,
     issue_id: args.issueId,
+    dispatch_id: seatManifest.dispatch_id,
     seat_handoffs_path: seatHandoffsDisplayPath,
+    seat_state_dir: seatStateDirPath,
     team_dispatch_path: path.relative(args.repoRoot, teamDispatchPath).split(path.sep).join("/"),
     worker_worktree: workerWorktree,
     worker_worktree_source: workerWorktreeSource,
@@ -888,7 +965,8 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
       review_group: "medium"
     },
     config_path: config.config_path,
-    dry_run: args.dryRun
+    dry_run: args.dryRun,
+    seat_barrier: seatBarrier
   };
 }
 

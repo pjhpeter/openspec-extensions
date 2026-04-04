@@ -27,6 +27,16 @@ import {
   readChangeControlState,
   type IssueModeConfig
 } from "../domain/issue-mode";
+import {
+  ensureActiveSeatDispatch,
+  planActiveSeatDispatch,
+  readSeatStatesForDispatch,
+  seatBarrierModeForGateMode,
+  seatStateDir,
+  summarizeSeatBarrier,
+  type ActiveSeatDefinition,
+  type SeatBarrierSummary,
+} from "../domain/seat-control";
 import { renderIssueTeamDispatch, type IssueTeamDispatchPayload } from "./issue-team-dispatch";
 import { displayPath } from "../utils/path";
 
@@ -60,6 +70,7 @@ type IssuePayload = JsonRecord & {
 };
 
 export type LifecycleDispatchPayload = {
+  active_seat_dispatch_path: string;
   automation: {
     accept_change_acceptance: boolean;
     accept_issue_planning: boolean;
@@ -70,6 +81,7 @@ export type LifecycleDispatchPayload = {
   automation_profile: string;
   change: string;
   control_state: JsonRecord;
+  dispatch_id: string;
   dry_run: boolean;
   focus_issue_id: string;
   generated_at: string;
@@ -81,6 +93,8 @@ export type LifecycleDispatchPayload = {
   lifecycle_dispatch_path: string;
   phase: string;
   phase_reason: string;
+  seat_barrier: SeatBarrierSummary;
+  seat_state_dir: string;
   team_topology: TeamTopologyItem[];
 };
 
@@ -742,6 +756,39 @@ function renderGateBearingSeats(items: TeamTopologyItem[]): string {
     .join("\n");
 }
 
+function topologySeats(items: TeamTopologyItem[]): ActiveSeatDefinition[] {
+  const seats: ActiveSeatDefinition[] = [];
+
+  for (const item of items) {
+    for (let index = 1; index <= item.count; index += 1) {
+      let seat = `${item.label} ${index}`;
+      if (item.key === "design_author") {
+        seat = "Design author";
+      } else if (item.key === "design_review") {
+        seat = `Design reviewer ${index}`;
+      } else if (item.key === "development_group") {
+        seat = `Development ${index}`;
+      } else if (item.key === "check_group") {
+        seat = `Checker ${index}`;
+      } else if (item.key === "review_group") {
+        seat = `Reviewer ${index}`;
+      }
+
+      seats.push({
+        seat,
+        role: item.responsibility,
+        gate_bearing: true,
+        required: true,
+        reasoning_effort: item.reasoning_effort === "low" || item.reasoning_effort === "medium" || item.reasoning_effort === "high"
+          ? item.reasoning_effort
+          : "unknown"
+      });
+    }
+  }
+
+  return seats;
+}
+
 function phaseRoundLoop(phase: string): string {
   return phase === "spec_readiness" ? "设计编写 -> 双评审 -> 修订 -> 双评审" : "开发 -> 检查 -> 修复 -> 审查";
 }
@@ -824,6 +871,10 @@ function renderPhasePacket(
   phase: string,
   phaseReason: string,
   issueId: string,
+  dispatchId: string,
+  activeSeatDispatchPath: string,
+  seatStateDirPath: string,
+  seatBarrier: SeatBarrierSummary,
   controlState: JsonRecord,
   config: IssueModeConfig,
   issues: IssuePayload[],
@@ -991,6 +1042,18 @@ ${renderTeamTopology(teamTopology)}
 
 ## Gate Barrier
 
+- Active dispatch:
+  - dispatch_id=\`${dispatchId}\`
+  - manifest=\`${activeSeatDispatchPath}\`
+  - seat_state_dir=\`${seatStateDirPath}\`
+- Current barrier summary:
+  - mode=\`${seatBarrier.mode}\`
+  - action=\`${seatBarrier.action || "none"}\`
+  - running=${seatBarrier.required_running.length}
+  - failed=${seatBarrier.required_failed.length}
+  - blocked=${seatBarrier.required_blocked.length}
+  - cancelled=${seatBarrier.required_cancelled.length}
+  - missing=${seatBarrier.required_missing.length}
 - Gate-bearing seats for this phase:
 ${renderGateBearingSeats(teamTopology)}
 - Barrier rules:
@@ -1071,6 +1134,23 @@ export function renderLifecycleDispatch(args: ParsedArgs): LifecycleDispatchPayl
   let issueTeamDispatchPath = "";
   let issueTeamSeatHandoffsPath = "";
   let issueTeamDispatch: IssueTeamDispatchPayload | Record<string, never> = {};
+  let dispatchId = "";
+  let activeSeatDispatchPath = "";
+  let seatStateDirPath = "";
+  let seatBarrier: SeatBarrierSummary = {
+    active: false,
+    blocking: false,
+    mode: "inactive",
+    action: "",
+    dispatch_id: "",
+    phase: "",
+    required_missing: [],
+    required_running: [],
+    required_failed: [],
+    required_blocked: [],
+    required_cancelled: [],
+    required_completed: []
+  };
 
   if (phase === "issue_execution" && focusIssue) {
     issueTeamDispatch = renderIssueTeamDispatch({
@@ -1083,6 +1163,40 @@ export function renderLifecycleDispatch(args: ParsedArgs): LifecycleDispatchPayl
     });
     issueTeamDispatchPath = String(issueTeamDispatch.team_dispatch_path ?? "").trim();
     issueTeamSeatHandoffsPath = String(issueTeamDispatch.seat_handoffs_path ?? "").trim();
+    dispatchId = String(issueTeamDispatch.dispatch_id ?? "").trim();
+    activeSeatDispatchPath = String(issueTeamDispatch.active_seat_dispatch_path ?? "").trim();
+    seatStateDirPath = String(issueTeamDispatch.seat_state_dir ?? "").trim();
+    seatBarrier = (issueTeamDispatch.seat_barrier as SeatBarrierSummary | undefined) ?? seatBarrier;
+  } else {
+    const lifecyclePacketPath = path.join(controlDir, "SUBAGENT-TEAM.dispatch.md");
+    const teamTopology = phaseTeamTopology(phase);
+    const manifestInput = {
+      change: args.change,
+      phase: phase as
+        | "spec_readiness"
+        | "issue_planning"
+        | "issue_execution"
+        | "change_acceptance"
+        | "change_verify"
+        | "ready_for_archive",
+      issue_id: focusIssue || undefined,
+      barrier_mode: seatBarrierModeForGateMode(config.rra.gate_mode),
+      packet_path: displayPath(args.repoRoot, lifecyclePacketPath),
+      seats: topologySeats(teamTopology)
+    };
+    const seatManifest = args.dryRun
+      ? planActiveSeatDispatch(args.repoRoot, manifestInput)
+      : ensureActiveSeatDispatch(args.repoRoot, manifestInput);
+    dispatchId = seatManifest.dispatch_id;
+    activeSeatDispatchPath = displayPath(
+      args.repoRoot,
+      path.join(args.repoRoot, "openspec", "changes", args.change, "control", "ACTIVE-SEAT-DISPATCH.json")
+    );
+    seatStateDirPath = displayPath(args.repoRoot, seatStateDir(args.repoRoot, args.change, dispatchId));
+    seatBarrier = summarizeSeatBarrier(
+      seatManifest,
+      readSeatStatesForDispatch(args.repoRoot, args.change, dispatchId)
+    );
   }
 
   const lifecyclePacketPath = path.join(controlDir, "SUBAGENT-TEAM.dispatch.md");
@@ -1092,6 +1206,10 @@ export function renderLifecycleDispatch(args: ParsedArgs): LifecycleDispatchPayl
     phase,
     phaseReason,
     focusIssue,
+    dispatchId,
+    activeSeatDispatchPath,
+    seatStateDirPath,
+    seatBarrier,
     controlState,
     config,
     issues,
@@ -1106,8 +1224,10 @@ export function renderLifecycleDispatch(args: ParsedArgs): LifecycleDispatchPayl
   const latestRoundPath = latestRoundArtifactPath(args.repoRoot, args.change);
 
   return {
+    active_seat_dispatch_path: activeSeatDispatchPath,
     generated_at: nowIso(),
     change: args.change,
+    dispatch_id: dispatchId,
     phase,
     phase_reason: phaseReason,
     focus_issue_id: focusIssue,
@@ -1125,6 +1245,8 @@ export function renderLifecycleDispatch(args: ParsedArgs): LifecycleDispatchPayl
     },
     automation_profile: automationProfile(config),
     team_topology: phaseTeamTopology(phase),
+    seat_barrier: seatBarrier,
+    seat_state_dir: seatStateDirPath,
     control_state: controlState,
     issue_count: issues.length,
     dry_run: args.dryRun

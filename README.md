@@ -195,7 +195,22 @@ flowchart TD
 4. 对任务拆分再做一次 `issue_planning` 门禁，并把当前通过结果写成 `runs/ISSUE-PLANNING.json`。
 4. 只为当前 round 已批准的 issue 创建或复用 workspace。
 5. 用 dispatch packet 推进当前 issue 的 `development -> check -> repair -> review`。
-6. 在 subagent-team 的 `issue_execution` 里，development seat 只写代码和 checkpoint；如果改动让既有校验失效，只把相关 validation 标回 `pending`，不直接把 issue 标成完成，也不在该 seat 内自称校验通过。checker / reviewer 通过后，由 coordinator 先写 `runs/ISSUE-REVIEW-<issue>.json`，再做 reconcile、review、merge、commit、verify、archive。
+6. `dispatch lifecycle` / `dispatch issue-team` 现在会同时产出 active seat dispatch 信息：`dispatch_id`、`openspec/changes/<change>/control/ACTIVE-SEAT-DISPATCH.json` 和 `openspec/changes/<change>/control/seat-state/<dispatch_id>/`。
+7. 在 subagent-team 的 `issue_execution` 里，coordinator 在 spawn gate-bearing seat 前先写 `launching`，seat 接手后写 `running`，结束时写 `completed` / `failed` / `blocked`。统一命令入口是：
+
+```bash
+openspec-extensions execute seat-state set \
+  --repo-root . \
+  --change "<change>" \
+  --dispatch-id "<dispatch-id>" \
+  --phase issue_execution \
+  --issue-id "<issue-id>" \
+  --seat "<seat-name>" \
+  --status running \
+  --agent-id "<agent-id>"
+```
+
+8. development seat 只写代码和 checkpoint；如果改动让既有校验失效，只把相关 validation 标回 `pending`，不直接把 issue 标成完成，也不在该 seat 内自称校验通过。checker / reviewer 通过后，由 coordinator 先写 `runs/ISSUE-REVIEW-<issue>.json`，再做 reconcile、review、merge、commit、verify、archive。
 
 这套流程的重点不是“多开几个 agent”本身，而是把 change 的控制面放回磁盘和 coordinator 手里。这样就算会话断掉、子代理失败、或者中途需要人工接管，状态也还是可追踪的。
 

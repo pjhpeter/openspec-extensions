@@ -11,6 +11,7 @@ import { runReconcileCommand } from "../commands/reconcile";
 import { runReviewCommand } from "../commands/review";
 import { runVerifyCommand } from "../commands/verify";
 import { runWorktreeCommand } from "../commands/worktree";
+import { runSeatStateCommand } from "../commands/execute/seat-state";
 import { runUpdateProgressCommand } from "../commands/execute/update-progress";
 
 const PACKAGE_VERSION = readPackageVersion();
@@ -26,6 +27,7 @@ Usage:
   openspec-extensions dispatch issue-team [options]
   openspec-extensions dispatch lifecycle [options]
   openspec-extensions execute update-progress <start|checkpoint|stop> [options]
+  openspec-extensions execute seat-state set [options]
   openspec-extensions reconcile change [options]
   openspec-extensions reconcile commit-planning-docs [options]
   openspec-extensions reconcile merge-issue [options]
@@ -41,6 +43,7 @@ Commands:
   dispatch issue-team     Render a subagent-team issue dispatch packet.
   dispatch lifecycle      Render the change lifecycle dispatch packet.
   execute update-progress Update issue progress and run artifacts.
+  execute seat-state      Update seat lifecycle state for the active dispatch.
   reconcile change        Reconcile change state and continuation policy.
   reconcile commit-planning-docs Commit planning docs for a change.
   reconcile merge-issue   Accept and merge one reviewed issue into the coordinator branch.
@@ -88,6 +91,10 @@ export async function main(argv: string[]): Promise<number> {
 
   if (command === "execute" && rest[0] === "update-progress") {
     return runUpdateProgressCommand(rest.slice(1));
+  }
+
+  if (command === "execute" && rest[0] === "seat-state") {
+    return runSeatStateCommand(rest.slice(1));
   }
 
   if (command === "reconcile") {

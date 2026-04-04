@@ -14,6 +14,10 @@ Gate barrier policy:
 
 - 当前 phase 里被真正拉起的 seat 都属于 gate-bearing subagent
 - 这些 gate-bearing subagent 要记录 `agent_id`、seat 和完成状态
+- coordinator spawn 前先写 `openspec-extensions execute seat-state set ... --status launching`
+- seat 接手后先写 `openspec-extensions execute seat-state set ... --status running`
+- seat 结束时必须写 `completed`、`failed` 或 `blocked`
+- 所有 seat-state 都写进 `openspec/changes/<change>/control/seat-state/<dispatch_id>/`，不要共享写同一个 JSON
 - 对 gate-bearing subagent 使用最长 1 小时的 blocking wait，不要 30 秒短轮询
 - 任一 required gate-bearing subagent 仍在运行时，不允许提前通过当前 phase
 - 任一 required gate-bearing subagent 仍在运行时，不允许提前关闭它
@@ -156,6 +160,7 @@ Fast-path activation:
 - 明确说明受影响的 validation 和待后续验证项
 - 如果要实现代码，必须遵守 issue dispatch 里的 progress/run artifact 规则
 - 如果你是 subagent-team 的 development seat，只允许写 `update-progress start` 或 `checkpoint`；不要自己写 `stop`，也不要把 issue 标成 `completed + review_required`
+- development seat 还必须按 seat contract 写自己的 `seat-state running/completed/failed/blocked`，但不得覆盖其他 seat 的 artifact
 - 如果当前改动让既有校验失效，只把相关 validation 标记回 `pending`，不要在 development seat 内宣称 `passed`
 - development seat 不是当前 issue 的 validation / check / review owner；这些结论留给 checker / reviewer / coordinator 收敛
 - checker / reviewer 通过后，由 coordinator 统一写 `runs/ISSUE-REVIEW-<issue>.json`，再把 issue progress 收敛到可 merge 状态

@@ -22,6 +22,12 @@ import {
   type JsonRecord
 } from "../domain/change-coordinator";
 import { automationProfile, loadIssueModeConfig, readChangeControlState, type IssueModeConfig } from "../domain/issue-mode";
+import {
+  readActiveSeatDispatch,
+  readSeatStatesForDispatch,
+  summarizeSeatBarrier,
+  type SeatBarrierSummary,
+} from "../domain/seat-control";
 
 const PASSING_VALIDATION_STATUSES = new Set([
   "passed",
@@ -588,6 +594,16 @@ function continuationPolicy(nextAction: string, recommendedIssueId: string): Jso
       instruction: "当前 next_action 是等待活跃 issue 完成，不应改成新的人工 checkpoint。"
     };
   }
+  if (nextAction === "wait_for_gate_seats") {
+    return {
+      mode: "wait_for_gate_seats",
+      pause_allowed: false,
+      human_confirmation_required: false,
+      must_not_stop_at_checkpoint: false,
+      summary: "当前 dispatch 的 required gate-bearing seats 仍在运行，应继续等待。",
+      instruction: "seat barrier 尚未收齐，不要提前 accept 当前 phase，也不要把等待改成人工 checkpoint。"
+    };
+  }
   return {
     mode: "resolve_or_inspect",
     pause_allowed: false,
@@ -598,12 +614,34 @@ function continuationPolicy(nextAction: string, recommendedIssueId: string): Jso
   };
 }
 
+function readSeatBarrierSummary(repoRoot: string, change: string): SeatBarrierSummary {
+  const manifest = readActiveSeatDispatch(repoRoot, change);
+  if (!manifest) {
+    return summarizeSeatBarrier(null, []);
+  }
+  return summarizeSeatBarrier(
+    manifest,
+    readSeatStatesForDispatch(repoRoot, change, manifest.dispatch_id)
+  );
+}
+
+function seatBarrierReason(summary: SeatBarrierSummary): string {
+  if (summary.action === "wait_for_gate_seats") {
+    return `active dispatch \`${summary.dispatch_id}\` 仍有 ${summary.required_running.length} 个 required gate-bearing seats 在运行。`;
+  }
+  if (summary.action === "resolve_seat_failure") {
+    return `active dispatch \`${summary.dispatch_id}\` 存在 required gate-bearing seat failure/blocker/cancelled，需先处理。`;
+  }
+  return "";
+}
+
 export function reconcileChange(args: ParsedChangeArgs): JsonRecord {
   const config = loadIssueModeConfig(args.repoRoot);
   const issues = collectIssues(args.repoRoot, args.change);
   const controlState = readChangeControlState(args.repoRoot, args.change);
   const gateMode = config.rra.gate_mode;
   const planningDocs = planningDocStatus(args.repoRoot, args.change);
+  const seatBarrier = readSeatBarrierSummary(args.repoRoot, args.change);
 
   const counts = countStatuses(issues);
   const [baseAction, baseRecommendedIssueId, baseReason] = determineBaseNextAction(args.repoRoot, args.change, issues, config);
@@ -612,9 +650,15 @@ export function reconcileChange(args: ParsedChangeArgs): JsonRecord {
   let nextAction = baseAction;
   let recommendedIssueId = baseRecommendedIssueId;
   let reason = baseReason;
+  const docGateBlockingAction = ["complete_spec_readiness_gate", "plan_issues", "complete_issue_planning_gate"].includes(nextAction);
+  if (!docGateBlockingAction && seatBarrier.mode === "enforce" && seatBarrier.action) {
+    nextAction = seatBarrier.action;
+    recommendedIssueId = seatBarrier.issue_id ?? recommendedIssueId;
+    reason = seatBarrierReason(seatBarrier);
+  }
   if (controlGate !== null && gateMode === "enforce") {
-    const docGateBlockingAction = ["complete_spec_readiness_gate", "plan_issues", "complete_issue_planning_gate"].includes(nextAction);
-    if (!docGateBlockingAction && !(["review_change_code", "resolve_change_review_failure"].includes(nextAction) && controlGate[0] === "change_acceptance_required")) {
+    const seatBarrierBlockingAction = ["wait_for_gate_seats", "resolve_seat_failure"].includes(nextAction);
+    if (!docGateBlockingAction && !seatBarrierBlockingAction && !(["review_change_code", "resolve_change_review_failure"].includes(nextAction) && controlGate[0] === "change_acceptance_required")) {
       [nextAction, recommendedIssueId, reason] = controlGate;
     }
   }
@@ -657,6 +701,7 @@ export function reconcileChange(args: ParsedChangeArgs): JsonRecord {
       accept_change_acceptance: config.subagent_team.auto_accept_change_acceptance,
       archive_after_verify: config.subagent_team.auto_archive_after_verify
     },
+    seat_barrier: seatBarrier,
     planning_docs: planningDocs,
     issues
   };

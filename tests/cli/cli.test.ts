@@ -155,6 +155,46 @@ test("cli dispatch lifecycle routes to renderer", async () => {
   assert.equal(payload.phase, "spec_readiness");
 });
 
+test("cli execute seat-state routes to command", async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-cli-seat-state-"));
+
+  const result = await captureStdout(() =>
+    main([
+      "execute",
+      "seat-state",
+      "set",
+      "--repo-root",
+      repoRoot,
+      "--change",
+      "demo-change",
+      "--dispatch-id",
+      "DISPATCH-20260404T120000",
+      "--phase",
+      "issue_execution",
+      "--issue-id",
+      "ISSUE-001",
+      "--seat",
+      "Checker 1",
+      "--status",
+      "running",
+      "--agent-id",
+      "agent-check",
+      "--gate-bearing",
+      "true",
+      "--required",
+      "true",
+      "--reasoning-effort",
+      "medium"
+    ])
+  );
+
+  const payload = JSON.parse(result.stdout.trim()) as { dispatch_id: string; seat: string; status: string };
+  assert.equal(result.exitCode, 0);
+  assert.equal(payload.dispatch_id, "DISPATCH-20260404T120000");
+  assert.equal(payload.seat, "Checker 1");
+  assert.equal(payload.status, "running");
+});
+
 test("cli reconcile change routes to command", async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-cli-reconcile-"));
   const changeDir = path.join(repoRoot, "openspec", "changes", "demo-change");

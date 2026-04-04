@@ -106,6 +106,9 @@ validation:
   const seatHandoffsText = fs.readFileSync(seatHandoffsPath, "utf8");
 
   assert.equal(exitCode, 0);
+  assert.match(String(payload.dispatch_id), /^DISPATCH-\d{8}T\d{6}$/);
+  assert.match(String(payload.active_seat_dispatch_path), /ACTIVE-SEAT-DISPATCH\.json$/);
+  assert.match(String(payload.seat_state_dir), /control\/seat-state\/DISPATCH-\d{8}T\d{6}$/);
   assert.equal((payload.control_state as { latest_round: { target_mode: string } }).latest_round.target_mode, "quality");
   assert.equal((payload.reasoning_policy as { development_group: string }).development_group, "high");
   assert.equal((payload.reasoning_policy as { check_group: string }).check_group, "medium");
@@ -121,6 +124,10 @@ validation:
   assert.match(dispatchText, /Checker 2: direct dependency regression risk, tests, evidence gaps/);
   assert.match(dispatchText, /Reviewer 1: scope-first target path \/ direct dependency \/ evidence pass or fail/);
   assert.match(dispatchText, /## Gate Barrier/);
+  assert.match(dispatchText, /dispatch_id=`DISPATCH-\d{8}T\d{6}`/);
+  assert.match(dispatchText, /ACTIVE-SEAT-DISPATCH\.json/);
+  assert.match(dispatchText, /seat-state/);
+  assert.match(dispatchText, /execute seat-state set --repo-root/);
   assert.match(dispatchText, /\u6700\u957f 1 \u5c0f\u65f6\u7684 blocking wait/);
   assert.match(dispatchText, /\u4e0d\u8981\u5f53\u4f5c `explorer` sidecar/);
   assert.match(dispatchText, /final status/);
@@ -158,6 +165,9 @@ validation:
   assert.doesNotMatch(dispatchText, /python3 \.codex\/skills/);
   assert.match(seatHandoffsText, /# Seat Handoffs for ISSUE-001/);
   assert.match(seatHandoffsText, /seat-local source of truth/);
+  assert.match(seatHandoffsText, /active seat dispatch:/);
+  assert.match(seatHandoffsText, /dispatch_id:/);
+  assert.match(seatHandoffsText, /seat_state_dir:/);
   assert.match(seatHandoffsText, /## Development 2 \(dependent module or integration owner\)/);
   assert.match(seatHandoffsText, /\u4f60\u4e0d\u662f coordinator/);
   assert.match(seatHandoffsText, /\u4e0d\u8981\u81ea\u884c\u62c9\u8d77\u3001\u66ff\u6362\u6216\u534f\u8c03\u5176\u4ed6 development \/ check \/ review seat/);

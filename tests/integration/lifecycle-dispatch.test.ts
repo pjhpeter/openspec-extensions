@@ -293,6 +293,11 @@ validation:
 
     assert.equal(payload.phase, "issue_execution");
     assert.equal(payload.focus_issue_id, "ISSUE-001");
+    assert.match(payload.dispatch_id, /^DISPATCH-\d{8}T\d{6}$/);
+    assert.match(payload.active_seat_dispatch_path, /ACTIVE-SEAT-DISPATCH\.json$/);
+    assert.match(payload.seat_state_dir, /control\/seat-state\/DISPATCH-\d{8}T\d{6}$/);
+    assert.equal(payload.seat_barrier.mode, "observe");
+    assert.equal(payload.seat_barrier.required_missing.length > 0, true);
     assert.match(payload.issue_team_dispatch_path, /ISSUE-001\.team\.dispatch\.md$/);
     assert.match(payload.issue_team_seat_handoffs_path, /ISSUE-001\.seat-handoffs\.md$/);
     assert.match(lifecycleText, /Current issue packet/);
@@ -300,6 +305,8 @@ validation:
     assert.match(lifecycleText, /Seat-local handoff packet for spawned seats/);
     assert.match(lifecycleText, /ISSUE-001\.seat-handoffs\.md/);
     assert.match(lifecycleText, /Gate-bearing seats for this phase/);
+    assert.match(lifecycleText, /ACTIVE-SEAT-DISPATCH\.json/);
+    assert.match(lifecycleText, /Current barrier summary/);
     assert.match(lifecycleText, /issue_execution` 仍然一次只处理一个 approved issue/);
     assert.match(lifecycleText, /只负责实现和 progress start\/checkpoint/);
     assert.match(lifecycleText, /只把相关 validation 回写成 `pending`/);

@@ -96,6 +96,9 @@ Read these first:
    - if runtime limitations prevent returning the seat result cleanly, report the seat-local blocker and stop instead of activating serial fallback
 12. Treat every launched seat in the current phase as a gate-bearing participant, not a disposable sidecar:
    - record the agent id, seat name, and current status
+   - use the rendered `dispatch_id`, `ACTIVE-SEAT-DISPATCH.json`, and `control/seat-state/<dispatch_id>/` as the seat control plane
+   - before the coordinator spawns a gate-bearing seat, write a `launching` seat-state entry
+   - after a seat takes over, it must write its own `running` state, then finish with `completed`, `failed`, or `blocked`
    - use `default` or `worker` style delegation for these gate-bearing seats; do not launch check/review gate seats as `explorer`
    - when the phase depends on their verdicts, wait up to 1 hour for completion instead of short polling
    - do not accept the phase, mark it passed, or close those subagents while any required gate-bearing seat is still running
@@ -113,9 +116,10 @@ Read these first:
    - review
    - if review fails, go back to development
 15. Only the explicit issue-only worker path uses `openspec-execute-issue` end to end. In `issue_execution` team rounds, development seats may write `start` / `checkpoint` issue progress updates, but must not close the issue as `completed + review_required`; the coordinator does that only after checker/reviewer gates pass and `runs/ISSUE-REVIEW-<issue>.json` is recorded.
-16. Before moving from one lifecycle phase to the next, reread `openspec/issue-mode.json` again and confirm the next phase still matches the latest config.
-17. After all issues are complete, run a change-level `/review` and write `runs/CHANGE-REVIEW.json` before verify.
-18. Coordinator keeps merge, commit, verify, archive, and change-level control artifacts.
+16. If a seat reaches a terminal status and must be relaunched, only the coordinator/manual repair path may replace that seat-state, using `openspec-extensions execute seat-state set ... --allow-terminal-overwrite true`.
+17. Before moving from one lifecycle phase to the next, reread `openspec/issue-mode.json` again and confirm the next phase still matches the latest config.
+18. After all issues are complete, run a change-level `/review` and write `runs/CHANGE-REVIEW.json` before verify.
+19. Coordinator keeps merge, commit, verify, archive, and change-level control artifacts.
 
 ## Rules
 
@@ -131,6 +135,8 @@ Read these first:
 - `issue_planning` starts after design review passes, and is where coordinator-owned `tasks.md` plus `issues/INDEX.md` and `ISSUE-*.md` are produced/reviewed.
 - `issue_planning` 通过后，coordinator 还要把当前 gate 结果写成 `runs/ISSUE-PLANNING.json`；缺这个工件时，不能开始首个 issue execution。
 - `issue_execution` 里如果走的是 team dispatch，development seat 只负责实现、changed_files 和 progress checkpoint；如果当前改动让既有校验失效，只把相关 validation 标回 `pending`，不要在 development seat 内自行宣称校验通过。checker / reviewer 通过后，coordinator 还要把当前 gate 结果写成 `runs/ISSUE-REVIEW-<issue>.json`，然后才能把 issue 标成 `completed + review_required` 并进入 merge。
+- gate-bearing seat 的状态以 `openspec-extensions execute seat-state set` 写出的 per-seat artifact 为准，不要只把 seat 完成情况留在聊天消息里。
+- `required_missing` 说明 manifest 已声明 seat，但该 seat 还没有写任何 seat-state；基线 rollout 下它默认不阻塞，但 coordinator 必须把它视为可观测缺口。
 - if a seat subagent was successfully launched, the fallback rule "main session continues serially when delegation is unavailable" no longer applies to that seat; only the coordinator may use that fallback.
 - if any gate-bearing seat for the current phase was successfully launched, the coordinator must not replace a missing seat verdict with its own serial pass; unresolved seat recovery means the gate is still blocked until the seat is relaunched or the blocker is surfaced.
 - Before the first issue dispatch, the coordinator must first commit `proposal.md`, `design.md`, `tasks.md`, `issues/INDEX.md`, and `ISSUE-*.md` as a dedicated planning-doc commit.
