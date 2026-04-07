@@ -73,6 +73,8 @@ If the repo is already initialized, you can install just the extensions:
 openspec-extensions install --target-repo /path/to/your/project
 ```
 
+When you run `openspec-extensions install --target-repo /path/to/your/project --force-config` in an interactive terminal and the target repo already has `openspec/issue-mode.json`, the command now asks the same English question as `init`: whether to overwrite it with `Semi-automatic and controllable` or `Fully automatic and hands-off`. If the config file does not exist yet, the command skips that extra prompt and installs the default template directly.
+
 Common options:
 
 - Preview installation: `openspec-extensions install --target-repo /path/to/your/project --dry-run`

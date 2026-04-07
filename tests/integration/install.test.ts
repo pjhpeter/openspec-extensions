@@ -13,7 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { runInstallCommand } from "../../src/commands/install";
+import { runInstallCommand, type InstallDependencies } from "../../src/commands/install";
 import { readOwnPackageVersion } from "../../src/domain/extensions-metadata";
 
 const EXTENSION_SKILL_NAMES = [
@@ -46,7 +46,29 @@ function readExtensionsMetadata(targetRepo: string): {
   };
 }
 
-function withCapturedStdout(fn: () => number): { exitCode: number; stdout: string } {
+function readIssueModeConfig(targetRepo: string): {
+  rra: { gate_mode: string };
+  subagent_team: {
+    auto_accept_spec_readiness: boolean;
+    auto_accept_issue_planning: boolean;
+    auto_accept_issue_review: boolean;
+    auto_accept_change_acceptance: boolean;
+    auto_archive_after_verify: boolean;
+  };
+} {
+  return JSON.parse(readFileSync(path.join(targetRepo, "openspec", "issue-mode.json"), "utf8")) as {
+    rra: { gate_mode: string };
+    subagent_team: {
+      auto_accept_spec_readiness: boolean;
+      auto_accept_issue_planning: boolean;
+      auto_accept_issue_review: boolean;
+      auto_accept_change_acceptance: boolean;
+      auto_archive_after_verify: boolean;
+    };
+  };
+}
+
+function withCapturedStdout(fn: () => Promise<number>): Promise<{ exitCode: number; stdout: string }> {
   let stdout = "";
   const originalWrite = process.stdout.write.bind(process.stdout);
   process.stdout.write = ((chunk: string | Uint8Array) => {
@@ -54,14 +76,22 @@ function withCapturedStdout(fn: () => number): { exitCode: number; stdout: strin
     return true;
   }) as typeof process.stdout.write;
 
-  try {
-    return {
-      exitCode: fn(),
+  return fn()
+    .then((exitCode) => ({
+      exitCode,
       stdout
-    };
-  } finally {
-    process.stdout.write = originalWrite;
-  }
+    }))
+    .finally(() => {
+      process.stdout.write = originalWrite;
+    });
+}
+
+function runInstallForTest(argv: string[], dependencies: InstallDependencies = {}): Promise<number> {
+  return runInstallCommand(argv, {
+    isInteractiveTerminal: () => false,
+    promptIssueModeAutomationPreference: () => "semi-auto",
+    ...dependencies
+  });
 }
 
 function createTargetRepo(): string {
@@ -110,11 +140,11 @@ function collectRelativeFiles(rootPath: string): string[] {
   return files.sort();
 }
 
-test("install dry-run reports TS-only skill set", () => {
+test("install dry-run reports TS-only skill set", async () => {
   const targetRepo = createTargetRepo();
   seedOpenSpecRepo(targetRepo, [".claude/skills"]);
 
-  const result = withCapturedStdout(() => runInstallCommand([
+  const result = await withCapturedStdout(() => runInstallForTest([
     "--target-repo",
     targetRepo,
     "--dry-run"
@@ -131,10 +161,10 @@ test("install dry-run reports TS-only skill set", () => {
   });
 });
 
-test("install writes skills, config, and gitignore entries", () => {
+test("install writes skills, config, and gitignore entries", async () => {
   const targetRepo = createTargetRepo();
   seedOpenSpecRepo(targetRepo, [".claude/skills"]);
-  const result = withCapturedStdout(() => runInstallCommand([
+  const result = await withCapturedStdout(() => runInstallForTest([
     "--target-repo",
     targetRepo
   ]));
@@ -183,11 +213,11 @@ test("install writes skills, config, and gitignore entries", () => {
   assert.match(gitignore, /\.worktree\/\n/);
 });
 
-test("install writes skills into every configured OpenSpec tool root", () => {
+test("install writes skills into every configured OpenSpec tool root", async () => {
   const targetRepo = createTargetRepo();
   seedOpenSpecRepo(targetRepo, [".claude/skills", ".codex/skills"]);
 
-  const result = withCapturedStdout(() => runInstallCommand([
+  const result = await withCapturedStdout(() => runInstallForTest([
     "--target-repo",
     targetRepo,
     "--dry-run"
@@ -202,7 +232,7 @@ test("install writes skills into every configured OpenSpec tool root", () => {
   assert.deepEqual(payload.installed_skill_dirs, expectedSkillDirs([".claude/skills", ".codex/skills"]));
 });
 
-test("install --force removes legacy Python runtime paths", () => {
+test("install --force removes legacy Python runtime paths", async () => {
   const targetRepo = createTargetRepo();
   seedOpenSpecRepo(targetRepo, [".claude/skills"]);
   const legacySkillDir = path.join(targetRepo, ".codex", "skills", "openspec-shared");
@@ -213,7 +243,7 @@ test("install --force removes legacy Python runtime paths", () => {
   mkdirSync(path.dirname(legacyHeartbeat), { recursive: true });
   writeFileSync(legacyHeartbeat, "# legacy\n");
 
-  const result = withCapturedStdout(() => runInstallCommand([
+  const result = await withCapturedStdout(() => runInstallForTest([
     "--target-repo",
     targetRepo,
     "--force"
@@ -235,7 +265,7 @@ test("install --force removes legacy Python runtime paths", () => {
   assert.ok(!existsSync(legacyHeartbeat));
 });
 
-test("install updates repo plugin metadata even when issue-mode config is preserved", () => {
+test("install updates repo plugin metadata even when issue-mode config is preserved", async () => {
   const targetRepo = createTargetRepo();
   seedOpenSpecRepo(targetRepo, [".claude/skills"]);
   mkdirSync(path.join(targetRepo, "openspec"), { recursive: true });
@@ -251,7 +281,7 @@ test("install updates repo plugin metadata even when issue-mode config is preser
     recorded_by: "install"
   }, null, 2));
 
-  const result = withCapturedStdout(() => runInstallCommand([
+  const result = await withCapturedStdout(() => runInstallForTest([
     "--target-repo",
     targetRepo
   ]));
@@ -276,21 +306,117 @@ test("install updates repo plugin metadata even when issue-mode config is preser
   assert.equal(metadata.recorded_by, "install");
 });
 
-test("install rejects repos that have not been initialized with OpenSpec", () => {
+for (const testCase of [
+  {
+    expected: {
+      autoArchiveAfterVerify: false,
+      autoAcceptChangeAcceptance: false,
+      autoAcceptIssuePlanning: false,
+      autoAcceptIssueReview: false,
+      autoAcceptSpecReadiness: false,
+      gateMode: "advisory"
+    },
+    preference: "semi-auto" as const
+  },
+  {
+    expected: {
+      autoArchiveAfterVerify: true,
+      autoAcceptChangeAcceptance: true,
+      autoAcceptIssuePlanning: true,
+      autoAcceptIssueReview: true,
+      autoAcceptSpecReadiness: true,
+      gateMode: "enforce"
+    },
+    preference: "full-auto" as const
+  }
+]) {
+  test(`install --force-config overwrites issue-mode config with the ${testCase.preference} automation profile`, async () => {
+    const targetRepo = createTargetRepo();
+    seedOpenSpecRepo(targetRepo, [".claude/skills"]);
+    writeFileSync(path.join(targetRepo, "openspec", "issue-mode.json"), JSON.stringify({
+      rra: { gate_mode: "advisory" },
+      subagent_team: {
+        auto_accept_spec_readiness: false,
+        auto_accept_issue_planning: false,
+        auto_accept_issue_review: false,
+        auto_accept_change_acceptance: false,
+        auto_archive_after_verify: false
+      }
+    }, null, 2));
+
+    let promptCalls = 0;
+    const result = await withCapturedStdout(() => runInstallForTest([
+      "--target-repo",
+      targetRepo,
+      "--force-config"
+    ], {
+      isInteractiveTerminal() {
+        return true;
+      },
+      promptIssueModeAutomationPreference() {
+        promptCalls += 1;
+        return testCase.preference;
+      }
+    }));
+    const payload = JSON.parse(result.stdout) as {
+      config: { status: string };
+    };
+    const config = readIssueModeConfig(targetRepo);
+
+    assert.equal(result.exitCode, 0);
+    assert.equal(promptCalls, 1);
+    assert.equal(payload.config.status, "overwritten");
+    assert.equal(config.rra.gate_mode, testCase.expected.gateMode);
+    assert.equal(config.subagent_team.auto_accept_spec_readiness, testCase.expected.autoAcceptSpecReadiness);
+    assert.equal(config.subagent_team.auto_accept_issue_planning, testCase.expected.autoAcceptIssuePlanning);
+    assert.equal(config.subagent_team.auto_accept_issue_review, testCase.expected.autoAcceptIssueReview);
+    assert.equal(config.subagent_team.auto_accept_change_acceptance, testCase.expected.autoAcceptChangeAcceptance);
+    assert.equal(config.subagent_team.auto_archive_after_verify, testCase.expected.autoArchiveAfterVerify);
+  });
+}
+
+test("install --force-config skips the automation prompt when issue-mode config does not exist yet", async () => {
+  const targetRepo = createTargetRepo();
+  seedOpenSpecRepo(targetRepo, [".claude/skills"]);
+
+  const result = await withCapturedStdout(() => runInstallForTest([
+    "--target-repo",
+    targetRepo,
+    "--force-config"
+  ], {
+    isInteractiveTerminal() {
+      return true;
+    },
+    promptIssueModeAutomationPreference() {
+      throw new Error("should not prompt when install is creating issue-mode config for the first time");
+    }
+  }));
+  const payload = JSON.parse(result.stdout) as {
+    config: { status: string };
+  };
+  const config = readIssueModeConfig(targetRepo);
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(payload.config.status, "installed");
+  assert.equal(config.rra.gate_mode, "advisory");
+  assert.equal(config.subagent_team.auto_accept_issue_review, true);
+});
+
+test("install rejects repos that have not been initialized with OpenSpec", async () => {
   const targetRepo = createTargetRepo();
 
-  assert.throws(
-    () => runInstallCommand(["--target-repo", targetRepo, "--dry-run"]),
+  await assert.rejects(
+    () => runInstallForTest(["--target-repo", targetRepo, "--dry-run"]),
     /Target repo is not initialized with OpenSpec/
   );
 });
 
-test("install rejects initialized repos without OpenSpec-managed skill directories", () => {
+test("install rejects initialized repos without OpenSpec-managed skill directories", async () => {
   const targetRepo = createTargetRepo();
   seedInitializedRepoWithoutSkills(targetRepo);
 
-  assert.throws(
-    () => runInstallCommand(["--target-repo", targetRepo, "--dry-run"]),
+  await assert.rejects(
+    () => runInstallForTest(["--target-repo", targetRepo, "--dry-run"]),
     /Target repo has no OpenSpec-managed skill directories/
   );
 });

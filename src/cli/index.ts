@@ -38,7 +38,7 @@ Usage:
 
 Commands:
   init                    Initialize OpenSpec when needed, keep the official tool prompt when tools are not preset, ask which issue-mode automation style to install, and offer a local CLI upgrade in interactive terminals.
-  install                 Install OpenSpec extension skills into a target repo.
+  install                 Install OpenSpec extension skills into a target repo and ask which issue-mode automation style to apply when --force-config overwrites config in interactive terminals.
   dispatch issue          Render a single issue dispatch packet.
   dispatch issue-team     Render a subagent-team issue dispatch packet.
   dispatch lifecycle      Render the change lifecycle dispatch packet.

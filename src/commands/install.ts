@@ -16,6 +16,12 @@ import {
   writeExtensionsMetadata,
   type ExtensionsMetadataRecorder
 } from "../domain/extensions-metadata";
+import {
+  ISSUE_MODE_AUTOMATION_OVERRIDES,
+  isInteractiveTerminal,
+  promptIssueModeAutomationPreference,
+  type IssueModeAutomationPreference
+} from "./issue-mode-automation";
 
 const SOURCE_SKILLS_ROOT = "skills";
 const LEGACY_CODEX_SKILLS_ROOT = path.join(".codex", "skills");
@@ -95,9 +101,19 @@ const LEGACY_CONFIG_KEYS = [
 
 const INSTALL_HELP_TEXT = `Usage:
   openspec-extensions install --target-repo <path> [--source-repo <path>] [--force] [--force-config] [--skip-gitignore] [--dry-run]
+
+Notes:
+  Interactive terminals ask which issue-mode automation style to install when --force-config will overwrite an existing openspec/issue-mode.json.
 `;
 
 type JsonObject = Record<string, unknown>;
+
+export type InstallDependencies = {
+  isInteractiveTerminal?: () => boolean;
+  promptIssueModeAutomationPreference?: () =>
+    | IssueModeAutomationPreference
+    | Promise<IssueModeAutomationPreference>;
+};
 
 export type InstallOptions = {
   dryRun: boolean;
@@ -530,6 +546,32 @@ function parseInstallArgs(argv: string[]): InstallOptions | null {
   };
 }
 
+function shouldPromptForIssueModeAutomation(targetRepo: string, parsed: InstallOptions, interactive: boolean): boolean {
+  if (!interactive || parsed.dryRun || !parsed.forceConfig) {
+    return false;
+  }
+
+  const configPath = path.join(targetRepo, TARGET_CONFIG_PATH);
+  return existsSync(configPath);
+}
+
+async function resolveIssueModeConfigOverrides(
+  targetRepo: string,
+  parsed: InstallOptions,
+  dependencies: InstallDependencies
+): Promise<JsonObject> {
+  const interactiveTerminal = dependencies.isInteractiveTerminal ?? isInteractiveTerminal;
+  if (!shouldPromptForIssueModeAutomation(targetRepo, parsed, interactiveTerminal())) {
+    return {};
+  }
+
+  const resolvePreference =
+    dependencies.promptIssueModeAutomationPreference ?? promptIssueModeAutomationPreference;
+  const preference = await resolvePreference();
+  // 覆盖已存在配置时继续显式写全开关，避免模板默认值和用户本次选择不一致。
+  return ISSUE_MODE_AUTOMATION_OVERRIDES[preference];
+}
+
 export function installExtensions(
   parsed: InstallOptions,
   options: InstallExecutionOptions = {}
@@ -632,13 +674,23 @@ export function installExtensions(
   return result;
 }
 
-export function runInstallCommand(argv: string[]): number {
+export async function runInstallCommand(
+  argv: string[],
+  dependencies: InstallDependencies = {}
+): Promise<number> {
   const parsed = parseInstallArgs(argv);
   if (!parsed) {
     return 0;
   }
 
-  const result = installExtensions(parsed);
+  const targetRepo = realpathSync(path.resolve(parsed.targetRepo));
+  const configOverrides = await resolveIssueModeConfigOverrides(targetRepo, parsed, dependencies);
+  const result = installExtensions({
+    ...parsed,
+    targetRepo
+  }, {
+    configOverrides
+  });
 
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   return 0;

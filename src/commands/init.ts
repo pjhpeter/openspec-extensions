@@ -11,6 +11,12 @@ import {
   type InstallOptions,
   type InstallResult
 } from "./install";
+import {
+  ISSUE_MODE_AUTOMATION_OVERRIDES,
+  isInteractiveTerminal,
+  promptIssueModeAutomationPreference,
+  type IssueModeAutomationPreference
+} from "./issue-mode-automation";
 
 const OPENSPEC_NPM_PACKAGE = "@fission-ai/openspec@~1.2.0";
 const EXTENSIONS_NPM_PACKAGE = "openspec-extensions";
@@ -71,8 +77,6 @@ type PackageUpdateStatus = {
   latest_version: string;
 };
 
-type IssueModeAutomationPreference = "semi-auto" | "full-auto";
-
 type InitResult = {
   dry_run: boolean;
   install: InstallResult;
@@ -97,33 +101,6 @@ export type InitDependencies = {
 type ParsedSemver = {
   core: [number, number, number];
   prerelease: Array<number | string>;
-};
-
-const ISSUE_MODE_AUTOMATION_OVERRIDES: Record<IssueModeAutomationPreference, JsonObject> = {
-  "semi-auto": {
-    rra: {
-      gate_mode: "advisory"
-    },
-    subagent_team: {
-      auto_accept_spec_readiness: false,
-      auto_accept_issue_planning: false,
-      auto_accept_issue_review: false,
-      auto_accept_change_acceptance: false,
-      auto_archive_after_verify: false
-    }
-  },
-  "full-auto": {
-    rra: {
-      gate_mode: "enforce"
-    },
-    subagent_team: {
-      auto_accept_spec_readiness: true,
-      auto_accept_issue_planning: true,
-      auto_accept_issue_review: true,
-      auto_accept_change_acceptance: true,
-      auto_archive_after_verify: true
-    }
-  }
 };
 
 function buildOpenSpecInitCommands(request: OpenSpecInitRequest): {
@@ -279,10 +256,6 @@ function checkForPackageUpdate(): PackageUpdateStatus | null {
   };
 }
 
-function isInteractiveTerminal(): boolean {
-  return Boolean(process.stdin.isTTY && process.stderr.isTTY);
-}
-
 async function confirmPackageUpdate(status: PackageUpdateStatus): Promise<boolean> {
   const readline = createInterface({
     input: process.stdin,
@@ -297,34 +270,6 @@ async function confirmPackageUpdate(status: PackageUpdateStatus): Promise<boolea
       .toLowerCase();
 
     return answer === "" || answer === "y" || answer === "yes";
-  } finally {
-    readline.close();
-  }
-}
-
-async function promptIssueModeAutomationPreference(): Promise<IssueModeAutomationPreference> {
-  const readline = createInterface({
-    input: process.stdin,
-    output: process.stderr
-  });
-
-  try {
-    for (;;) {
-      const answer = (await readline.question(
-        "Choose the issue-mode automation style to install: [1] Semi-automatic and controllable (recommended) [2] Fully automatic and hands-off [1/2] "
-      ))
-        .trim()
-        .toLowerCase();
-
-      if (answer === "" || answer === "1" || answer === "semi" || answer === "semi-auto") {
-        return "semi-auto";
-      }
-      if (answer === "2" || answer === "full" || answer === "full-auto" || answer === "auto") {
-        return "full-auto";
-      }
-
-      process.stderr.write("Please enter 1 or 2.\n");
-    }
   } finally {
     readline.close();
   }

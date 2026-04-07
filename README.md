@@ -79,6 +79,8 @@ openspec-extensions install --target-repo /path/to/your/project
 openspec-extensions install --target-repo /path/to/your/project --force
 ```
 
+如果你在交互终端里执行 `openspec-extensions install --target-repo /path/to/your/project --force-config`，并且目标仓库已经存在 `openspec/issue-mode.json`，命令也会像 `init` 一样继续用英文询问你这次要覆盖成 `Semi-automatic and controllable` 还是 `Fully automatic and hands-off`。如果这次是首次写入配置文件，则不会额外弹这个问题，直接按默认模板安装。
+
 常用选项：
 
 - 预览安装结果：`openspec-extensions install --target-repo /path/to/your/project --dry-run`
