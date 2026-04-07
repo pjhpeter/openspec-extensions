@@ -78,6 +78,7 @@ For change `<change-name>`:
 openspec/changes/<change-name>/
 ├── control/
 │   ├── BACKLOG.md
+│   ├── ROUTE-DECISION.json
 │   └── ROUND-01.md
 ├── tasks.md
 ├── issues/
@@ -110,7 +111,7 @@ If repo config is missing, compatibility fallback remains shared workspace mode 
 ## Coordinator Reconcile Rules
 
 1. Read all `issues/*.progress.json` first.
-2. Read `control/BACKLOG.md` and the latest `control/ROUND-*.md` when they exist.
+2. Read `control/ROUTE-DECISION.json`, `control/BACKLOG.md`, and the latest `control/ROUND-*.md` when they exist.
 3. Read `issues/ISSUE-*.md` to discover pending issues that have not started yet.
 4. Use `runs/*.json` only as supporting evidence, not as the source of truth.
 5. Update `tasks.md` only after reconciling issue state from disk.
@@ -184,6 +185,7 @@ Explicit `.worktree/<change>/<issue>` means issue-isolated worktree mode.
 ## Practical Rule
 
 Chat text is not the workflow state.
+Complexity triage for a concrete change should be written to `control/ROUTE-DECISION.json`.
 Issue progress files are the execution state.
 Control backlog and round reports are the acceptance state.
 Team dispatch artifacts are the coordinator handoff state for the default subagent-team rounds in issue mode.

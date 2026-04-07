@@ -66,11 +66,19 @@ test("chat-router skill defines explainable complexity triage before choosing si
   assert.match(skill, /Existing issue artifacts on disk override a fresh simple-flow guess; reconcile first/);
   assert.match(skill, /keep that route sticky across later "start implementing" or "continue coding" messages/);
   assert.match(skill, /immediately restate a route decision/);
+  assert.match(skill, /control\/ROUTE-DECISION\.json/);
   assert.match(skill, /complex flow is a routing decision, not implementation authorization/);
   assert.match(skill, /do not start implementation, do not run scaffolding or app-bootstrap commands/);
   assert.match(skill, /runs\/ISSUE-PLANNING\.json/);
   assert.match(skill, /explicitly upgrade to the complex flow and state why/);
   assert.match(skill, /complex -> auto subagent-team/);
+});
+
+test("issue-mode contract includes persisted route decision artifact", () => {
+  const contract = readRepoFile("skills/openspec-chat-router/references/issue-mode-contract.md");
+
+  assert.match(contract, /ROUTE-DECISION\.json/);
+  assert.match(contract, /Complexity triage for a concrete change should be written to `control\/ROUTE-DECISION\.json`/);
 });
 
 test("coordinator playbook forbids implementation before complex-flow gates pass", () => {

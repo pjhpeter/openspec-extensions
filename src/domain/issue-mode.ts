@@ -12,6 +12,7 @@ import { displayPath, ensurePathWithin, resolveRepoPath } from "../utils/path";
 
 const CONFIG_RELATIVE_PATH = "openspec/issue-mode.json";
 const CONTROL_DIR_NAME = "control";
+const ROUTE_DECISION_FILE_NAME = "ROUTE-DECISION.json";
 const ROUND_FILE_PREFIX = "ROUND-";
 const ROUND_FILE_SUFFIX = ".md";
 const ISSUE_ID_PATTERN = /\bISSUE-\d+\b/gi;
@@ -225,6 +226,14 @@ function normalizeStringList(values: unknown): string[] {
 
 function normalizeBool(value: unknown, defaultValue: boolean): boolean {
   return typeof value === "boolean" ? value : defaultValue;
+}
+
+function normalizeOptionalString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeOptionalNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function normalizeSubagentTeamFlags(raw: unknown): IssueModeConfig["subagent_team"] {
@@ -583,6 +592,10 @@ function backlogArtifactPath(repoRoot: string, change: string): string {
   return path.join(repoRoot, "openspec", "changes", change, CONTROL_DIR_NAME, "BACKLOG.md");
 }
 
+function routeDecisionArtifactPath(repoRoot: string, change: string): string {
+  return path.join(repoRoot, "openspec", "changes", change, CONTROL_DIR_NAME, ROUTE_DECISION_FILE_NAME);
+}
+
 function latestRoundArtifactPath(repoRoot: string, change: string): string | null {
   const controlDir = path.join(repoRoot, "openspec", "changes", change, CONTROL_DIR_NAME);
   if (!fs.existsSync(controlDir)) {
@@ -603,8 +616,64 @@ function extractIssueIdsFromText(text: string): string[] {
   return dedupeStrings(matches);
 }
 
+function readRouteDecisionState(repoRoot: string, change: string): Record<string, unknown> {
+  const artifactPath = routeDecisionArtifactPath(repoRoot, change);
+  if (!fs.existsSync(artifactPath)) {
+    return {
+      exists: false,
+      path: "",
+      valid: false,
+      route: "",
+      score: null,
+      summary: "",
+      rationale: [],
+      recommended_flow: "",
+      updated_at: "",
+      error: "",
+    };
+  }
+
+  try {
+    const payload = JSON.parse(fs.readFileSync(artifactPath, "utf8")) as unknown;
+    if (!isRecord(payload)) {
+      throw new Error("route decision artifact must be a JSON object");
+    }
+
+    const rationale = normalizeStringList(payload.rationale ?? payload.evidence);
+
+    return {
+      exists: true,
+      path: displayPath(repoRoot, artifactPath),
+      valid: true,
+      route: normalizeOptionalString(payload.route),
+      score: normalizeOptionalNumber(payload.score),
+      summary: normalizeOptionalString(payload.summary),
+      rationale,
+      recommended_flow: normalizeOptionalString(payload.recommended_flow ?? payload.recommended_entry),
+      updated_at: normalizeOptionalString(payload.updated_at),
+      error: "",
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    // 路由记录主要服务人工查看，不应因格式错误卡死整个 reconcile。
+    return {
+      exists: true,
+      path: displayPath(repoRoot, artifactPath),
+      valid: false,
+      route: "",
+      score: null,
+      summary: "",
+      rationale: [],
+      recommended_flow: "",
+      updated_at: "",
+      error: message,
+    };
+  }
+}
+
 export function readChangeControlState(repoRoot: string, change: string): Record<string, unknown> {
   const backlogPath = backlogArtifactPath(repoRoot, change);
+  const routeDecision = readRouteDecisionState(repoRoot, change);
   const latestRoundPath = latestRoundArtifactPath(repoRoot, change);
 
   const backlogSections = extractMarkdownSections(
@@ -637,6 +706,8 @@ export function readChangeControlState(repoRoot: string, change: string): Record
   return {
     enabled: fs.existsSync(backlogPath) || latestRoundPath !== null,
     backlog_path: fs.existsSync(backlogPath) ? displayPath(repoRoot, backlogPath) : "",
+    route_decision_path: String(routeDecision.path ?? ""),
+    route_decision: routeDecision,
     latest_round_path: latestRoundPath ? displayPath(repoRoot, latestRoundPath) : "",
     backlog: {
       must_fix_now: {

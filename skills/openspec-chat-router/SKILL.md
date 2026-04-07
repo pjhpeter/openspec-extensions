@@ -53,6 +53,7 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - If the user explicitly names a stage or command, that overrides heuristic routing.
 - When the user does not explicitly choose simple vs complex flow, run a lightweight complexity triage first and make the default route explainable in one short sentence.
 - After complexity triage selects the complex flow, immediately restate a route decision before doing more work, for example: `路由决议：复杂流。当前只允许补 proposal/design 并推进 spec_readiness；禁止开始实现。`
+- Once the target change is known, record that triage result to `openspec/changes/<change>/control/ROUTE-DECISION.json` so later sessions can inspect the chosen route instead of relying on chat memory only.
 - If the user explicitly says "你自己判断复杂度，复杂时自动启用 subagent-team" or an equivalent instruction, treat that as permission for the main coordinator session to use delegation when the triage selects the complex flow.
 - If the user asks to enter OpenSpec mode, print the OpenSpec mode cheat sheet instead of running a workflow stage.
 - For large or complex work, prefer issue-based execution plus a change-level review/repair/re-review/acceptance loop rather than one long-running session.
@@ -101,6 +102,7 @@ Guardrails:
 
 - Existing issue artifacts on disk override a fresh simple-flow guess; reconcile first.
 - Once issue-mode state exists on disk for the target change, keep that route sticky across later "start implementing" or "continue coding" messages unless the user explicitly asks to exit issue-mode.
+- When a concrete change is already selected, persist the triage result to `control/ROUTE-DECISION.json` with the route, score, short summary, rationale bullets, recommended flow, and timestamp.
 - When the triage lands on the complex path, stop treating generic implementation wording as permission to code. First produce the route decision, then continue through proposal/design and the documented gates.
 - A single-file or tightly bounded change should not be promoted to issue-mode without concrete evidence from the request or artifacts.
 - If a simple-flow execution uncovers cross-module scope, repeated review loops, or clear issue boundaries, explicitly upgrade to the complex flow and state why.

@@ -9,6 +9,7 @@
 - 发现新版本时，推荐使用这条高亮提醒：`【更新提醒】检测到 openspec-extensions 有新版本。可先退出到命令行执行 \`npm update -g openspec-extensions\` 更新 openspec-extensions，再执行 \`openspec-ex install --target-repo /path/to/your/project --force --force-config\` 刷新当前仓库插件；当前流程继续，不受这条提醒影响。`
 - issue-mode 的默认 coordinator 入口是 `subagent-team`
 - 如果当前 change 已经有 `issues/*.progress.json`、`issues/*.team.dispatch.md`、`runs/ISSUE-PLANNING.json` 或 `control/ACTIVE-SEAT-DISPATCH.json`，这些磁盘工件比“开始做 / 开始实现 / 直接落地”这类聊天话术优先级更高；默认先 reconcile，再继续 `subagent-team` 主链
+- 当你已经选定具体 change 且刚做完复杂度判断时，最好把结果写进 `openspec/changes/<change>/control/ROUTE-DECISION.json`，至少包含 `route`、`score`、`summary`、`rationale`、`recommended_flow`、`updated_at`
 - 如果 `openspec/issue-mode.json` 里启用了 `subagent_team.auto_accept_*`，对应 gate 会由 coordinator 自动接受并继续，不再等待人工评审确认
 - `auto_accept_*` 的真实含义是“收齐当前 gate 所需 subagent verdict 之后，跳过人工签字继续推进”，不是“子代理刚启动就可以直接进入下一阶段”
 - 但某些 runtime 对真实拉起 subagent / delegation 仍要求你在当前会话里显式授权

@@ -128,6 +128,12 @@ function writeIssueModeConfig(repoRoot: string, payload: Record<string, unknown>
   fs.writeFileSync(configPath, JSON.stringify(payload, null, 2));
 }
 
+function writeRouteDecision(repoRoot: string, change: string, payload: Record<string, unknown>): void {
+  const routeDecisionPath = path.join(repoRoot, "openspec", "changes", change, "control", "ROUTE-DECISION.json");
+  fs.mkdirSync(path.dirname(routeDecisionPath), { recursive: true });
+  fs.writeFileSync(routeDecisionPath, JSON.stringify(payload, null, 2));
+}
+
 function writeChangeReviewArtifact(repoRoot: string, change: string, status = "passed", updatedAt = "2026-03-30T10:05:00+08:00"): void {
   const reviewPath = path.join(repoRoot, "openspec", "changes", change, "runs", "CHANGE-REVIEW.json");
   fs.mkdirSync(path.dirname(reviewPath), { recursive: true });
@@ -206,6 +212,53 @@ test("first issue requires planning_doc_commit before dispatch", () => {
     assert.equal((payload.continuation_policy as Record<string, string>).mode, "await_human_confirmation");
     assert.equal((payload.planning_docs as Record<string, boolean>).needs_commit, true);
     assert.match(String(payload.reason), /需先提交规划文档/);
+  });
+});
+
+test("reconcile surfaces recorded route decision", () => {
+  withTempDir((repoRoot) => {
+    writeIssueDoc(repoRoot, "demo-change");
+    writeRouteDecision(repoRoot, "demo-change", {
+      route: "complex",
+      score: 4,
+      summary: "改走复杂流程，因为已经跨模块并且需要 design review + issue 拆分。",
+      rationale: ["跨模块", "需要 issue 拆分"],
+      recommended_flow: "issue-mode -> subagent-team",
+      updated_at: "2026-04-07T12:00:00+08:00"
+    });
+
+    const payload = reconcileChange({ repoRoot, change: "demo-change" });
+    const routeDecision = payload.route_decision as Record<string, unknown>;
+    const control = payload.control as Record<string, unknown>;
+    const controlRouteDecision = control.route_decision as Record<string, unknown>;
+
+    assert.equal(routeDecision.exists, true);
+    assert.equal(routeDecision.valid, true);
+    assert.equal(routeDecision.route, "complex");
+    assert.equal(routeDecision.score, 4);
+    assert.equal(routeDecision.recommended_flow, "issue-mode -> subagent-team");
+    assert.deepEqual(routeDecision.rationale, ["跨模块", "需要 issue 拆分"]);
+    assert.match(String(routeDecision.path), /control\/ROUTE-DECISION\.json$/);
+
+    assert.equal(control.route_decision_path, String(routeDecision.path));
+    assert.deepEqual(controlRouteDecision, routeDecision);
+  });
+});
+
+test("reconcile tolerates malformed route decision artifact", () => {
+  withTempDir((repoRoot) => {
+    writeIssueDoc(repoRoot, "demo-change");
+    const routeDecisionPath = path.join(repoRoot, "openspec", "changes", "demo-change", "control", "ROUTE-DECISION.json");
+    fs.mkdirSync(path.dirname(routeDecisionPath), { recursive: true });
+    fs.writeFileSync(routeDecisionPath, "{bad json\n");
+
+    const payload = reconcileChange({ repoRoot, change: "demo-change" });
+    const routeDecision = payload.route_decision as Record<string, unknown>;
+
+    assert.equal(routeDecision.exists, true);
+    assert.equal(routeDecision.valid, false);
+    assert.equal(routeDecision.route, "");
+    assert.match(String(routeDecision.error), /JSON|Expected|position/i);
   });
 });
 

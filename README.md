@@ -131,6 +131,7 @@ openspec/changes/*/runs/CHANGE-REVIEW.json
 - 如果介于两者之间，先走 `new` 或 `ff` 把 proposal/design 补清楚，再重新判断，不要一开始就强行进入 issue-mode。
 - 如果简单流程做着做着发现已经跨模块、需要多轮 review、或者已经自然形成 issue 边界，就应当显式升级到复杂流程，而不是硬撑在短链路里。
 - 一旦判断进入复杂流程，应立即用一句短话输出“路由决议”，例如：`路由决议：复杂流。当前只允许补 proposal/design 并推进 spec_readiness；禁止开始实现。`
+- 当目标 change 已明确时，最好把这次判断同步写入 `openspec/changes/<change>/control/ROUTE-DECISION.json`，至少记录 `route`、`score`、`summary`、`rationale`、`recommended_flow` 和 `updated_at`，方便后续 `reconcile change` 或人工直接查看。
 - 复杂流程的判断结果只是路由，不是实现授权；在 `runs/SPEC-READINESS.json` 通过之前，不应开始实现、不应先跑脚手架、不应先派发编码 subagent。
 - 即使 `spec_readiness` 已通过，首个 issue execution 仍要继续等待当前通过的 `runs/ISSUE-PLANNING.json` 与 planning-doc commit；不能因为“开始实现”“继续做”或“启用 subagent-team”就跳过这些前置条件。
 - 一旦当前 change 已经在磁盘上写出了 issue-mode 工件，例如 `issues/*.progress.json`、`issues/*.team.dispatch.md` 或 `runs/ISSUE-PLANNING.json`，这些状态就优先于“开始做 / 开始实现 / 直接落地”这类泛化话术；默认应先 reconcile，再继续 `subagent-team` 主链，除非你明确要求退回简单流程。

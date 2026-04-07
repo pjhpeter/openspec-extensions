@@ -683,6 +683,7 @@ export function reconcileChange(args: ParsedChangeArgs): JsonRecord {
     next_action: nextAction,
     recommended_issue_id: recommendedIssueId,
     reason,
+    route_decision: (controlState.route_decision as JsonRecord | undefined) ?? {},
     continuation_policy: continuationPolicy(nextAction, recommendedIssueId),
     base_next_action: {
       action: baseAction,
