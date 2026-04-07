@@ -52,6 +52,7 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - Keep the user-facing response natural and brief: first state the action you are taking, then proceed.
 - If the user explicitly names a stage or command, that overrides heuristic routing.
 - When the user does not explicitly choose simple vs complex flow, run a lightweight complexity triage first and make the default route explainable in one short sentence.
+- After complexity triage selects the complex flow, immediately restate a route decision before doing more work, for example: `路由决议：复杂流。当前只允许补 proposal/design 并推进 spec_readiness；禁止开始实现。`
 - If the user explicitly says "你自己判断复杂度，复杂时自动启用 subagent-team" or an equivalent instruction, treat that as permission for the main coordinator session to use delegation when the triage selects the complex flow.
 - If the user asks to enter OpenSpec mode, print the OpenSpec mode cheat sheet instead of running a workflow stage.
 - For large or complex work, prefer issue-based execution plus a change-level review/repair/re-review/acceptance loop rather than one long-running session.
@@ -64,6 +65,8 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - The "runtime does not support delegation" fallback belongs only to the main coordinator session; spawned seat subagents must report seat-local results and stop instead of activating that fallback themselves.
 - Use the single-issue `dispatch-issue` / `execute-issue` path only when the user explicitly wants one bounded issue-only subagent, or the current phase has already been narrowed to that one issue.
 - The default issue-mode flow is: coordinator enters through `openspec-subagent-team`, creates or reuses the approved issue workspace as needed, drives the current round, then reviews accepted issue output from the main session before acceptance and commit.
+- Selecting the complex flow is a routing decision, not implementation authorization. Until `runs/SPEC-READINESS.json` is current and passed, do not start implementation, do not run scaffolding or app-bootstrap commands, and do not launch code-writing execution seats.
+- Even after spec-readiness passes, the first issue execution still waits for a current passed `runs/ISSUE-PLANNING.json` plus the coordinator-owned planning-doc commit. Do not dispatch implementation work before those artifacts exist.
 - In multi-session work on the same change, the coordinator session owns `tasks.md`, change-level backlog, merge, commit, `verify`, and `archive`.
 - Issue execution subagents must write issue-local progress and run artifacts. They must not directly update `tasks.md`, self-merge, or create the final git commit.
 - Before a coordinator continues a change that already has issue artifacts, reconcile issue state from disk first and read change-level control artifacts if present instead of trusting chat memory.
@@ -98,6 +101,7 @@ Guardrails:
 
 - Existing issue artifacts on disk override a fresh simple-flow guess; reconcile first.
 - Once issue-mode state exists on disk for the target change, keep that route sticky across later "start implementing" or "continue coding" messages unless the user explicitly asks to exit issue-mode.
+- When the triage lands on the complex path, stop treating generic implementation wording as permission to code. First produce the route decision, then continue through proposal/design and the documented gates.
 - A single-file or tightly bounded change should not be promoted to issue-mode without concrete evidence from the request or artifacts.
 - If a simple-flow execution uncovers cross-module scope, repeated review loops, or clear issue boundaries, explicitly upgrade to the complex flow and state why.
 - If the user already authorized "complex -> auto subagent-team", do not ask again before using `subagent-team` in the main coordinator session once the triage lands on the complex path.
@@ -151,14 +155,17 @@ Preferred flow:
 
 1. Use the main session to get the change to proposal/design-ready state.
 2. Run a change-level spec-readiness design review with a dedicated `1` design-author subagent plus `2` design-review subagents, and keep a normalized backlog for that gate.
-3. Only after design review passes, split implementation into coordinator-owned `tasks.md` plus issue-sized units with clear boundaries.
-4. Review the issue plan, then commit `proposal.md` / `design.md` / `tasks.md` / `issues/INDEX.md` / `ISSUE-*.md` as a coordinator-owned planning-doc commit before the first issue dispatch.
-5. For each approved issue, create or reuse the issue workspace (`worker_worktree`) before handoff. The installed template defaults to one change-level `.worktree/<change>` reused across that change's serial issues.
-6. By default, render the subagent-team lifecycle packet and use it as the coordinator control packet for the current phase.
-7. Use one issue-only execution subagent for one approved issue only when the user explicitly narrows execution to that one issue, or the current step is already a bounded single-issue handoff. Do not reuse that full worker contract for development/check/review seats inside an issue-team round.
-8. In subagent-team `issue_execution`, development seats stop at implementation and progress checkpoint. If code changes invalidate prior validation, they only mark those validation entries back to `pending`; checker/reviewer and the coordinator own the later validation/review gate. Only after checker/reviewer finish and the coordinator records `runs/ISSUE-REVIEW-<issue>.json` should the issue move to `review_required`, after which manual review or `auto_accept_issue_review=true` may merge/commit it.
-9. In every gate-bearing phase, record launched seat ids, wait for completion, normalize the verdicts, and do not advance while any required gate subagent is still running.
-10. Repeat for the next approved issue, then run a change-level `/review` plus a change-level acceptance round before `verify` and `archive`.
+3. Treat the route decision as a hard boundary: complex flow selected means issue-mode coordination is now authoritative, but implementation is still forbidden until spec-readiness passes.
+4. Before `runs/SPEC-READINESS.json` is current and passed, do not start implementation, do not run project scaffolding or bootstrap commands, and do not spawn code-writing seats.
+5. Only after design review passes, split implementation into coordinator-owned `tasks.md` plus issue-sized units with clear boundaries.
+6. Before the first issue execution, require a current passed `runs/ISSUE-PLANNING.json` and the coordinator-owned planning-doc commit; do not let `subagent-team` wording or "start implementing" chat text skip those prerequisites.
+7. Review the issue plan, then commit `proposal.md` / `design.md` / `tasks.md` / `issues/INDEX.md` / `ISSUE-*.md` as a coordinator-owned planning-doc commit before the first issue dispatch.
+8. For each approved issue, create or reuse the issue workspace (`worker_worktree`) before handoff. The installed template defaults to one change-level `.worktree/<change>` reused across that change's serial issues.
+9. By default, render the subagent-team lifecycle packet and use it as the coordinator control packet for the current phase.
+10. Use one issue-only execution subagent for one approved issue only when the user explicitly narrows execution to that one issue, or the current step is already a bounded single-issue handoff. Do not reuse that full worker contract for development/check/review seats inside an issue-team round.
+11. In subagent-team `issue_execution`, development seats stop at implementation and progress checkpoint. If code changes invalidate prior validation, they only mark those validation entries back to `pending`; checker/reviewer and the coordinator own the later validation/review gate. Only after checker/reviewer finish and the coordinator records `runs/ISSUE-REVIEW-<issue>.json` should the issue move to `review_required`, after which manual review or `auto_accept_issue_review=true` may merge/commit it.
+12. In every gate-bearing phase, record launched seat ids, wait for completion, normalize the verdicts, and do not advance while any required gate subagent is still running.
+13. Repeat for the next approved issue, then run a change-level `/review` plus a change-level acceptance round before `verify` and `archive`.
 
 ## Special Path: `mode`
 

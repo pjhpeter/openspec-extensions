@@ -65,8 +65,21 @@ test("chat-router skill defines explainable complexity triage before choosing si
   assert.match(skill, /4\+/);
   assert.match(skill, /Existing issue artifacts on disk override a fresh simple-flow guess; reconcile first/);
   assert.match(skill, /keep that route sticky across later "start implementing" or "continue coding" messages/);
+  assert.match(skill, /immediately restate a route decision/);
+  assert.match(skill, /complex flow is a routing decision, not implementation authorization/);
+  assert.match(skill, /do not start implementation, do not run scaffolding or app-bootstrap commands/);
+  assert.match(skill, /runs\/ISSUE-PLANNING\.json/);
   assert.match(skill, /explicitly upgrade to the complex flow and state why/);
   assert.match(skill, /complex -> auto subagent-team/);
+});
+
+test("coordinator playbook forbids implementation before complex-flow gates pass", () => {
+  const playbook = readRepoFile("skills/openspec-chat-router/references/router/coordinator-playbook.md");
+
+  assert.match(playbook, /immediately restate a route decision/);
+  assert.match(playbook, /Before `runs\/SPEC-READINESS\.json` is current and passed, do not start implementation/);
+  assert.match(playbook, /do not run scaffolding or bootstrap commands/);
+  assert.match(playbook, /Before the first issue execution, require both a current passed `runs\/ISSUE-PLANNING\.json` and the coordinator-owned planning-doc commit/);
 });
 
 test("router examples and cheat sheet keep issue-mode state above generic apply wording", () => {

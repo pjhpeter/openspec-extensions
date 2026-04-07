@@ -121,6 +121,9 @@ You can let the AI choose between the short path and the complex path, but it sh
 - Default to the complex path when the work crosses modules, the design is still uncertain, design review is needed, issue splitting is likely, validation is multi-stage or expensive, or the user explicitly wants a long-running unattended lifecycle.
 - For borderline cases, prefer `new` or `ff` first so proposal/design become clearer, then re-evaluate instead of forcing issue-mode too early.
 - If a short-path execution reveals cross-module scope, repeated review loops, or natural issue boundaries, explicitly upgrade to the complex path and state why.
+- Once the triage selects the complex path, immediately restate a short route decision such as: `Route decision: complex flow. Only proposal/design and spec_readiness are allowed now; implementation is forbidden.`
+- The complex-path result is a routing decision, not implementation authorization. Before `runs/SPEC-READINESS.json` is current and passed, do not start implementation, do not run scaffolding, and do not launch code-writing subagents.
+- Even after spec-readiness passes, the first issue execution still waits for a current passed `runs/ISSUE-PLANNING.json` and the planning-doc commit. Do not let phrases like "start implementing", "continue", or "enable subagent-team" skip those prerequisites.
 - Once the current change has written issue-mode artifacts on disk, such as `issues/*.progress.json`, `issues/*.team.dispatch.md`, or `runs/ISSUE-PLANNING.json`, that state should outrank generic phrases like "start implementing" or "just do it". The default move is to reconcile first and continue the `subagent-team` main path unless you explicitly ask to go back to the simple flow.
 
 The route explanation should stay short and concrete, for example:

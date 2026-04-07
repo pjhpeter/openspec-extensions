@@ -8,22 +8,25 @@ This is the normal flow when the runtime supports delegation and the user wants 
 ## Default Flow
 
 1. Before starting any lifecycle phase, reread `openspec/issue-mode.json` when it exists and restate the active execution rules: `worker_worktree.*`, `validation_commands`, `rra.gate_mode`, and `subagent_team.*`. If the file changed since the previous phase, treat the latest contents as authoritative before spawning any new seats.
-2. Get the change to proposal/design-ready state, then run a spec-readiness design review for the current target mode. In this gate, the topology is 1 design author plus 2 design reviewers, and task splitting must not start before both reviewers pass. When the gate passes, normalize that result into `runs/SPEC-READINESS.json`. If `auto_accept_spec_readiness=true`, do not pause for human sign-off once the gate is satisfied.
-3. After spec-readiness passes, run `plan-issues` to create or refresh `tasks.md` plus the issue breakdown, then review that task-splitting result. When the planning gate passes, normalize that result into `runs/ISSUE-PLANNING.json`. Before the first issue dispatch, commit `proposal.md`, `design.md`, `tasks.md`, `issues/INDEX.md`, and `ISSUE-*.md` as a coordinator-owned planning-doc commit. If `auto_accept_issue_planning=true`, do not pause for human sign-off once those docs are dispatch-ready; commit them first, then immediately dispatch the first approved issue.
-4. Dispatch only issues that are approved for the active round.
-5. Create or reuse the worker workspace before handoff. The installed template defaults to one change-level `.worktree/<change>` reused across that change's serial issues. Shared workspace remains the compatibility fallback when repo config is missing, and issue-level `.worktree/<change>/<issue>` stays opt-in for truly parallel work.
-6. By default, render the subagent-team lifecycle packet and use it as the round control packet.
-7. Explicitly set `reasoning_effort` when spawning subagents:
+2. When complexity triage has just selected the complex flow, immediately restate a route decision before doing more work, for example: `路由决议：复杂流。当前只允许补 proposal/design 并推进 spec_readiness；禁止开始实现。`
+3. Get the change to proposal/design-ready state, then run a spec-readiness design review for the current target mode. In this gate, the topology is 1 design author plus 2 design reviewers, and task splitting must not start before both reviewers pass. When the gate passes, normalize that result into `runs/SPEC-READINESS.json`. If `auto_accept_spec_readiness=true`, do not pause for human sign-off once the gate is satisfied.
+4. Before `runs/SPEC-READINESS.json` is current and passed, do not start implementation, do not run scaffolding or bootstrap commands, and do not launch code-writing execution seats.
+5. After spec-readiness passes, run `plan-issues` to create or refresh `tasks.md` plus the issue breakdown, then review that task-splitting result. When the planning gate passes, normalize that result into `runs/ISSUE-PLANNING.json`. Before the first issue dispatch, commit `proposal.md`, `design.md`, `tasks.md`, `issues/INDEX.md`, and `ISSUE-*.md` as a coordinator-owned planning-doc commit. If `auto_accept_issue_planning=true`, do not pause for human sign-off once those docs are dispatch-ready; commit them first, then immediately dispatch the first approved issue.
+6. Before the first issue execution, require both a current passed `runs/ISSUE-PLANNING.json` and the coordinator-owned planning-doc commit. Do not let generic implementation wording or `subagent-team` wording skip those prerequisites.
+7. Dispatch only issues that are approved for the active round.
+8. Create or reuse the worker workspace before handoff. The installed template defaults to one change-level `.worktree/<change>` reused across that change's serial issues. Shared workspace remains the compatibility fallback when repo config is missing, and issue-level `.worktree/<change>/<issue>` stays opt-in for truly parallel work.
+9. By default, render the subagent-team lifecycle packet and use it as the round control packet.
+10. Explicitly set `reasoning_effort` when spawning subagents:
    - design author: `high`
    - any code-writing implementation or verify-fix subagent: `high`
    - design reviewers, planning authors, checkers, reviewers, and closeout-only subagents: `medium`
-8. Default to the lighter fast path before escalating more seats:
+11. Default to the lighter fast path before escalating more seats:
    - issue planning: `2 development + 1 check + 1 review`
    - issue execution: `3 development + 2 check + 1 review`
    - change acceptance: `1 development + 1 check + 1 review`
    - change verify: `2 development + 1 check + 1 review`
    - only expand check/review seats when the current round surfaces cross-boundary architecture risk or unresolved evidence gaps
-9. For every phase, treat the launched phase seats as gate-bearing participants:
+12. For every phase, treat the launched phase seats as gate-bearing participants:
    - record agent ids, seat names, and running/completed status
    - use `default` or `worker` style delegation for those gate seats; do not use `explorer` for design-review, check, or review gates
    - if unattended progression matters, wait up to 1 hour for those gate-bearing subagents instead of short polling
@@ -45,6 +48,7 @@ This is the normal flow when the runtime supports delegation and the user wants 
 
 - one issue-scoped execution context handles one issue only
 - use subagent-team rounds as the default issue-mode coordinator topology
+- selecting the complex flow is only a routing decision; it must not be treated as permission to implement or scaffold before the required gates pass
 - do not let subagents inherit the session-wide reasoning default blindly; set role-based `reasoning_effort` explicitly
 - `auto_accept_*` only removes human sign-off after gate-bearing subagents have all finished and their verdicts are in hand
 - do not start a new lifecycle phase from stale config memory; reread `openspec/issue-mode.json` first whenever the repo provides it
