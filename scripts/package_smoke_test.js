@@ -88,6 +88,7 @@ function verifyTarballContents(tarballPath) {
   const entries = run("tar", ["-tf", tarballPath]).split("\n").filter(Boolean);
 
   assert.ok(entries.includes("package/dist/cli/index.js"));
+  assert.ok(entries.includes("package/dist/cli/openspec.js"));
   assert.ok(entries.includes("package/skills/openspec-dispatch-issue/SKILL.md"));
   assert.equal(entries.includes("package/skills/openspec-shared/SKILL.md"), false);
   assert.equal(entries.some((entry) => entry.endsWith(".py")), false);
@@ -172,9 +173,24 @@ function verifyInstalledBin(tarballPath) {
       ".bin",
       process.platform === "win32" ? "openspec-ex.cmd" : "openspec-ex"
     );
+    const openspecBinPath = path.join(
+      packageRepo,
+      "node_modules",
+      ".bin",
+      process.platform === "win32" ? "openspec.cmd" : "openspec"
+    );
     const stdout = run(binPath, ["install", "--target-repo", targetRepo], { cwd: packageRepo });
     const payload = JSON.parse(stdout);
     const installedPackageRoot = path.join(packageRepo, "node_modules", "openspec-extensions");
+    const bundledOpenSpecModuleEntry = require.resolve("@fission-ai/openspec", {
+      paths: [installedPackageRoot]
+    });
+    const bundledOpenSpecEntry = path.join(path.dirname(bundledOpenSpecModuleEntry), "..", "bin", "openspec.js");
+    const bundledOpenSpecPackageJson = path.join(path.dirname(path.dirname(bundledOpenSpecEntry)), "package.json");
+    const bundledOpenSpecVersion = JSON.parse(
+      fs.readFileSync(bundledOpenSpecPackageJson, "utf8")
+    ).version;
+    const openspecVersion = run(openspecBinPath, ["--version"], { cwd: packageRepo });
 
     assert.equal(payload.dry_run, false);
     assert.equal(payload.config.status, "installed");
@@ -184,6 +200,8 @@ function verifyInstalledBin(tarballPath) {
     assert.ok(!fs.existsSync(path.join(targetRepo, ".claude", "skills", "openspec-shared")));
     assert.ok(fs.existsSync(path.join(targetRepo, "openspec", "issue-mode.json")));
     assert.ok(fs.existsSync(aliasBinPath));
+    assert.ok(fs.existsSync(openspecBinPath));
+    assert.equal(openspecVersion, bundledOpenSpecVersion);
     assert.deepEqual(
       collectMatchingFiles(installedPackageRoot, (filePath) => filePath.endsWith(".py")),
       []

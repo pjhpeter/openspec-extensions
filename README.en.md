@@ -30,7 +30,7 @@ Install the CLI globally:
 npm install -g openspec-extensions
 ```
 
-That install also pulls in `@fission-ai/openspec@~1.2.0` as a runtime dependency of `openspec-extensions`, so a fresh machine does not need a separate manual OpenSpec install first.
+That install also pulls in `@fission-ai/openspec@~1.2.0` as a runtime dependency of `openspec-extensions` and exposes three global commands: `openspec`, `openspec-ex`, and `openspec-extensions`. A fresh machine does not need a separate manual OpenSpec install first.
 
 Then initialize from the target project:
 
@@ -39,7 +39,13 @@ cd /path/to/your/project
 openspec-ex init
 ```
 
-Check the installed CLI version:
+Check the bundled OpenSpec version:
+
+```bash
+openspec --version
+```
+
+Check the extensions CLI version:
 
 ```bash
 openspec-ex --version
@@ -72,7 +78,8 @@ Common options:
 - Preview installation: `openspec-extensions install --target-repo /path/to/your/project --dry-run`
 - Overwrite existing skills: `openspec-extensions install --target-repo /path/to/your/project --force`
 - Overwrite `openspec/issue-mode.json`: `openspec-extensions install --target-repo /path/to/your/project --force-config`
-- Check the CLI version: `openspec-ex -v`, `openspec-ex --version`
+- Check the bundled OpenSpec version: `openspec --version`
+- Check the extensions CLI version: `openspec-ex -v`, `openspec-ex --version`
 - Upgrade the global CLI: `npm install -g openspec-extensions@latest`
 - Upgrade extension skills already installed in a target repo: `openspec-ex init --force`, or `openspec-extensions install --target-repo /path/to/your/project --force`
 - Upgrade skills and also overwrite the default config template: `openspec-ex init --force --force-config`
