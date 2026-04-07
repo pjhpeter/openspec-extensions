@@ -1,6 +1,6 @@
 {
   "name": "openspec-extensions",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "OpenSpec issue-mode extensions packaged for npm-first distribution.",
   "license": "MIT",
   "repository": {
@@ -32,6 +32,9 @@
     "smoke:package": "node scripts/package_smoke_test.js",
     "type-check": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test tests/**/*.test.ts"
+  },
+  "dependencies": {
+    "@fission-ai/openspec": "~1.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.26.0",

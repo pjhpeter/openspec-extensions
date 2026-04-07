@@ -12,10 +12,11 @@ import {
   type InstallResult
 } from "./install";
 
-const OPENSPEC_NPM_PACKAGE = "@fission-ai/openspec@1.2.0";
+const OPENSPEC_NPM_PACKAGE = "@fission-ai/openspec@~1.2.0";
 const EXTENSIONS_NPM_PACKAGE = "openspec-extensions";
 const SELF_UPDATE_SKIP_ENV = "OPENSPEC_EXTENSIONS_SKIP_SELF_UPDATE_CHECK";
 const PACKAGE_VERSION = readOwnPackageVersion();
+const BUNDLED_NODE_BIN_PATH = path.join("node_modules", ".bin");
 const ISSUE_MODE_CONFIG_PATH = path.join("openspec", "issue-mode.json");
 
 const INIT_HELP_TEXT = `Usage:
@@ -29,6 +30,7 @@ Notes:
 `;
 
 type JsonObject = Record<string, unknown>;
+type ProcessEnvMap = Record<string, string | undefined>;
 
 type InitOptions = InstallOptions & {
   openspecForce: boolean;
@@ -232,6 +234,32 @@ function parsePackageVersionOutput(stdout: string): string | null {
   }
 }
 
+function commandPackageRoot(): string {
+  return path.resolve(__dirname, "..", "..");
+}
+
+export function withBundledOpenSpecPath(
+  env: ProcessEnvMap,
+  packageRoot: string = commandPackageRoot()
+): ProcessEnvMap {
+  const bundledNodeBin = path.join(packageRoot, BUNDLED_NODE_BIN_PATH);
+  if (!existsSync(bundledNodeBin)) {
+    return { ...env };
+  }
+
+  const normalizedBundledNodeBin = path.resolve(bundledNodeBin);
+  const currentPathEntries = (env.PATH ?? "")
+    .split(path.delimiter)
+    .filter(Boolean)
+    .filter((entry) => path.resolve(entry) !== normalizedBundledNodeBin);
+
+  return {
+    ...env,
+    // 优先使用随包安装的 openspec，避免全新环境还得先手装官方 CLI。
+    PATH: [bundledNodeBin, ...currentPathEntries].join(path.delimiter)
+  };
+}
+
 function checkForPackageUpdate(): PackageUpdateStatus | null {
   const result = spawnSync("npm", ["view", EXTENSIONS_NPM_PACKAGE, "version", "--json"], {
     encoding: "utf8"
@@ -383,14 +411,18 @@ function resolveOpenSpecCommandMode(request: OpenSpecInitRequest): OpenSpecComma
 }
 
 function runCommand(command: string[], mode: OpenSpecCommandMode): OpenSpecCommandResult {
+  const env = withBundledOpenSpecPath(process.env);
+
   if (mode === "interactive") {
     return spawnSync(command[0], command.slice(1), {
+      env,
       stdio: "inherit"
     });
   }
 
   return spawnSync(command[0], command.slice(1), {
-    encoding: "utf8"
+    encoding: "utf8",
+    env
   });
 }
 

@@ -43,7 +43,7 @@ const OPENSPEC_CORE_SKILL_NAMES = [
   "openspec-onboard",
   "openspec-propose"
 ];
-// 与 openspec@1.2.0 的 tool -> skillsDir 约定保持一致。
+// 与 openspec 1.2.x 的 tool -> skillsDir 约定保持一致。
 const OPENSPEC_TOOL_SKILL_DIRS = {
   "amazon-q": ".amazonq",
   antigravity: ".agent",
