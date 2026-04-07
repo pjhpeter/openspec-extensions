@@ -41,6 +41,9 @@ test("chat-router agent prompt does not reroute spawned seat sessions", () => {
   assert.match(prompt, /do not fork the full coordinator thread\/context into them/);
   assert.match(prompt, /do not repeat the version reminder there/);
   assert.match(prompt, /你自己判断复杂度, 复杂时自动启用 subagent-team/);
+  assert.match(prompt, /issue-mode artifacts already exist/);
+  assert.match(prompt, /higher priority than generic implementation wording/);
+  assert.match(prompt, /reconcile first and continue the subagent-team main path/);
 });
 
 test("mode cheat sheet includes unattended kickoff with explicit model and requirement placeholders", () => {
@@ -61,8 +64,20 @@ test("chat-router skill defines explainable complexity triage before choosing si
   assert.match(skill, /2-3/);
   assert.match(skill, /4\+/);
   assert.match(skill, /Existing issue artifacts on disk override a fresh simple-flow guess; reconcile first/);
+  assert.match(skill, /keep that route sticky across later "start implementing" or "continue coding" messages/);
   assert.match(skill, /explicitly upgrade to the complex flow and state why/);
   assert.match(skill, /complex -> auto subagent-team/);
+});
+
+test("router examples and cheat sheet keep issue-mode state above generic apply wording", () => {
+  const examples = readRepoFile("skills/openspec-chat-router/references/router/examples.md");
+  const template = readRepoFile("skills/openspec-chat-router/references/router/mode-cheatsheet.md");
+
+  assert.match(examples, /已经拆过 issue，现在开始实现/);
+  assert.match(examples, /reconcile`, then continue through `subagent-team`/);
+  assert.match(examples, /apply` when the change has not entered issue-mode yet/);
+  assert.match(template, /这些磁盘工件比“开始做 \/ 开始实现 \/ 直接落地”这类聊天话术优先级更高/);
+  assert.match(template, /不要因为“开始实现”这类泛化话术退回 apply/);
 });
 
 test("mode cheat sheet includes auto-subagent authorization wording for complex flow", () => {

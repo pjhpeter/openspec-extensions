@@ -123,6 +123,7 @@ openspec/changes/*/runs/CHANGE-REVIEW.json
 - 满足这些特征时，默认走复杂流程：跨模块、需求或设计不确定、需要 design review、需要拆 issue、多阶段验证成本高、或用户明确要求长生命周期/无人值守推进。
 - 如果介于两者之间，先走 `new` 或 `ff` 把 proposal/design 补清楚，再重新判断，不要一开始就强行进入 issue-mode。
 - 如果简单流程做着做着发现已经跨模块、需要多轮 review、或者已经自然形成 issue 边界，就应当显式升级到复杂流程，而不是硬撑在短链路里。
+- 一旦当前 change 已经在磁盘上写出了 issue-mode 工件，例如 `issues/*.progress.json`、`issues/*.team.dispatch.md` 或 `runs/ISSUE-PLANNING.json`，这些状态就优先于“开始做 / 开始实现 / 直接落地”这类泛化话术；默认应先 reconcile，再继续 `subagent-team` 主链，除非你明确要求退回简单流程。
 
 我建议把这套选择解释成一句短话，例如：
 
@@ -172,7 +173,7 @@ flowchart TD
 3. 直接实现当前 change
 
 ```text
-开始实现当前 change；如果任务规模仍然简单，就不要进入 issue-mode，直接完成实现并运行校验。
+开始实现当前 change；如果任务规模仍然简单，并且当前 change 还没有进入 issue-mode，就不要拆 issue，直接完成实现并运行校验。
 ```
 
 4. review / verify / archive 收尾
@@ -185,6 +186,12 @@ flowchart TD
 
 ```text
 继续当前 change，保持 OpenSpec 主链推进，先完成 review，再做 verify 和 archive。
+```
+
+如果当前 change 已经拆过 issue，但会话中断后你只是想接着往下做，我建议这样说：
+
+```text
+这个 change 已经在 issue-mode 里了。先按磁盘上的 issue/progress/dispatch 状态 reconcile，再继续 subagent-team 主链；不要因为“开始实现”这类泛化话术退回 apply。
 ```
 
 ### 复杂任务

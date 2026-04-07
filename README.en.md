@@ -114,6 +114,7 @@ You can let the AI choose between the short path and the complex path, but it sh
 - Default to the complex path when the work crosses modules, the design is still uncertain, design review is needed, issue splitting is likely, validation is multi-stage or expensive, or the user explicitly wants a long-running unattended lifecycle.
 - For borderline cases, prefer `new` or `ff` first so proposal/design become clearer, then re-evaluate instead of forcing issue-mode too early.
 - If a short-path execution reveals cross-module scope, repeated review loops, or natural issue boundaries, explicitly upgrade to the complex path and state why.
+- Once the current change has written issue-mode artifacts on disk, such as `issues/*.progress.json`, `issues/*.team.dispatch.md`, or `runs/ISSUE-PLANNING.json`, that state should outrank generic phrases like "start implementing" or "just do it". The default move is to reconcile first and continue the `subagent-team` main path unless you explicitly ask to go back to the simple flow.
 
 The route explanation should stay short and concrete, for example:
 
@@ -163,7 +164,7 @@ Create a change for this request and fill proposal, design, and tasks until they
 3. Implement the current change directly
 
 ```text
-Start implementing the current change. If the scope is still small, do not enter issue-mode. Just complete the implementation and run validation.
+Start implementing the current change. If the scope is still small, and the change has not entered issue-mode yet, do not split into issues. Just complete the implementation and run validation.
 ```
 
 4. Finish with review / verify / archive
@@ -176,6 +177,12 @@ Run a change-level /review on the unpushed code in the current branch, excluding
 
 ```text
 Continue the current change and keep moving on the OpenSpec main path. Finish review first, then verify and archive.
+```
+
+If the current change already split into issues and the session dropped, I recommend wording the resume request like this:
+
+```text
+This change is already in issue-mode. Reconcile from the issue/progress/dispatch artifacts on disk first, then continue the subagent-team main path. Do not fall back to apply just because I said "start implementing".
 ```
 
 ### Complex Changes

@@ -16,13 +16,14 @@ Use these examples when you need quick intent-to-route references without re-rea
 - “这个 issue-only subagent 只做 ISSUE-002。” -> `execute-issue`
 - “同步一下当前 change 的 issue 进度。” -> `reconcile`
 - “根据 issue 结果继续推进这个 change。” -> `reconcile`
+- “这个 change 已经拆过 issue，现在开始实现。” -> `reconcile`, then continue through `subagent-team`
 - “对这个 change 做 change-level acceptance review，再决定要不要 verify。” -> `reconcile`, then change-level acceptance decision
 - “这个需求我还没想清楚，你先帮我梳理一下。” -> `explore`
 - “帮我起一个登录重构的变更，把文档一次性补齐。” -> `propose`
 - “先建个 change，我想先看第一步文档模板。” -> `new`
 - “把当前 change 的文档补齐到可以开始做。” -> `ff`
 - “继续刚才那个 change。” -> `continue`
-- “现在开始实现这个变更。” -> `apply`
+- “现在开始实现这个变更。” -> `apply` when the change has not entered issue-mode yet
 - “检查一下当前变更能不能归档。” -> `verify`
 - “把这个 change 的 delta spec 同步到主 spec。” -> `sync-specs`
 - “这个变更做完了，帮我归档。” -> `archive`

@@ -59,6 +59,7 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - In issue-based execution, one issue-scoped execution context handles one issue only.
 - In issue-mode, default the coordinator entry path to `openspec-subagent-team`.
 - In runtimes that support subagents or delegation, prefer the coordinator continuing through the approved issue round with `subagent-team`.
+- If the target change already has issue-mode state on disk such as `issues/*.progress.json`, `issues/*.team.dispatch.md`, `runs/ISSUE-PLANNING.json`, or `control/ACTIVE-SEAT-DISPATCH.json`, treat that disk state as higher priority than generic implementation wording like “开始做 / 开始实现 / 直接落地”; reconcile first, then continue the subagent-team main path unless the user explicitly tells you to abandon issue-mode and go back to the simple flow.
 - If the runtime does not support delegation at all, fall back to the main-session serial issue path: keep the coordinator in the current session, render the lifecycle / issue dispatch packets, execute one approved issue at a time locally, and keep progress/run artifacts on disk.
 - The "runtime does not support delegation" fallback belongs only to the main coordinator session; spawned seat subagents must report seat-local results and stop instead of activating that fallback themselves.
 - Use the single-issue `dispatch-issue` / `execute-issue` path only when the user explicitly wants one bounded issue-only subagent, or the current phase has already been narrowed to that one issue.
@@ -96,6 +97,7 @@ Route based on the total:
 Guardrails:
 
 - Existing issue artifacts on disk override a fresh simple-flow guess; reconcile first.
+- Once issue-mode state exists on disk for the target change, keep that route sticky across later "start implementing" or "continue coding" messages unless the user explicitly asks to exit issue-mode.
 - A single-file or tightly bounded change should not be promoted to issue-mode without concrete evidence from the request or artifacts.
 - If a simple-flow execution uncovers cross-module scope, repeated review loops, or clear issue boundaries, explicitly upgrade to the complex flow and state why.
 - If the user already authorized "complex -> auto subagent-team", do not ask again before using `subagent-team` in the main coordinator session once the triage lands on the complex path.
@@ -131,7 +133,7 @@ Guardrails:
 - Small task after triage -> `propose` -> `apply` -> review current code -> `verify` -> `archive`
 - Large task after triage -> `new` -> `ff` -> `plan-issues` / `subagent-team` -> reconcile -> review current code -> `verify` -> `archive`
 - “继续刚才那个 / 继续这个 change / 下一个文档” -> `continue`
-- “开始做 / 开始实现 / 直接落地” -> `apply`
+- “开始做 / 开始实现 / 直接落地” -> `apply`, but only when the target change does not already have active issue-mode state on disk
 - “拆成 issue / 给出 issue 边界 / 生成 issue 文档” -> `plan-issues`
 - “给我 ISSUE-001 的派发模板 / 派发下一个 issue / 给 ISSUE-001 创建 issue workspace / 直接开 subagent 做 ISSUE-001” -> `dispatch-issue`
 - “用 subagent team 推进 ISSUE-001 / 开发组检查组审查组一起推进” -> `subagent-team`
@@ -217,7 +219,9 @@ If the user asks to sync issue outputs, collect issue progress, or continue a co
 Reconcile is the default first step when:
 
 - `issues/*.progress.json` already exists for the change
+- `issues/*.team.dispatch.md`, `runs/ISSUE-PLANNING.json`, or `control/ACTIVE-SEAT-DISPATCH.json` already exists for the change
 - the user says “继续当前 change” after issue-mode work
+- the user says “开始做 / 开始实现 / 直接落地” after issue-mode artifacts already exist
 - the user asks whether the coordinator can continue automatically
 
 ## Preferred Issue Execution Path

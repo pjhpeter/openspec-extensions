@@ -8,6 +8,7 @@
 - 当前会话首次触发任一 `openspec-extensions` skill 时，应先做一次非阻塞版本检查；如果发现 npm 有更新版本，只提醒，不中断当前流程
 - 发现新版本时，推荐使用这条高亮提醒：`【更新提醒】检测到 openspec-extensions 有新版本。可先退出到命令行执行 \`npm update -g openspec-extensions\` 更新 openspec-extensions，再执行 \`openspec-ex install --target-repo /path/to/your/project --force --force-config\` 刷新当前仓库插件；当前流程继续，不受这条提醒影响。`
 - issue-mode 的默认 coordinator 入口是 `subagent-team`
+- 如果当前 change 已经有 `issues/*.progress.json`、`issues/*.team.dispatch.md`、`runs/ISSUE-PLANNING.json` 或 `control/ACTIVE-SEAT-DISPATCH.json`，这些磁盘工件比“开始做 / 开始实现 / 直接落地”这类聊天话术优先级更高；默认先 reconcile，再继续 `subagent-team` 主链
 - 如果 `openspec/issue-mode.json` 里启用了 `subagent_team.auto_accept_*`，对应 gate 会由 coordinator 自动接受并继续，不再等待人工评审确认
 - `auto_accept_*` 的真实含义是“收齐当前 gate 所需 subagent verdict 之后，跳过人工签字继续推进”，不是“子代理刚启动就可以直接进入下一阶段”
 - 但某些 runtime 对真实拉起 subagent / delegation 仍要求你在当前会话里显式授权
@@ -61,7 +62,7 @@
 3. 直接实现
 
 ```text
-开始实现当前 change；如果任务规模仍然简单，就不要进入 issue-mode，直接完成实现并运行校验。
+开始实现当前 change；如果任务规模仍然简单，并且当前 change 还没有进入 issue-mode，就不要拆 issue，直接完成实现并运行校验。
 ```
 
 4. review / verify / archive 收尾
@@ -133,11 +134,18 @@
 如果当前 phase 还有 review/check subagent 在运行，先等它们全部完成并收齐 verdict，再决定是否进入下一阶段。
 ```
 
+如果当前 change 已经写出 issue-mode 工件，但你只是想接着往下做，也可以直接这样说：
+
+```text
+这个 change 已经在 issue-mode 里了。先按磁盘上的 issue/progress/dispatch 状态 reconcile，再继续 subagent-team 主链；不要因为“开始实现”这类泛化话术退回 apply。
+```
+
 你可以直接这样说：
 
 - 帮我起一个变更，把文档一次性补齐
 - 继续刚才那个 change
 - 按 issue 模式继续当前复杂 change
+- 这个 change 已经拆过 issue，现在继续推进
 - 开始实现当前变更
 - 检查一下当前变更能不能归档
 
@@ -149,9 +157,10 @@
 | 帮我起一个变更，把文档补齐 | /opsx:propose | 小任务一键生成 proposal/design/tasks |
 | 先建个 change，我想先看模板 | /opsx:new | 只创建 change 并展示第一步模板 |
 | 按 issue 模式继续当前复杂 change | issue-mode -> subagent-team | 进入复杂变更执行模式，并默认从 subagent-team 主链推进 |
+| 这个 change 已经拆过 issue，现在继续推进 | reconcile -> subagent-team | 先以 issue/progress/dispatch 工件为准恢复状态，再继续复杂流主链 |
 | 把当前 change 的文档补齐到可以开始做 | /opsx:ff | 一次性补到可实现状态 |
 | 继续刚才那个 change | /opsx:continue | 创建下一个 artifact |
-| 开始实现当前变更 | /opsx:apply | 按 tasks 开始实现 |
+| 开始实现当前变更 | /opsx:apply | 仅在当前 change 还没有进入 issue-mode 时按 tasks 开始实现 |
 | 检查一下当前变更能不能归档 | /opsx:verify | 做归档前校验 |
 | 把这个 change 的 delta spec 同步到主 spec | /opsx:sync-specs | 同步主 spec |
 | 这个变更做完了，帮我归档 | /opsx:archive | 收尾归档 |
