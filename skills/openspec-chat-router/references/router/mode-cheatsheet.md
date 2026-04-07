@@ -8,7 +8,10 @@
 - 当前会话首次触发任一 `openspec-extensions` skill 时，应先做一次非阻塞版本检查；如果发现 npm 有更新版本，只提醒，不中断当前流程
 - 发现新版本时，推荐使用这条高亮提醒：`【更新提醒】检测到 openspec-extensions 有新版本。可先退出到命令行执行 \`npm update -g openspec-extensions\` 更新 openspec-extensions，再执行 \`openspec-ex install --target-repo /path/to/your/project --force --force-config\` 刷新当前仓库插件；当前流程继续，不受这条提醒影响。`
 - issue-mode 的默认 coordinator 入口是 `subagent-team`
+- 如果用户没有明确指定 stage，就先做显式复杂度 triage；不要因为“看起来我自己能直接做完”而跳过这个闸门
+- `2-3` 分是边界态，不是开始实现的授权；默认先走 `new` / `ff` 补 proposal/design，再重判
 - 如果当前 change 已经有 `issues/*.progress.json`、`issues/*.team.dispatch.md`、`runs/ISSUE-PLANNING.json` 或 `control/ACTIVE-SEAT-DISPATCH.json`，这些磁盘工件比“开始做 / 开始实现 / 直接落地”这类聊天话术优先级更高；默认先 reconcile，再继续 `subagent-team` 主链
+- 如果 triage 已选中复杂流，且你已授权“复杂时自动启用 subagent-team”，第一条执行更新就应明确说出：`路由决议：复杂流。我将按 subagent-team 协调推进；当前只允许补 proposal/design 并推进 spec_readiness，禁止开始实现。`
 - 当你已经选定具体 change 且刚做完复杂度判断时，最好把结果写进 `openspec/changes/<change>/control/ROUTE-DECISION.json`，至少包含 `route`、`score`、`summary`、`rationale`、`recommended_flow`、`updated_at`
 - 如果 `openspec/issue-mode.json` 里启用了 `subagent_team.auto_accept_*`，对应 gate 会由 coordinator 自动接受并继续，不再等待人工评审确认
 - `auto_accept_*` 的真实含义是“收齐当前 gate 所需 subagent verdict 之后，跳过人工签字继续推进”，不是“子代理刚启动就可以直接进入下一阶段”

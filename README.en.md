@@ -119,12 +119,17 @@ You can let the AI choose between the short path and the complex path, but it sh
 
 - Default to the short path when the scope is concentrated, the boundaries are clear, issue splitting is unnecessary, and one implementation pass plus change-level review is likely enough.
 - Default to the complex path when the work crosses modules, the design is still uncertain, design review is needed, issue splitting is likely, validation is multi-stage or expensive, or the user explicitly wants a long-running unattended lifecycle.
+- Treat the complexity check itself as a mandatory pre-implementation gate. If the user did not explicitly force a stage, run triage first instead of skipping it because the work feels manageable in one session.
 - For borderline cases, prefer `new` or `ff` first so proposal/design become clearer, then re-evaluate instead of forcing issue-mode too early.
+- A `2-3` result is a borderline route, not permission to start implementing. Fill proposal/design first, then re-evaluate instead of drifting straight into `apply` or `subagent-team`.
 - If a short-path execution reveals cross-module scope, repeated review loops, or natural issue boundaries, explicitly upgrade to the complex path and state why.
 - Once the triage selects the complex path, immediately restate a short route decision such as: `Route decision: complex flow. Only proposal/design and spec_readiness are allowed now; implementation is forbidden.`
+- When the complex path is selected, delegation is available, and the user already authorized auto-subagent use for complex work, immediately enter `issue-mode -> subagent-team`. Do not fall back to a single-agent `apply` path just because the task still looks doable locally.
+- In the first execution update after selecting the complex path, state the route and the immediate restriction plainly, for example: `Route decision: complex flow. I will continue through subagent-team; only proposal/design and spec_readiness are allowed now, implementation is forbidden.`
 - The complex-path result is a routing decision, not implementation authorization. Before `runs/SPEC-READINESS.json` is current and passed, do not start implementation, do not run scaffolding, and do not launch code-writing subagents.
 - Even after spec-readiness passes, the first issue execution still waits for a current passed `runs/ISSUE-PLANNING.json` and the planning-doc commit. Do not let phrases like "start implementing", "continue", or "enable subagent-team" skip those prerequisites.
 - Once the current change has written issue-mode artifacts on disk, such as `issues/*.progress.json`, `issues/*.team.dispatch.md`, or `runs/ISSUE-PLANNING.json`, that state should outrank generic phrases like "start implementing" or "just do it". The default move is to reconcile first and continue the `subagent-team` main path unless you explicitly ask to go back to the simple flow.
+- Before wrapping up, do one route-audit pass. If the selected route was not actually followed, say so explicitly instead of summarizing the run as if it remained compliant.
 
 The route explanation should stay short and concrete, for example:
 
@@ -138,6 +143,12 @@ Enter OpenSpec mode.
 Judge the requirement complexity yourself; if it belongs to the complex path, automatically enable subagent-team and proceed without asking me again.
 If spawned subagents are needed, explicitly use `<specified-model>`.
 Requirement: <requirement-description>
+```
+
+If you want the anti-drift version in one line without over-promoting medium work, use this:
+
+```text
+After entering OpenSpec mode, always run explicit complexity triage first; lock into issue-mode -> subagent-team only for `4+` or when issue-mode artifacts already exist; send `2-3` through `new`/`ff` and re-evaluate before any coding.
 ```
 
 ### Small Changes

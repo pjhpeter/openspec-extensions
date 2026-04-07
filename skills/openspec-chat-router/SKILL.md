@@ -100,13 +100,18 @@ Route based on the total:
 
 Guardrails:
 
+- Treat complexity triage as a mandatory gate before implementation whenever the user did not explicitly force a stage; do not skip it just because the work feels locally doable.
 - Existing issue artifacts on disk override a fresh simple-flow guess; reconcile first.
 - Once issue-mode state exists on disk for the target change, keep that route sticky across later "start implementing" or "continue coding" messages unless the user explicitly asks to exit issue-mode.
 - When a concrete change is already selected, persist the triage result to `control/ROUTE-DECISION.json` with the route, score, short summary, rationale bullets, recommended flow, and timestamp.
+- A `2-3` borderline result is not implementation authorization; route to `new` or `ff` first, then re-evaluate after proposal/design becomes clearer.
 - When the triage lands on the complex path, stop treating generic implementation wording as permission to code. First produce the route decision, then continue through proposal/design and the documented gates.
+- When the triage lands on the complex path and delegation is available, `issue-mode -> subagent-team` is the default coordinator route. Do not keep going as a simple local `apply` path just because the task still looks manageable in one session.
+- In the first user-facing execution update after selecting the complex path, explicitly state the route and the immediate restriction, for example: `路由决议：复杂流。我将按 subagent-team 协调推进；当前只允许补 proposal/design 并推进 spec_readiness，禁止开始实现。`
 - A single-file or tightly bounded change should not be promoted to issue-mode without concrete evidence from the request or artifacts.
 - If a simple-flow execution uncovers cross-module scope, repeated review loops, or clear issue boundaries, explicitly upgrade to the complex flow and state why.
 - If the user already authorized "complex -> auto subagent-team", do not ask again before using `subagent-team` in the main coordinator session once the triage lands on the complex path.
+- Before final completion, audit whether the selected route was actually followed. If execution drifted from the chosen route, disclose that deviation explicitly instead of silently summarizing the work as compliant.
 - The route explanation should be short and concrete, for example: "先按简单流程走，因为范围集中且不需要 issue 拆分。" or "改为复杂流程，因为已经跨模块并且需要 design review + issue 拆分。"
 
 ## Intent Routing

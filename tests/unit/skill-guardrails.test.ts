@@ -63,13 +63,17 @@ test("chat-router skill defines explainable complexity triage before choosing si
   assert.match(skill, /0-1/);
   assert.match(skill, /2-3/);
   assert.match(skill, /4\+/);
+  assert.match(skill, /mandatory gate before implementation/);
   assert.match(skill, /Existing issue artifacts on disk override a fresh simple-flow guess; reconcile first/);
+  assert.match(skill, /A `2-3` borderline result is not implementation authorization/);
   assert.match(skill, /keep that route sticky across later "start implementing" or "continue coding" messages/);
+  assert.match(skill, /Do not keep going as a simple local `apply` path just because the task still looks manageable in one session/);
   assert.match(skill, /immediately restate a route decision/);
   assert.match(skill, /control\/ROUTE-DECISION\.json/);
   assert.match(skill, /complex flow is a routing decision, not implementation authorization/);
   assert.match(skill, /do not start implementation, do not run scaffolding or app-bootstrap commands/);
   assert.match(skill, /runs\/ISSUE-PLANNING\.json/);
+  assert.match(skill, /Before final completion, audit whether the selected route was actually followed/);
   assert.match(skill, /explicitly upgrade to the complex flow and state why/);
   assert.match(skill, /complex -> auto subagent-team/);
 });
@@ -97,7 +101,10 @@ test("router examples and cheat sheet keep issue-mode state above generic apply 
   assert.match(examples, /已经拆过 issue，现在开始实现/);
   assert.match(examples, /reconcile`, then continue through `subagent-team`/);
   assert.match(examples, /apply` when the change has not entered issue-mode yet/);
+  assert.match(template, /先做显式复杂度 triage/);
+  assert.match(template, /`2-3` 分是边界态，不是开始实现的授权/);
   assert.match(template, /这些磁盘工件比“开始做 \/ 开始实现 \/ 直接落地”这类聊天话术优先级更高/);
+  assert.match(template, /路由决议：复杂流。我将按 subagent-team 协调推进/);
   assert.match(template, /不要因为“开始实现”这类泛化话术退回 apply/);
 });
 
