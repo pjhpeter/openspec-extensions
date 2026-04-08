@@ -23,6 +23,10 @@ test("subagent-team agent prompt scopes coordinator defaults to the main session
   assert.match(prompt, /seat-handoff artifact or the exact seat section from it/);
   assert.match(prompt, /do not fork the full coordinator thread or full chat history/);
   assert.match(prompt, /do not repeat the version reminder there/);
+  assert.match(prompt, /Only treat control-plane artifacts under `openspec\/changes\/<change>\/\.\.\.` as workflow state/);
+  assert.match(prompt, /task_plan\.md/);
+  assert.match(prompt, /continuation_policy\.mode=continue_immediately/);
+  assert.match(prompt, /do not stop at `control-plane ready`/);
   assert.match(prompt, /do not self-certify the gate/);
 });
 
@@ -44,6 +48,10 @@ test("chat-router agent prompt does not reroute spawned seat sessions", () => {
   assert.match(prompt, /issue-mode artifacts already exist/);
   assert.match(prompt, /higher priority than generic implementation wording/);
   assert.match(prompt, /reconcile first and continue the subagent-team main path/);
+  assert.match(prompt, /Only treat control-plane artifacts under `openspec\/changes\/<change>\/\.\.\.` as workflow state/);
+  assert.match(prompt, /task_plan\.md/);
+  assert.match(prompt, /continuation_policy/);
+  assert.match(prompt, /do not stop at a chat summary/);
 });
 
 test("mode cheat sheet includes unattended kickoff with explicit model and requirement placeholders", () => {
@@ -83,6 +91,18 @@ test("issue-mode contract includes persisted route decision artifact", () => {
 
   assert.match(contract, /ROUTE-DECISION\.json/);
   assert.match(contract, /Complexity triage for a concrete change should be written to `control\/ROUTE-DECISION\.json`/);
+  assert.match(contract, /Only issue-mode artifacts under `openspec\/changes\/<change>\/\.\.\.` count as workflow state/);
+  assert.match(contract, /task_plan\.md/);
+  assert.match(contract, /After an external disconnect or fresh reconnect/);
+});
+
+test("reconcile skill resume rules ignore repo-root helper noise and honor continuation policy", () => {
+  const skill = readRepoFile("skills/openspec-reconcile-change/SKILL.md");
+
+  assert.match(skill, /Only treat control-plane artifacts under `openspec\/changes\/<change>\/\.\.\.` as issue-mode workflow state/);
+  assert.match(skill, /task_plan\.md/);
+  assert.match(skill, /continuation_policy\.mode=continue_immediately/);
+  assert.match(skill, /external disconnect or a fresh reconnect/);
 });
 
 test("coordinator playbook forbids implementation before complex-flow gates pass", () => {

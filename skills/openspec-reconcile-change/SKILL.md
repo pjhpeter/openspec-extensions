@@ -76,6 +76,7 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
 ## Rules
 
 - Do not treat issue-execution chat output as the source of truth when artifacts exist; prefer issue progress artifacts over run artifacts.
+- Only treat control-plane artifacts under `openspec/changes/<change>/...` as issue-mode workflow state; do not reinterpret unrelated repo-root helper files such as `task_plan.md`, `findings.md`, or `progress.md` as control-plane corruption, workflow noise, or a reason to pause reconcile.
 - Do not let issue execution subagents update `tasks.md`, self-merge, or create the final git commit for an issue.
 - Use issue docs to discover pending work that has not started yet.
 - `openspec-extensions reconcile merge-issue` expects a clean coordinator worktree only when the issue uses an isolated worker worktree; shared workspace mode commits the current repo-root issue diff directly.
@@ -88,6 +89,7 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
 - Read `continuation_policy` from the helper output before deciding whether a pause is intentional.
 - Before the first issue dispatch, the coordinator must create a dedicated planning-doc commit for `proposal.md` / `design.md` / `tasks.md` / `issues/INDEX.md` / `ISSUE-*.md`.
 - If `continuation_policy.mode=continue_immediately`, do not stop at `control-plane ready`, `checkpoint`, or a chat summary; continue the action now.
+- The same rule applies after an external disconnect or a fresh reconnect: rerun reconcile from disk, then honor `continuation_policy` instead of treating the resumed chat as a new manual checkpoint.
 - If `commit_planning_docs` is emitted, do not skip straight to issue execution; commit the planning docs first, rerun reconcile, and only then honor `dispatch_next_issue`.
 - If `automation_profile=full_auto` and the helper emits `dispatch_next_issue`, do not stop to ask the user; render the next team dispatch or continue the subagent-team loop immediately.
 - If `auto_accept_issue_review=true` and the helper emits `auto_accept_issue`, do not stop to ask the user; merge/commit the issue immediately and continue.

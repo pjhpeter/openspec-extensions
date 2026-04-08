@@ -189,6 +189,7 @@ Complexity triage for a concrete change should be written to `control/ROUTE-DECI
 Issue progress files are the execution state.
 Control backlog and round reports are the acceptance state.
 Team dispatch artifacts are the coordinator handoff state for the default subagent-team rounds in issue mode.
+Only issue-mode artifacts under `openspec/changes/<change>/...` count as workflow state; unrelated repo-root helper files such as `task_plan.md`, `findings.md`, or `progress.md` must not be reclassified as control-plane corruption, workflow noise, or a reason to stop auto-continuation.
 In issue mode, accepted code lands through coordinator review plus coordinator-owned acceptance commit, not through worker self-management.
 When a change-level worktree is reused across serial issues, that worktree must be synced to the latest accepted commit after each accepted issue so later issues inherit the already-landed code.
 The first issue execution also depends on a prior coordinator-owned planning-doc commit for `proposal.md` / `design.md` / `tasks.md` / `issues/INDEX.md` / `ISSUE-*.md`.
@@ -198,3 +199,4 @@ Before verify, the coordinator must also write a current `runs/CHANGE-REVIEW.jso
 After successful archive of a change that used change scope, the reusable worktree should be removed as part of archive cleanup.
 When `subagent_team.auto_accept_*` is enabled, the gate is still coordinator-owned; it simply no longer waits for human chat confirmation before the coordinator accepts it.
 It still requires the gate-bearing subagents for that phase to finish, and it does not authorize early phase completion or early subagent closure.
+After an external disconnect or fresh reconnect, the coordinator should resume from those disk artifacts, rerun reconcile, and keep following `continuation_policy` instead of inventing a new soft checkpoint from chat history alone.
