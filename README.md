@@ -1,7 +1,7 @@
 # OpenSpec Extensions
 
 > [!TIP]
-> 语言 / Language：**简体中文（默认）** | [English](./README.en.md)
+> 语言 / Language：**简体中文** | [English](./README.en.md)
 
 > [!IMPORTANT]
 > 特别鸣谢！本 skill 基于 **唐杰** 提供的 rra subagent team 工作流基座。

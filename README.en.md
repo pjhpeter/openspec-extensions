@@ -1,7 +1,7 @@
 # OpenSpec Extensions
 
 > [!TIP]
-> Language / 语言: [简体中文（默认）](./README.md) | **English**
+> Language / 语言: [简体中文](./README.md) | **English**
 
 > [!IMPORTANT]
 > Special thanks! This skill set is built on top of **Tang Jie**'s RRA subagent-team workflow foundation.
