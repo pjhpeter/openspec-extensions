@@ -165,19 +165,21 @@ openspec/changes/*/runs/CHANGE-REVIEW.json
 
 ### 简单任务
 
-如果任务足够小，我建议直接走 OpenSpec 的短链路：创建 change、补齐 proposal/design/tasks、完成实现、跑 change-level review、再 verify 和 archive。这个仓库不会强迫你把所有事情都拆成多 issue。
+如果任务足够小，我建议直接走 OpenSpec 的短链路：创建 change、补齐 proposal/design/tasks、完成实现、先跑自动化测试/校验、再做自动化手工验证、然后跑 change-level review、最后 verify 和 archive。这个仓库不会强迫你把所有事情都拆成多 issue。前端或其他浏览器可见改动不能只停在命令行测试，必须调用浏览器覆盖受影响主路径。
 
 ```mermaid
 flowchart TD
     A[进入 OpenSpec 模式] --> B[创建 change 并补齐 proposal/design/tasks]
     B --> C[直接实现当前 change]
-    C --> D[运行 change-level /review]
-    D --> E{review 通过?}
-    E -- 否 --> C
-    E -- 是 --> F[verify 当前 change]
-    F --> G{verify 通过?}
+    C --> D[运行自动化测试 / 校验]
+    D --> E[执行自动化手工验证<br/>前端需调用浏览器]
+    E --> F[运行 change-level /review]
+    F --> G{review 通过?}
     G -- 否 --> C
-    G -- 是 --> H[同步 spec 并 archive]
+    G -- 是 --> H[verify 当前 change]
+    H --> I{verify 通过?}
+    I -- 否 --> C
+    I -- 是 --> J[同步 spec 并 archive]
 ```
 
 如果我要让 agent 按简单任务短链路推进，我常用的话术是：
@@ -197,13 +199,13 @@ flowchart TD
 3. 直接实现当前 change
 
 ```text
-开始实现当前 change；如果任务规模仍然简单，并且当前 change 还没有进入 issue-mode，就不要拆 issue，直接完成实现并运行校验。
+开始实现当前 change；如果任务规模仍然简单，并且当前 change 还没有进入 issue-mode，就不要拆 issue。直接完成实现，先跑自动化测试/校验，再做自动化手工验证；如果是前端或其他浏览器可见改动，必须调用浏览器覆盖受影响主路径。
 ```
 
 4. review / verify / archive 收尾
 
 ```text
-先对当前分支未 push 的代码执行 change-level /review（排除 `openspec/changes/**`）；review 通过后再检查当前 change 是否可以归档；如果 verify 通过，就同步 spec 并归档。
+先确认自动化测试/校验和自动化手工验证证据都已补齐；如果是前端或其他浏览器可见改动，确认浏览器主路径已实际跑通。然后对当前分支未 push 的代码执行 change-level /review（排除 `openspec/changes/**`）；review 通过后再检查当前 change 是否可以归档；如果 verify 通过，就同步 spec 并归档。
 ```
 
 5. 如果中途会话返回过早
@@ -244,6 +246,8 @@ openspec-extensions execute seat-state set \
 ```
 
 8. development seat 只写代码和 checkpoint；如果改动让既有校验失效，只把相关 validation 标回 `pending`，不直接把 issue 标成完成，也不在该 seat 内自称校验通过。checker / reviewer 通过后，由 coordinator 先写 `runs/ISSUE-REVIEW-<issue>.json`，再做 reconcile、review、merge、commit、verify、archive。
+
+复杂流程把自动化测试/校验和自动化手工验证放在最后统一收口一次即可；所有 issue 完成后，再补齐这些验证证据。前端或其他浏览器可见改动也放在这个最终收口节点调用浏览器覆盖受影响主路径，然后再进入后续 review / verify。
 
 这套流程的重点不是“多开几个 agent”本身，而是把 change 的控制面放回磁盘和 coordinator 手里。这样就算会话断掉、子代理失败、或者中途需要人工接管，状态也还是可追踪的。
 

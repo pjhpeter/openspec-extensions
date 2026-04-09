@@ -141,8 +141,8 @@ Guardrails:
 
 - “没想清楚 / 先聊聊 / 先梳理一下” -> `explore`
 - Default to `complexity triage` before choosing the simple or complex path when the user only describes the requirement.
-- Small task after triage -> `propose` -> `apply` -> review current code -> `verify` -> `archive`
-- Large task after triage -> `new` -> `ff` -> `plan-issues` / `subagent-team` -> reconcile -> review current code -> `verify` -> `archive`
+- Small task after triage -> `propose` -> `apply` -> automated test/validation + automated manual verification -> review current code -> `verify` -> `archive`
+- Large task after triage -> `new` -> `ff` -> `plan-issues` / `subagent-team` -> reconcile -> automated test/validation + automated manual verification evidence -> review current code -> `verify` -> `archive`
 - “继续刚才那个 / 继续这个 change / 下一个文档” -> `continue`
 - “开始做 / 开始实现 / 直接落地” -> `apply`, but only when the target change does not already have active issue-mode state on disk
 - “拆成 issue / 给出 issue 边界 / 生成 issue 文档” -> `plan-issues`
@@ -173,6 +173,7 @@ Preferred flow:
 11. In subagent-team `issue_execution`, development seats stop at implementation and progress checkpoint. If code changes invalidate prior validation, they only mark those validation entries back to `pending`; checker/reviewer and the coordinator own the later validation/review gate. Only after checker/reviewer finish and the coordinator records `runs/ISSUE-REVIEW-<issue>.json` should the issue move to `review_required`, after which manual review or `auto_accept_issue_review=true` may merge/commit it.
 12. In every gate-bearing phase, record launched seat ids, wait for completion, normalize the verdicts, and do not advance while any required gate subagent is still running.
 13. Repeat for the next approved issue, then run a change-level `/review` plus a change-level acceptance round before `verify` and `archive`.
+14. In complex flow, keep automated test/validation and automated manual verification as one final closeout step after all approved issues are done. For frontend or other browser-visible changes, drive the browser through the affected main path in that final closeout step before `verify` / `archive`.
 
 ## Special Path: `mode`
 

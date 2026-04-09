@@ -29,10 +29,11 @@
    - 如果 gate-bearing seat 已经拉起，但结果回收链路不稳定，主会话只能重拉 seat 或停下处理 blocker；不要把该 gate 改成主会话自证通过，更不要直接继续后续 phase
 7. 只有在显式收窄到单个 issue-only subagent 时，才让一个 issue 开一个 subagent，并且只在该 worktree 内工作
 8. team dispatch 里的 development seat 只写代码和 progress checkpoint；如果代码改动让既有校验失效，只把对应 validation 标回 `pending`，不直接把 issue 标成 `completed + review_required`，也不在该 seat 内自称校验已通过。checker / reviewer 通过后，由主会话把结果写成 `runs/ISSUE-REVIEW-<issue>.json`
-9. issue 执行 subagent 不直接合并、不直接提交
-10. 主会话用 reconcile 收敛状态；如果 `auto_accept_issue_review=true` 且 issue-local validation 通过，主会话应在 gate-bearing 审查 subagent 全部完成、`runs/ISSUE-REVIEW-<issue>.json` 已通过后直接自动 merge/commit 并继续下一轮。若当前 issue 使用的是 change 级 worktree，merge/commit 后还要把该 worktree 同步到最新接受 commit，再开始后续 issue
-11. 所有 issue 都被主会话接受后，先对当前 change 修改的代码运行一次 `/review`，把结果落成 `runs/CHANGE-REVIEW.json`
-12. change-level `/review` 通过后，再做一轮 change 级 acceptance；如果 `auto_accept_change_acceptance=true`，这一关不需要人工签字，然后进入 verify / archive。对于 change 级 worktree，archive 时应一起清理对应 `.worktree/<change>`
+9. issue 执行回合不要求在每个 issue 上重复跑最终自动化测试；自动化测试/校验和自动化手工验证统一留到所有 issue 完成后的最终收口节点
+10. issue 执行 subagent 不直接合并、不直接提交
+11. 主会话用 reconcile 收敛状态；如果 `auto_accept_issue_review=true` 且 issue-local validation 通过，主会话应在 gate-bearing 审查 subagent 全部完成、`runs/ISSUE-REVIEW-<issue>.json` 已通过后直接自动 merge/commit 并继续下一轮。若当前 issue 使用的是 change 级 worktree，merge/commit 后还要把该 worktree 同步到最新接受 commit，再开始后续 issue
+12. 所有 issue 都被主会话接受后，先确认自动化测试/校验与自动化手工验证证据齐全，再对当前 change 修改的代码运行一次 `/review`，把结果落成 `runs/CHANGE-REVIEW.json`
+13. change-level `/review` 通过后，再做一轮 change 级 acceptance；如果 `auto_accept_change_acceptance=true`，这一关不需要人工签字，然后进入 verify / archive。对于 change 级 worktree，archive 时应一起清理对应 `.worktree/<change>`
 
 所有 subagent 都要遵守下面这组角色铁律：
 
@@ -86,7 +87,7 @@
 按当前 openspec/issue-mode.json 配置继续当前 change。
 默认入口使用 subagent-team，按全自动方式推进整个生命周期。
 设计文档编写 subagent 和编码 subagent 使用 high，其他 subagent 使用 Medium。
-在所有 issues 完成后，先对当前 change 修改的代码执行 /review，通过后再进入 verify。
+在所有 issues 完成后，先补齐自动化测试/校验和自动化手工验证证据；前端或其他浏览器可见改动必须先调用浏览器覆盖受影响主路径。然后对当前 change 修改的代码执行 /review，通过后再进入 verify。
 对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
 当前 gate 的 review/check subagent 必须等待全部完成并收齐 verdict，禁止提前关闭或提前通过 phase。
 ```

@@ -178,6 +178,7 @@ depends_on:
 
 This is the source of truth for dispatch generation.
 If `worker_worktree` or `validation` is missing, helpers fall back to `openspec/issue-mode.json`.
+`validation` covers command-based checks only; automated manual verification can still be required separately for user-visible behavior.
 `worker_worktree: .` means shared workspace mode.
 Explicit `.worktree/<change>` means change worktree mode.
 Explicit `.worktree/<change>/<issue>` means issue-isolated worktree mode.
@@ -195,6 +196,7 @@ When a change-level worktree is reused across serial issues, that worktree must 
 The first issue execution also depends on a prior coordinator-owned planning-doc commit for `proposal.md` / `design.md` / `tasks.md` / `issues/INDEX.md` / `ISSUE-*.md`.
 It also depends on a current passed `runs/ISSUE-PLANNING.json`; stale or missing planning gate artifacts mean the change is still in `issue_planning`.
 When the issue is running under team dispatch, development seats do not close the issue on their own and are not the validation owner; they hand off changed files plus any validation entries reset to `pending`, then the coordinator records `runs/ISSUE-REVIEW-<issue>.json` after checker/reviewer pass and marks the issue `completed + review_required`.
+Complex flow keeps the final automated test/validation and automated manual verification at change closeout rather than repeating them for every issue. For frontend or other browser-visible changes, drive the affected main path in a browser during that final closeout step before the change is treated as verified.
 Before verify, the coordinator must also write a current `runs/CHANGE-REVIEW.json` artifact from a change-level `/review` of the current change diff.
 After successful archive of a change that used change scope, the reusable worktree should be removed as part of archive cleanup.
 When `subagent_team.auto_accept_*` is enabled, the gate is still coordinator-owned; it simply no longer waits for human chat confirmation before the coordinator accepts it.

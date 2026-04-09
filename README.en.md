@@ -155,19 +155,21 @@ After entering OpenSpec mode, always run explicit complexity triage first; lock 
 
 ### Small Changes
 
-If the task is small enough, I recommend staying on the short OpenSpec path: create a change, fill in proposal/design/tasks, implement it, run change-level review, then verify and archive. This repository does not force every task into multi-issue execution.
+If the task is small enough, I recommend staying on the short OpenSpec path: create a change, fill in proposal/design/tasks, implement it, run automated tests and validation, perform automated manual verification, then run change-level review, verify, and archive. This repository does not force every task into multi-issue execution. Frontend or other browser-visible changes must not stop at command-line checks; they also need browser-driven coverage of the affected main path.
 
 ```mermaid
 flowchart TD
     A[Enter OpenSpec mode] --> B[Create a change and fill proposal/design/tasks]
     B --> C[Implement the current change directly]
-    C --> D[Run change-level /review]
-    D --> E{Review passed?}
-    E -- No --> C
-    E -- Yes --> F[Verify the current change]
-    F --> G{Verify passed?}
+    C --> D[Run automated tests / validation]
+    D --> E[Perform automated manual verification<br/>use a browser for frontend paths]
+    E --> F[Run change-level /review]
+    F --> G{Review passed?}
     G -- No --> C
-    G -- Yes --> H[Sync spec and archive]
+    G -- Yes --> H[Verify the current change]
+    H --> I{Verify passed?}
+    I -- No --> C
+    I -- Yes --> J[Sync spec and archive]
 ```
 
 If I want an agent to follow the short path for a small task, these are the prompts I usually use:
@@ -187,13 +189,13 @@ Create a change for this request and fill proposal, design, and tasks until they
 3. Implement the current change directly
 
 ```text
-Start implementing the current change. If the scope is still small, and the change has not entered issue-mode yet, do not split into issues. Just complete the implementation and run validation.
+Start implementing the current change. If the scope is still small, and the change has not entered issue-mode yet, do not split into issues. Complete the implementation, run automated tests and validation, then perform automated manual verification. If the change is frontend or otherwise browser-visible, use a browser to cover the affected main path.
 ```
 
 4. Finish with review / verify / archive
 
 ```text
-Run a change-level /review on the unpushed code in the current branch, excluding openspec/changes/**. If review passes, check whether the change is ready to archive. If verify passes, sync the spec and archive it.
+First confirm that automated test/validation evidence and automated manual verification evidence are both current. For frontend or other browser-visible changes, confirm the affected main path was actually exercised in a browser. Then run a change-level /review on the unpushed code in the current branch, excluding openspec/changes/**. If review passes, check whether the change is ready to archive. If verify passes, sync the spec and archive it.
 ```
 
 5. If the session returns too early
