@@ -157,6 +157,13 @@ openspec/changes/*/runs/CHANGE-REVIEW.json
 需求：<需求描述>
 ```
 
+如果中断的会话想要继续完成之前的 change，也可以直接这样说：
+
+```text
+进入 OpenSpec 模式。
+继续 <change> change，根据原来判断的复杂度继续；如果是复杂流程，启用 subagent-team，spawned subagent 显式使用 `<指定模型>`。
+```
+
 如果你想把防呆做得更硬，但又不想误伤中等任务，我建议把规则收敛成一句：
 
 ```text
@@ -211,13 +218,7 @@ flowchart TD
 5. 如果中途会话返回过早
 
 ```text
-继续当前 change，保持 OpenSpec 主链推进，先完成 review，再做 verify 和 archive。
-```
-
-如果当前 change 已经拆过 issue，但会话中断后你只是想接着往下做，我建议这样说：
-
-```text
-这个 change 已经在 issue-mode 里了。先按磁盘上的 issue/progress/dispatch 状态 reconcile，再继续 subagent-team 主链；不要因为“开始实现”这类泛化话术退回 apply。
+继续 <change> change。
 ```
 
 ### 复杂任务
@@ -342,7 +343,7 @@ flowchart TD
 6. 如果中途会话返回过早
 
 ```text
-继续当前 change，保持 subagent-team 主链推进。
+这个 change 已经在 issue-mode 里了。先按磁盘上的 issue/progress/dispatch 状态 reconcile，再继续 subagent-team 主链；不要因为“开始实现”这类泛化话术退回 apply。
 如果需要等待 subagent，使用 1 小时阻塞等待，直到 subagent 完成再返回。
 如果当前 phase 还有 review/check subagent 在运行，先等它们全部完成并收齐 verdict，再决定是否进入下一阶段。
 ```
