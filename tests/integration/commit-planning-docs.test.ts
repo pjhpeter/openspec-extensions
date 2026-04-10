@@ -68,11 +68,15 @@ validation:
     }) as { commit_sha?: string; status: string };
     const status = git(repoRoot, "status", "--short");
     const headMessage = git(repoRoot, "log", "-1", "--pretty=%s");
+    const headBody = git(repoRoot, "log", "-1", "--pretty=%B");
     const committedFiles = git(repoRoot, "show", "--pretty=", "--name-only", "HEAD");
 
     assert.equal(payload.status, "committed");
     assert.match(String(payload.commit_sha), /^[0-9a-f]{40}$/);
     assert.equal(headMessage, `opsx(${change}): commit planning docs`);
+    assert.match(headBody, /- snapshot proposal, design, tasks, and issue docs before the first issue dispatch/);
+    assert.match(headBody, /- keep the planning-doc commit boundary separate from issue execution/);
+    assert.match(headBody, /- include proposal\.md, design\.md, tasks\.md, INDEX\.md; ISSUE-001/);
     assert.match(status, /src\/keep\.ts/);
     assert.match(committedFiles, new RegExp(`openspec/changes/${change}/proposal\\.md`));
     assert.match(committedFiles, new RegExp(`openspec/changes/${change}/design\\.md`));

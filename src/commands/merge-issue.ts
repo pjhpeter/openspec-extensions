@@ -204,25 +204,22 @@ function buildDefaultCommitMessage(
 
   const bodyLines: string[] = [];
   if (context.doneWhen.length > 0) {
-    bodyLines.push("Done when:");
-    for (const item of context.doneWhen.slice(0, 3)) {
-      bodyLines.push(`- ${item}`);
-    }
-    if (context.doneWhen.length > 3) {
-      bodyLines.push(`- (+${context.doneWhen.length - 3} more acceptance items)`);
-    }
+    const acceptanceItems = context.doneWhen.slice(0, 3);
+    const acceptanceSummary = acceptanceItems.join("; ");
+    bodyLines.push(
+      context.doneWhen.length > 3
+        ? `- cover acceptance targets: ${acceptanceSummary}; (+${context.doneWhen.length - 3} more items)`
+        : `- cover acceptance targets: ${acceptanceSummary}`
+    );
+  } else if (context.title) {
+    bodyLines.push(`- accept the reviewed implementation for ${context.title}`);
   }
 
   const changedFileLines = summarizeChangedFiles(changedFiles);
   if (changedFileLines.length > 0) {
-    if (bodyLines.length > 0) {
-      bodyLines.push("");
-    }
-    bodyLines.push("Changed files:");
-    for (const item of changedFileLines) {
-      bodyLines.push(`- ${item}`);
-    }
+    bodyLines.push(`- merge reviewed changes touching ${changedFileLines.join(", ")}`);
   }
+  bodyLines.push("- preserve the coordinator-owned acceptance commit boundary before the next issue");
 
   return bodyLines.length > 0 ? `${subject}\n\n${bodyLines.join("\n")}` : subject;
 }

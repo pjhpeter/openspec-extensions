@@ -59,5 +59,10 @@ Use [`README.md`](./README.md) as the long-form product and workflow reference. 
 ## Commit & Pull Request Guidelines
 - Use Conventional Commit style consistent with repo history, for example `feat(reconcile): add change backlog sync` or `chore(release): bump version to 0.1.3`.
 - Keep commits focused on one behavior change, installer change, or release step.
+- When writing a commit message, prefer `type(scope): summary` plus 2-3 short body bullets when the change is non-trivial.
+- The summary should state one concrete intent; use specific verbs such as `add`, `fix`, `clarify`, `align`, or `tighten`, and avoid vague subjects like `update` or `misc fixes`.
+- Choose `scope` from the affected subsystem or workflow, not a file list; omit it if it only makes the title noisier.
+- Body bullets should cover: what changed, why it changed, and impact/risk/boundary when that information is known. Do not claim tests passed, compatibility improved, or risk was reduced unless that was actually verified.
+- If the staged changes clearly mix multiple intents, split them into separate commits before writing the final message.
 - PRs should describe the user-visible workflow impact, list verification commands actually run, and call out any target-repo effects such as installed files, config keys, or overwrite behavior.
 - Include sample command output when changing CLI semantics, install output, or package publishing behavior.

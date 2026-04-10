@@ -114,8 +114,9 @@ validation:
     assert.equal(runArtifact.boundary_status, "done");
     assert.equal(status, "");
     assert.equal(headMessage, `opsx(${change}): accept ${issueId} Shared workspace issue`);
-    assert.match(headBody, /Done when:\n- complete shared workspace acceptance/);
-    assert.match(headBody, /Changed files:\n- src\/demo\.ts/);
+    assert.match(headBody, /- cover acceptance targets: complete shared workspace acceptance/);
+    assert.match(headBody, /- merge reviewed changes touching src\/demo\.ts/);
+    assert.match(headBody, /- preserve the coordinator-owned acceptance commit boundary before the next issue/);
   });
 });
 

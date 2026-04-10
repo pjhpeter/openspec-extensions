@@ -144,8 +144,37 @@ function gitOutput(repoRoot: string, ...args: string[]): string {
   return runCommand(["git", ...args], repoRoot).stdout.trim();
 }
 
-function defaultCommitMessage(change: string): string {
-  return `opsx(${change}): commit planning docs`;
+function summarizePlanningDocPaths(paths: string[]): string[] {
+  const normalized = [...new Set(paths.map((item) => item.trim()).filter(Boolean))];
+  const issueDocs = normalized.filter((item) => /\/issues\/ISSUE-.*\.md$/u.test(item));
+  const coreDocs = normalized.filter((item) => !issueDocs.includes(item));
+  const summary: string[] = [];
+
+  if (coreDocs.length > 0) {
+    summary.push(coreDocs.map((item) => path.basename(item)).join(", "));
+  }
+  if (issueDocs.length > 0) {
+    const issueLabels = issueDocs.slice(0, 3).map((item) => path.basename(item, ".md"));
+    summary.push(
+      issueDocs.length > 3
+        ? `${issueLabels.join(", ")} (+${issueDocs.length - 3} more issue docs)`
+        : issueLabels.join(", ")
+    );
+  }
+
+  return summary;
+}
+
+function defaultCommitMessage(change: string, repoRelativePaths: string[]): string {
+  const bodyLines = [
+    "- snapshot proposal, design, tasks, and issue docs before the first issue dispatch",
+    "- keep the planning-doc commit boundary separate from issue execution"
+  ];
+  const summarizedPaths = summarizePlanningDocPaths(repoRelativePaths);
+  if (summarizedPaths.length > 0) {
+    bodyLines.push(`- include ${summarizedPaths.join("; ")}`);
+  }
+  return `opsx(${change}): commit planning docs\n\n${bodyLines.join("\n")}`;
 }
 
 function issueIdFromDoc(filePath: string): string {
@@ -731,7 +760,7 @@ export function commitPlanningDocs(args: CommitPlanningDocsArgs): JsonRecord {
     throw new Error(`No planning docs found for change \`${args.change}\`.`);
   }
 
-  const commitMessage = args.commitMessage.trim() || defaultCommitMessage(args.change);
+  const commitMessage = args.commitMessage.trim() || defaultCommitMessage(args.change, repoRelativePaths);
   const result: JsonRecord = {
     change: args.change,
     commit_message: commitMessage,
