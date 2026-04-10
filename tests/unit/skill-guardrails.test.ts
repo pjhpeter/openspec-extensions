@@ -34,12 +34,19 @@ test("chat-router agent prompt does not reroute spawned seat sessions", () => {
   const prompt = readRepoFile("skills/openspec-chat-router/agents/openai.yaml");
 
   assert.match(prompt, /only for the main user-facing or coordinator session/);
+  assert.match(prompt, /进入 openspec 模式/);
+  assert.match(prompt, /进入 OpenSpec 模式/);
+  assert.match(prompt, /给我 openspec 话术模板/);
+  assert.match(prompt, /把命令表打出来/);
   assert.match(prompt, /first openspec-extensions skill activation/);
   assert.match(prompt, /best-effort non-blocking version check/);
   assert.match(prompt, /openspec\/openspec-extensions\.json/);
   assert.match(prompt, /repo-recorded plugin version/);
   assert.match(prompt, /npm update -g openspec-extensions/);
   assert.match(prompt, /openspec-ex install --target-repo \/path\/to\/your\/project --force --force-config/);
+  assert.match(prompt, /treat that as the `mode` path/);
+  assert.match(prompt, /print the compact OpenSpec mode cheat sheet and recommended kickoff wording/);
+  assert.match(prompt, /stop unless I included another concrete OpenSpec request in the same message/);
   assert.match(prompt, /explicit seat-local spawned-subagent handoff/);
   assert.match(prompt, /do not apply coordinator fallback rules/);
   assert.match(prompt, /do not fork the full coordinator thread\/context into them/);
@@ -52,6 +59,13 @@ test("chat-router agent prompt does not reroute spawned seat sessions", () => {
   assert.match(prompt, /task_plan\.md/);
   assert.match(prompt, /continuation_policy/);
   assert.match(prompt, /do not stop at a chat summary/);
+});
+
+test("chat-router skill metadata includes the spaced OpenSpec mode trigger", () => {
+  const skill = readRepoFile("skills/openspec-chat-router/SKILL.md");
+
+  assert.match(skill, /“进入openspec模式”/);
+  assert.match(skill, /“进入 openspec 模式”/);
 });
 
 test("mode cheat sheet includes unattended kickoff with explicit model and requirement placeholders", () => {

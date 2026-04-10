@@ -1,6 +1,6 @@
 ---
 name: openspec-chat-router
-description: Route natural-language chat or IM requests into the correct OpenSpec workflow step without requiring slash commands. Use when the user wants to drive the OpenSpec change workflow in plain language, such as “进入openspec模式”, “给我 openspec 话术模板”, “列出当前 change 列表”, “起一个变更”, “继续当前 change”, “把文档补齐后开始做”, “检查能不能归档”, “同步 delta spec”, “按 issue 模式继续”, “拆成 issue”, “给我 ISSUE-001 的派发模板”, “直接开 subagent 做 ISSUE-001”, “用 subagent team 推进 ISSUE-001”, “执行 ISSUE-001”, “同步 issue 进度”, or “根据 issue 结果继续推进”.
+description: Route natural-language chat or IM requests into the correct OpenSpec workflow step without requiring slash commands. Use when the user wants to drive the OpenSpec change workflow in plain language, such as “进入openspec模式”, “进入 openspec 模式”, “给我 openspec 话术模板”, “列出当前 change 列表”, “起一个变更”, “继续当前 change”, “把文档补齐后开始做”, “检查能不能归档”, “同步 delta spec”, “按 issue 模式继续”, “拆成 issue”, “给我 ISSUE-001 的派发模板”, “直接开 subagent 做 ISSUE-001”, “用 subagent team 推进 ISSUE-001”, “执行 ISSUE-001”, “同步 issue 进度”, or “根据 issue 结果继续推进”.
 ---
 
 # OpenSpec Chat Router
