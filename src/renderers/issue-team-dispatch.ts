@@ -4,10 +4,13 @@ import { parseArgs } from "node:util";
 
 import { issueReviewArtifactPath } from "../domain/change-coordinator";
 import {
+  collectIssueDispatchStateSnapshots,
+  ensureIssueDispatchAllowed,
   loadIssueModeConfig,
   issueWorkerWorktreeSetting,
   parseFrontmatter,
   readChangeControlState,
+  type IssueDispatchGate,
   type IssueModeConfig,
 } from "../domain/issue-mode";
 import {
@@ -24,18 +27,6 @@ import { displayPath } from "../utils/path";
 
 type JsonRecord = Record<string, unknown>;
 
-type DispatchGate = {
-  action: string;
-  active: boolean;
-  allowed: boolean;
-  blocking: boolean;
-  enforced: boolean;
-  issue_id: string;
-  mode: string;
-  reason: string;
-  status: string;
-};
-
 type ParsedArgs = {
   change: string;
   dryRun: boolean;
@@ -51,7 +42,7 @@ export type IssueTeamDispatchPayload = {
   active_seat_dispatch_path: string;
   change: string;
   config_path: string;
-  control_gate: DispatchGate;
+  control_gate: IssueDispatchGate;
   control_state: JsonRecord;
   dispatch_id: string;
   dry_run: boolean;
@@ -249,78 +240,6 @@ function validationSnapshotLines(progressSnapshot: JsonRecord): string[] {
 
 function issueProgressPath(repoRoot: string, change: string, issueId: string): string {
   return path.join(repoRoot, "openspec", "changes", change, "issues", `${issueId}.progress.json`);
-}
-
-function evaluateIssueDispatchGate(
-  config: IssueModeConfig,
-  controlState: JsonRecord,
-  issueId: string
-): DispatchGate {
-  const gateMode = String(config.rra.gate_mode || "advisory").trim() || "advisory";
-  const normalizedIssueId = issueId.trim();
-  const gate: DispatchGate = {
-    action: "",
-    active: false,
-    allowed: true,
-    blocking: false,
-    enforced: false,
-    issue_id: normalizedIssueId,
-    mode: gateMode,
-    reason: "",
-    status: "not_applicable",
-  };
-
-  if (!controlState.enabled) {
-    return gate;
-  }
-
-  const mustFixNow = controlState.must_fix_now;
-  const mustFixNowOpen =
-    mustFixNow && typeof mustFixNow === "object" && !Array.isArray(mustFixNow)
-      ? Number((mustFixNow as JsonRecord).open_count || 0)
-      : 0;
-  if (mustFixNowOpen > 0) {
-    gate.active = true;
-    gate.blocking = true;
-    gate.allowed = false;
-    gate.status = "blocked_by_backlog";
-    gate.action = "resolve_round_backlog";
-    gate.reason = `\u5f53\u524d RRA backlog \u4ecd\u6709 ${mustFixNowOpen} \u4e2a Must fix now \u672a\u5904\u7406\u3002`;
-    gate.enforced = gateMode === "enforce";
-    return gate;
-  }
-
-  const latestRound =
-    controlState.latest_round && typeof controlState.latest_round === "object" && !Array.isArray(controlState.latest_round)
-      ? (controlState.latest_round as JsonRecord)
-      : {};
-  const dispatchableIssueIds = new Set(normalizeStringList(latestRound.referenced_issue_ids));
-  if (latestRound.dispatch_gate_active && dispatchableIssueIds.size > 0) {
-    gate.active = true;
-    if (dispatchableIssueIds.has(normalizedIssueId)) {
-      gate.allowed = true;
-      gate.status = "approved_for_dispatch";
-      gate.action = "dispatch_next_issue";
-      gate.reason = "\u5f53\u524d round \u5df2\u6279\u51c6\u8be5 issue \u6d3e\u53d1\u3002";
-    } else {
-      gate.allowed = false;
-      gate.blocking = true;
-      gate.status = "blocked_by_round_scope";
-      gate.action = "update_round_scope";
-      gate.reason = "\u5f53\u524d round \u672a\u6279\u51c6\u8be5 issue \u6d3e\u53d1\uff0c\u8bf7\u66f4\u65b0 round scope\u3002";
-    }
-  }
-
-  gate.enforced = gate.blocking && gateMode === "enforce";
-  return gate;
-}
-
-function ensureIssueDispatchAllowed(config: IssueModeConfig, controlState: JsonRecord, issueId: string): DispatchGate {
-  const gate = evaluateIssueDispatchGate(config, controlState, issueId);
-  if (gate.enforced) {
-    throw new Error(`Dispatch blocked by RRA gate: ${gate.reason || "unknown reason"}`);
-  }
-  return gate;
 }
 
 function issueValidationCommands(
@@ -554,7 +473,7 @@ function renderDispatch(input: {
   allowedScope: string[];
   change: string;
   controlState: JsonRecord;
-  dispatchGate: DispatchGate;
+  dispatchGate: IssueDispatchGate;
   dispatchId: string;
   doneWhen: string[];
   issueId: string;
@@ -855,7 +774,12 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
   const [changeDir, issuePath, teamDispatchPath] = issuePaths(args.repoRoot, args.change, args.issueId);
   const seatHandoffsPath = issueSeatHandoffsPath(args.repoRoot, args.change, args.issueId);
   const controlState = readChangeControlState(args.repoRoot, args.change);
-  const dispatchGate = ensureIssueDispatchAllowed(config, controlState, args.issueId);
+  const dispatchGate = ensureIssueDispatchAllowed(
+    config,
+    controlState,
+    args.issueId,
+    collectIssueDispatchStateSnapshots(args.repoRoot, args.change)
+  );
 
   if (!fs.existsSync(issuePath)) {
     throw new Error(`Issue doc not found: ${issuePath}`);

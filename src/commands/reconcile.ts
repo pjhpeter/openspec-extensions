@@ -21,7 +21,7 @@ import {
   type PhaseGate,
   type JsonRecord
 } from "../domain/change-coordinator";
-import { automationProfile, loadIssueModeConfig, readChangeControlState, type IssueModeConfig } from "../domain/issue-mode";
+import { automationProfile, loadIssueModeConfig, readChangeControlState, resolveRoundDispatchWindow, type IssueModeConfig } from "../domain/issue-mode";
 import {
   readActiveSeatDispatch,
   readSeatStatesForDispatch,
@@ -493,15 +493,26 @@ function determineControlGate(controlState: JsonRecord, issues: IssuePayload[]):
   }
 
   const latestRound = (controlState.latest_round as JsonRecord | undefined) ?? {};
-  const dispatchableIssueIds = new Set(
-    Array.isArray(latestRound.referenced_issue_ids)
-      ? latestRound.referenced_issue_ids.map((issueId) => String(issueId).trim()).filter(Boolean)
-      : []
-  );
-  if (pending.length > 0 && latestRound.dispatch_gate_active === true && dispatchableIssueIds.size > 0) {
-    const approvedPending = pending.filter((issue) => dispatchableIssueIds.has(String(issue.issue_id ?? "")));
-    if (approvedPending.length > 0) {
-      return ["dispatch_next_issue", String(approvedPending[0]?.issue_id ?? ""), `当前 round 已批准 ${approvedPending.length} 个待派发 issue。`];
+  const roundDispatch = resolveRoundDispatchWindow(controlState, issues.map((issue) => ({
+    issue_id: String(issue.issue_id ?? "").trim(),
+    status: String(issue.status ?? "").trim(),
+    boundary_status: String(issue.boundary_status ?? "").trim(),
+    next_action: String(issue.next_action ?? "").trim(),
+  })));
+  if (pending.length > 0 && roundDispatch.dispatch_gate_active && roundDispatch.referenced_issue_ids.length > 0) {
+    if (roundDispatch.approved_pending_issue_ids.length > 0) {
+      return [
+        "dispatch_next_issue",
+        roundDispatch.approved_pending_issue_ids[0] ?? "",
+        `当前 round 已批准 ${roundDispatch.approved_pending_issue_ids.length} 个待派发 issue。`
+      ];
+    }
+    if (roundDispatch.stale_completed_round && roundDispatch.next_pending_issue_id) {
+      return [
+        "dispatch_next_issue",
+        roundDispatch.next_pending_issue_id,
+        "当前 round 只覆盖已收敛 issue；coordinator 应继续派发下一个 pending issue。"
+      ];
     }
     return ["update_round_scope", "", `当前 round 未批准剩余 ${pending.length} 个 pending issue 的派发，请更新 round scope。`];
   }

@@ -134,6 +134,12 @@ function writeRouteDecision(repoRoot: string, change: string, payload: Record<st
   fs.writeFileSync(routeDecisionPath, JSON.stringify(payload, null, 2));
 }
 
+function writeRoundArtifact(repoRoot: string, change: string, roundName: string, contents: string): void {
+  const roundPath = path.join(repoRoot, "openspec", "changes", change, "control", roundName);
+  fs.mkdirSync(path.dirname(roundPath), { recursive: true });
+  fs.writeFileSync(roundPath, contents);
+}
+
 function writeChangeReviewArtifact(repoRoot: string, change: string, status = "passed", updatedAt = "2026-03-30T10:05:00+08:00"): void {
   const reviewPath = path.join(repoRoot, "openspec", "changes", change, "runs", "CHANGE-REVIEW.json");
   fs.mkdirSync(path.dirname(reviewPath), { recursive: true });
@@ -366,6 +372,40 @@ test("team dispatch issue can auto accept after review gate passes", () => {
 
     assert.equal(payload.next_action, "auto_accept_issue");
     assert.equal(payload.recommended_issue_id, issueId);
+  });
+});
+
+test("stale completed round auto advances to the next pending issue", () => {
+  withTempDir((repoRoot) => {
+    const change = "demo-change";
+    writeIssueDoc(repoRoot, change, "ISSUE-001");
+    writeIssueDoc(repoRoot, change, "ISSUE-002");
+    writeIssueModeConfig(repoRoot, { rra: { gate_mode: "enforce" } });
+    writeIssueProgress(repoRoot, change, {
+      issueId: "ISSUE-001",
+      status: "completed",
+      boundaryStatus: "accepted",
+      nextAction: "",
+    });
+    writeRoundArtifact(repoRoot, change, "ROUND-04.md", `## Round Target
+- 收敛 ISSUE-001
+
+## Scope In Round
+- ISSUE-001
+
+## Acceptance Verdict
+- accepted
+
+## Next Action
+- reconcile and continue
+`);
+
+    const payload = reconcileChange({ repoRoot, change });
+
+    assert.equal(payload.next_action, "dispatch_next_issue");
+    assert.equal(payload.recommended_issue_id, "ISSUE-002");
+    assert.equal((payload.continuation_policy as Record<string, string>).mode, "continue_immediately");
+    assert.match(String(payload.reason), /当前 round 只覆盖已收敛 issue/);
   });
 });
 

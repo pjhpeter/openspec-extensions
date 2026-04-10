@@ -2,10 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 
 import {
+  collectIssueDispatchStateSnapshots,
+  ensureIssueDispatchAllowed,
   issueWorkerWorktreeSetting,
   loadIssueModeConfig,
   parseFrontmatter,
   readChangeControlState,
+  type IssueDispatchGate,
   type IssueModeConfig
 } from "../domain/issue-mode";
 
@@ -17,18 +20,6 @@ export interface RenderIssueDispatchArgs {
   issueId: string;
   repoRoot: string;
   runId?: string;
-}
-
-export interface IssueDispatchGate {
-  action: string;
-  active: boolean;
-  allowed: boolean;
-  blocking: boolean;
-  enforced: boolean;
-  issue_id: string;
-  mode: string;
-  reason: string;
-  status: string;
 }
 
 export interface RenderIssueDispatchResult {
@@ -87,82 +78,6 @@ function issueValidationCommands(
     }
   }
   return [[...config.validation_commands], "config_default"];
-}
-
-function evaluateIssueDispatchGate(
-  config: IssueModeConfig,
-  controlState: Record<string, unknown>,
-  issueId: string
-): IssueDispatchGate {
-  const gateMode = String(config.rra.gate_mode || "advisory").trim() || "advisory";
-  const normalizedIssueId = issueId.trim();
-  const gate: IssueDispatchGate = {
-    action: "",
-    active: false,
-    allowed: true,
-    blocking: false,
-    enforced: false,
-    issue_id: normalizedIssueId,
-    mode: gateMode,
-    reason: "",
-    status: "not_applicable"
-  };
-
-  if (!controlState.enabled) {
-    return gate;
-  }
-
-  const mustFixNow = controlState.must_fix_now as Record<string, unknown> | undefined;
-  const mustFixNowOpen = Number(mustFixNow?.open_count ?? 0);
-  if (mustFixNowOpen > 0) {
-    gate.active = true;
-    gate.blocking = true;
-    gate.allowed = false;
-    gate.status = "blocked_by_backlog";
-    gate.action = "resolve_round_backlog";
-    gate.reason = `当前 RRA backlog 仍有 ${mustFixNowOpen} 个 Must fix now 未处理。`;
-    gate.enforced = gateMode === "enforce";
-    return gate;
-  }
-
-  const latestRound = controlState.latest_round as Record<string, unknown> | undefined;
-  const referencedIssueIds = Array.isArray(latestRound?.referenced_issue_ids)
-    ? latestRound?.referenced_issue_ids
-        .map((candidate) => String(candidate).trim())
-        .filter(Boolean)
-    : [];
-  const dispatchGateActive = Boolean(latestRound?.dispatch_gate_active);
-
-  if (dispatchGateActive && referencedIssueIds.length) {
-    gate.active = true;
-    if (referencedIssueIds.includes(normalizedIssueId)) {
-      gate.allowed = true;
-      gate.status = "approved_for_dispatch";
-      gate.action = "dispatch_next_issue";
-      gate.reason = "当前 round 已批准该 issue 派发。";
-    } else {
-      gate.allowed = false;
-      gate.blocking = true;
-      gate.status = "blocked_by_round_scope";
-      gate.action = "update_round_scope";
-      gate.reason = "当前 round 未批准该 issue 派发，请更新 round scope。";
-    }
-  }
-
-  gate.enforced = gate.blocking && gateMode === "enforce";
-  return gate;
-}
-
-function ensureIssueDispatchAllowed(
-  config: IssueModeConfig,
-  controlState: Record<string, unknown>,
-  issueId: string
-): IssueDispatchGate {
-  const gate = evaluateIssueDispatchGate(config, controlState, issueId);
-  if (gate.enforced) {
-    throw new Error(`Dispatch blocked by RRA gate: ${gate.reason || "unknown reason"}`);
-  }
-  return gate;
 }
 
 function bulletList(items: string[]): string {
@@ -240,7 +155,12 @@ export function renderIssueDispatch(args: RenderIssueDispatchArgs): RenderIssueD
   const runId = args.runId ?? "";
   const config = loadIssueModeConfig(repoRoot);
   const controlState = readChangeControlState(repoRoot, args.change);
-  const dispatchGate = ensureIssueDispatchAllowed(config, controlState, args.issueId);
+  const dispatchGate = ensureIssueDispatchAllowed(
+    config,
+    controlState,
+    args.issueId,
+    collectIssueDispatchStateSnapshots(repoRoot, args.change)
+  );
   const issuesDir = path.join(repoRoot, "openspec", "changes", args.change, "issues");
   const issuePath = path.join(issuesDir, `${args.issueId}.md`);
   const dispatchPath = path.join(issuesDir, `${args.issueId}.dispatch.md`);

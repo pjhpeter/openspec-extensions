@@ -3,6 +3,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 
 import {
+  collectIssueDispatchStateSnapshots,
   ensureIssueDispatchAllowed,
   inferWorkerWorktreeScope,
   isSharedWorkerWorkspace,
@@ -83,7 +84,12 @@ function worktreeExists(targetPath: string): boolean {
 export function createWorkerWorktree(args: ParsedCreateArgs): Record<string, unknown> {
   const config = loadIssueModeConfig(args.repoRoot);
   const controlState = readChangeControlState(args.repoRoot, args.change);
-  const dispatchGate = ensureIssueDispatchAllowed(config, controlState, args.issueId);
+  const dispatchGate = ensureIssueDispatchAllowed(
+    config,
+    controlState,
+    args.issueId,
+    collectIssueDispatchStateSnapshots(args.repoRoot, args.change)
+  );
   const [worktreePath, worktreeRelative, worktreeSource] = issueWorkerWorktreePath(
     args.repoRoot,
     args.change,

@@ -246,3 +246,87 @@ validation:
   assert.doesNotMatch(seatHandoffsText, /dispatch_next_issue/);
   assert.doesNotMatch(seatHandoffsText, /control-plane ready/);
 });
+
+test("stale completed round does not block the next pending issue in enforce mode", () => {
+  const repoRoot = makeTempRepo();
+  const changeDir = path.join(repoRoot, "openspec", "changes", "demo-change");
+  const issuesDir = path.join(changeDir, "issues");
+  const controlDir = path.join(changeDir, "control");
+  fs.mkdirSync(issuesDir, { recursive: true });
+  fs.mkdirSync(controlDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(repoRoot, "openspec", "issue-mode.json"),
+    JSON.stringify({
+      rra: {
+        gate_mode: "enforce",
+      },
+    }, null, 2)
+  );
+
+  fs.writeFileSync(path.join(issuesDir, "ISSUE-001.md"), `---
+issue_id: ISSUE-001
+title: 已完成的上一轮
+worker_worktree: .worktree/demo-change
+allowed_scope:
+  - src/issue-001.ts
+out_of_scope:
+  - electron/
+done_when:
+  - ISSUE-001 已完成
+validation:
+  - pnpm lint
+---
+`);
+  fs.writeFileSync(path.join(issuesDir, "ISSUE-002.md"), `---
+issue_id: ISSUE-002
+title: 下一轮待派发 issue
+worker_worktree: .worktree/demo-change
+allowed_scope:
+  - src/issue-002.ts
+out_of_scope:
+  - electron/
+done_when:
+  - ISSUE-002 已派发
+validation:
+  - pnpm lint
+---
+`);
+  fs.writeFileSync(
+    path.join(issuesDir, "ISSUE-001.progress.json"),
+    JSON.stringify({
+      issue_id: "ISSUE-001",
+      status: "completed",
+      boundary_status: "accepted",
+      next_action: "",
+    }, null, 2)
+  );
+  fs.writeFileSync(path.join(controlDir, "ROUND-04.md"), `## Round Target
+- 收敛 ISSUE-001
+
+## Scope In Round
+- ISSUE-001
+
+## Acceptance Verdict
+- accepted
+
+## Next Action
+- reconcile and continue
+`);
+
+  const { exitCode, stdout } = captureStdout(() =>
+    runIssueTeamDispatchRenderer([
+      "--repo-root",
+      repoRoot,
+      "--change",
+      "demo-change",
+      "--issue-id",
+      "ISSUE-002",
+    ])
+  );
+  const payload = JSON.parse(stdout.trim()) as Record<string, unknown>;
+
+  assert.equal(exitCode, 0);
+  assert.equal((payload.control_gate as { status: string }).status, "approved_for_dispatch");
+  assert.equal((payload.control_gate as { action: string }).action, "dispatch_next_issue");
+  assert.match(String((payload.control_gate as { reason: string }).reason), /当前 round 只覆盖已收敛 issue/);
+});

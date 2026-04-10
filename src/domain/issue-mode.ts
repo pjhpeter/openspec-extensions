@@ -173,6 +173,21 @@ export interface IssueDispatchGate {
   status: string;
 }
 
+export interface IssueDispatchStateSnapshot {
+  boundary_status: string;
+  issue_id: string;
+  next_action: string;
+  status: string;
+}
+
+export interface RoundDispatchWindow {
+  approved_pending_issue_ids: string[];
+  dispatch_gate_active: boolean;
+  next_pending_issue_id: string;
+  referenced_issue_ids: string[];
+  stale_completed_round: boolean;
+}
+
 export const DEFAULT_CONFIG: Omit<IssueModeConfig, "config_path" | "config_exists"> = {
   worktree_root: ".worktree",
   validation_commands: ["pnpm lint", "pnpm type-check"],
@@ -251,6 +266,96 @@ function normalizeSubagentTeamFlags(raw: unknown): IssueModeConfig["subagent_tea
       defaults.auto_accept_change_acceptance
     ),
     auto_archive_after_verify: normalizeBool(values.auto_archive_after_verify, defaults.auto_archive_after_verify),
+  };
+}
+
+function issueIdFromIssueDocName(name: string): string {
+  return name.replace(/\.md$/u, "");
+}
+
+function issueIdFromProgressName(name: string): string {
+  return name.replace(/\.progress\.json$/u, "");
+}
+
+function issueIsPending(issue: Pick<IssueDispatchStateSnapshot, "status">): boolean {
+  return issue.status === "pending" || issue.status === "";
+}
+
+function issueHasSettledRound(issue: IssueDispatchStateSnapshot): boolean {
+  return issue.status === "completed" && issue.boundary_status !== "review_required" && issue.next_action !== "coordinator_review";
+}
+
+export function collectIssueDispatchStateSnapshots(repoRoot: string, change: string): IssueDispatchStateSnapshot[] {
+  const issuesDir = path.join(repoRoot, "openspec", "changes", change, "issues");
+  if (!fs.existsSync(issuesDir)) {
+    return [];
+  }
+
+  const progressByIssue = new Map<string, string>();
+  for (const name of fs.readdirSync(issuesDir).filter((current) => current.endsWith(".progress.json")).sort()) {
+    progressByIssue.set(issueIdFromProgressName(name), path.join(issuesDir, name));
+  }
+
+  const snapshots: IssueDispatchStateSnapshot[] = [];
+  const seenIds = new Set<string>();
+  for (const name of fs.readdirSync(issuesDir).filter((current) => /^ISSUE-.*\.md$/u.test(current)).sort()) {
+    if (name.endsWith(".dispatch.md") || name.endsWith(".team.dispatch.md")) {
+      continue;
+    }
+    const issueId = issueIdFromIssueDocName(name);
+    const progressPath = progressByIssue.get(issueId);
+    const progress = progressPath && fs.existsSync(progressPath) ? (JSON.parse(fs.readFileSync(progressPath, "utf8")) as Record<string, unknown>) : {};
+    snapshots.push({
+      issue_id: issueId,
+      status: normalizeOptionalString(progress.status) || "pending",
+      boundary_status: normalizeOptionalString(progress.boundary_status),
+      next_action: normalizeOptionalString(progress.next_action),
+    });
+    seenIds.add(issueId);
+  }
+
+  for (const [issueId, progressPath] of progressByIssue.entries()) {
+    if (seenIds.has(issueId) || !fs.existsSync(progressPath)) {
+      continue;
+    }
+    const progress = JSON.parse(fs.readFileSync(progressPath, "utf8")) as Record<string, unknown>;
+    snapshots.push({
+      issue_id: normalizeOptionalString(progress.issue_id) || issueId,
+      status: normalizeOptionalString(progress.status) || "pending",
+      boundary_status: normalizeOptionalString(progress.boundary_status),
+      next_action: normalizeOptionalString(progress.next_action),
+    });
+  }
+
+  return snapshots;
+}
+
+export function resolveRoundDispatchWindow(
+  controlState: Record<string, unknown>,
+  issues: IssueDispatchStateSnapshot[]
+): RoundDispatchWindow {
+  const latestRound = isRecord(controlState.latest_round) ? controlState.latest_round : {};
+  const referencedIssueIds = normalizeStringList(latestRound.referenced_issue_ids);
+  const pendingIssues = issues.filter(issueIsPending);
+  const approvedPendingIssueIds = pendingIssues
+    .map((issue) => issue.issue_id)
+    .filter((issueId) => referencedIssueIds.includes(issueId));
+  const issueById = new Map(issues.map((issue) => [issue.issue_id, issue] as const));
+  const referencedKnownIssues = referencedIssueIds
+    .map((issueId) => issueById.get(issueId))
+    .filter((issue): issue is IssueDispatchStateSnapshot => Boolean(issue));
+
+  return {
+    approved_pending_issue_ids: approvedPendingIssueIds,
+    dispatch_gate_active: latestRound.dispatch_gate_active === true && referencedIssueIds.length > 0,
+    next_pending_issue_id: pendingIssues[0]?.issue_id ?? "",
+    referenced_issue_ids: referencedIssueIds,
+    // 旧 round 只覆盖已收敛 issue 时，允许 coordinator 续派下一个 pending issue。
+    stale_completed_round:
+      pendingIssues.length > 0 &&
+      approvedPendingIssueIds.length === 0 &&
+      referencedKnownIssues.length > 0 &&
+      referencedKnownIssues.every(issueHasSettledRound),
   };
 }
 
@@ -751,7 +856,8 @@ export function readChangeControlState(repoRoot: string, change: string): Record
 export function evaluateIssueDispatchGate(
   config: IssueModeConfig,
   controlState: Record<string, unknown>,
-  issueId: string
+  issueId: string,
+  issues: IssueDispatchStateSnapshot[] = []
 ): IssueDispatchGate {
   const gateMode = String(config.rra.gate_mode || "advisory").trim() || "advisory";
   const normalizedIssueId = issueId.trim();
@@ -784,19 +890,20 @@ export function evaluateIssueDispatchGate(
     return gate;
   }
 
-  const latestRound = isRecord(controlState.latest_round) ? controlState.latest_round : {};
-  const dispatchableIssueIds = new Set(
-    Array.isArray(latestRound.referenced_issue_ids)
-      ? latestRound.referenced_issue_ids.map((candidate) => String(candidate).trim()).filter(Boolean)
-      : []
-  );
-  if (latestRound.dispatch_gate_active === true && dispatchableIssueIds.size > 0) {
+  const roundDispatch = resolveRoundDispatchWindow(controlState, issues);
+  const dispatchableIssueIds = new Set(roundDispatch.referenced_issue_ids);
+  if (roundDispatch.dispatch_gate_active && dispatchableIssueIds.size > 0) {
     gate.active = true;
     if (dispatchableIssueIds.has(normalizedIssueId)) {
       gate.allowed = true;
       gate.status = "approved_for_dispatch";
       gate.action = "dispatch_next_issue";
       gate.reason = "当前 round 已批准该 issue 派发。";
+    } else if (roundDispatch.stale_completed_round && roundDispatch.next_pending_issue_id === normalizedIssueId) {
+      gate.allowed = true;
+      gate.status = "approved_for_dispatch";
+      gate.action = "dispatch_next_issue";
+      gate.reason = "当前 round 只覆盖已收敛 issue；允许继续派发下一个 pending issue。";
     } else {
       gate.blocking = true;
       gate.allowed = false;
@@ -813,9 +920,10 @@ export function evaluateIssueDispatchGate(
 export function ensureIssueDispatchAllowed(
   config: IssueModeConfig,
   controlState: Record<string, unknown>,
-  issueId: string
+  issueId: string,
+  issues: IssueDispatchStateSnapshot[] = []
 ): IssueDispatchGate {
-  const gate = evaluateIssueDispatchGate(config, controlState, issueId);
+  const gate = evaluateIssueDispatchGate(config, controlState, issueId, issues);
   if (gate.enforced) {
     throw new Error(`Dispatch blocked by RRA gate: ${gate.reason || "unknown reason"}`);
   }
