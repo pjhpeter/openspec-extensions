@@ -85,9 +85,9 @@
 
 ```text
 按当前 openspec/issue-mode.json 配置继续当前 change。
-默认入口使用 subagent-team，按全自动方式推进整个生命周期。
+默认入口使用 subagent-team，按全自动方式推进到自动化测试收口。
 设计文档编写 subagent 和编码 subagent 使用 high，其他 subagent 使用 Medium。
-在所有 issues 完成后，先补齐自动化测试/校验和自动化手工验证证据；前端或其他浏览器可见改动必须先调用浏览器覆盖受影响主路径。然后对当前 change 修改的代码执行 /review，通过后再进入 verify。
+在所有 issues 完成后，先对当前 change 修改的代码执行 /review；review 通过后，再补齐自动化测试/校验和自动化手工验证证据；前端或其他浏览器可见改动必须优先使用 chrome devtools MCP 覆盖受影响主路径。然后再进入 verify。
 对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
 当前 gate 的 review/check subagent 必须等待全部完成并收齐 verdict，禁止提前关闭或提前通过 phase。
 ```

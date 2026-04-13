@@ -325,8 +325,8 @@ for (const testCase of [
   },
   {
     expected: {
-      autoArchiveAfterVerify: true,
-      autoAcceptChangeAcceptance: true,
+      autoArchiveAfterVerify: false,
+      autoAcceptChangeAcceptance: false,
       autoAcceptIssuePlanning: true,
       autoAcceptIssueReview: true,
       autoAcceptSpecReadiness: true,
@@ -380,8 +380,8 @@ test("init skips the automation prompt when issue-mode config is preserved", asy
       auto_accept_spec_readiness: true,
       auto_accept_issue_planning: true,
       auto_accept_issue_review: true,
-      auto_accept_change_acceptance: true,
-      auto_archive_after_verify: true
+      auto_accept_change_acceptance: false,
+      auto_archive_after_verify: false
     }
   }, null, 2));
 

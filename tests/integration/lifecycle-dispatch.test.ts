@@ -441,8 +441,8 @@ validation:
         auto_accept_spec_readiness: true,
         auto_accept_issue_planning: true,
         auto_accept_issue_review: true,
-        auto_accept_change_acceptance: true,
-        auto_archive_after_verify: true
+        auto_accept_change_acceptance: false,
+        auto_archive_after_verify: false
       }
     }, null, 2));
     writePhaseGateArtifact(repoRoot, "demo-change", "spec_readiness");
@@ -457,11 +457,10 @@ validation:
     });
     const dispatchText = fs.readFileSync(path.join(repoRoot, payload.lifecycle_dispatch_path), "utf8");
 
-    assert.equal(payload.phase, "change_verify");
+    assert.equal(payload.phase, "change_acceptance");
     assert.equal(payload.automation_profile, "full_auto");
-    assert.equal(payload.automation.accept_change_acceptance, true);
-    assert.match(dispatchText, /openspec-extensions verify change --repo-root/);
-    assert.match(dispatchText, /subagent_team\.auto_accept_change_acceptance=true/);
+    assert.equal(payload.automation.accept_change_acceptance, false);
+    assert.match(dispatchText, /subagent_team\.auto_accept_change_acceptance=false/);
     assert.match(dispatchText, /CHANGE-REVIEW\.json 为当前 issue 集合的最新 review 结果/);
   });
 });

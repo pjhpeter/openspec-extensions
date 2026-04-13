@@ -13,8 +13,8 @@ If this file is missing, the helpers fall back to these defaults:
   "worktree_root": ".worktree",
   "validation_commands": ["pnpm lint", "pnpm type-check"],
   "worker_worktree": {
-    "enabled": false,
-    "scope": "shared",
+    "enabled": true,
+    "scope": "change",
     "mode": "detach",
     "base_ref": "HEAD",
     "branch_prefix": "opsx"
@@ -59,13 +59,13 @@ The repo config is a reusable default layer, not a replacement for clear issue d
 
 `worker_worktree` stays in the contract, and it now supports three steady-state modes:
 
-- shared workspace: `worker_worktree.scope=shared`, `worker_worktree.enabled=false`, or `worker_worktree: .` in the issue doc. Issue execution happens in the coordinator repo root. This remains the compatibility fallback when `openspec/issue-mode.json` is missing.
+- shared workspace: `worker_worktree.scope=shared`, `worker_worktree.enabled=false`, or `worker_worktree: .` in the issue doc. Issue execution happens in the coordinator repo root. This remains the compatibility fallback only when a repo explicitly disables worktrees.
 - change worktree: `worker_worktree.enabled=true` with `worker_worktree.scope=change`, or an explicit `.worktree/<change>` path in the issue doc. This is the installed template default. All serial issues in the same change reuse one worktree, and after each accepted issue the coordinator syncs that worktree to the latest accepted commit before the next issue starts.
 - issue worktree: `worker_worktree.enabled=true` with `worker_worktree.scope=issue`, or an explicit `.worktree/<change>/<issue>` path in the issue doc. Use this only when you truly need per-issue isolation or parallel issue execution.
 
 Backward compatibility note:
 
-- repos without `openspec/issue-mode.json` still fall back to shared workspace mode
+- repos without `openspec/issue-mode.json` now default to one change-scoped worktree
 - older repos that already materialized `worktree_root` / `worker_worktree.mode` without an explicit `enabled` flag continue to be treated as isolated-worktree configs
 - new templates write `worker_worktree.enabled=true` plus `worker_worktree.scope=change`, so the recommended default is unambiguous
 
@@ -92,7 +92,7 @@ Important:
 The runtime derives a profile from `rra.gate_mode` plus the `subagent_team.*` switches:
 
 - `semi_auto`: `rra.gate_mode=advisory`, while `spec_readiness`, `issue_planning`, `change_acceptance`, and `archive` still wait for manual confirmation. Before the first issue dispatch, the coordinator also pauses for the planning-doc commit. `auto_accept_issue_review` may be `false` or `true`; when it is `true`, issue execution still auto-commits each validated issue.
-- `full_auto`: `rra.gate_mode=enforce` and all five `subagent_team` switches are `true`
+- `full_auto`: `rra.gate_mode=enforce`, `auto_accept_spec_readiness=true`, `auto_accept_issue_planning=true`, `auto_accept_issue_review=true`, and both `auto_accept_change_acceptance` / `auto_archive_after_verify` remain `false`
 - `custom`: any mixed combination
 
 `rra.gate_mode` still matters in both modes:
@@ -146,7 +146,7 @@ Behavior:
 
 ### Full-Automatic
 
-Use this when subagent-team should own the full lifecycle, not just issue execution.
+Use this when unattended execution should cover either a simple or complex change through automated-test closeout, but should still stop before verify / archive.
 
 ```json
 {
@@ -166,8 +166,8 @@ Use this when subagent-team should own the full lifecycle, not just issue execut
     "auto_accept_spec_readiness": true,
     "auto_accept_issue_planning": true,
     "auto_accept_issue_review": true,
-    "auto_accept_change_acceptance": true,
-    "auto_archive_after_verify": true
+    "auto_accept_change_acceptance": false,
+    "auto_archive_after_verify": false
   }
 }
 ```
@@ -179,9 +179,8 @@ Behavior:
 - a `commit_planning_docs` result must be executed immediately; it must not be skipped or reframed as a terminal checkpoint
 - a `dispatch_next_issue` result must be executed immediately; it must not be reframed as a terminal checkpoint or chat-only summary
 - eligible issue review is auto-accepted and immediately merges/continues
-- after all issues are done, coordinator still runs change-level `/review`; only a passed review can auto-advance into verify
-- change acceptance is auto-accepted and immediately enters verify once that review has passed
-- verify pass automatically advances into archive
+- simple or complex flow continues automatically through change-level `/review` and the required automated test/validation plus automated manual verification closeout
+- after that test closeout, the flow pauses; verify and archive remain manual unless you explicitly build a custom profile
 - each auto-advance still waits for the phase's gate-bearing subagents to finish and for their verdicts to be collected
 - issues reuse one change-level worktree by default; if you need per-issue isolation, opt into `worker_worktree.scope=issue`
 - after each accepted issue, the change worktree is synced to the latest accepted commit; successful archive should then clean it up

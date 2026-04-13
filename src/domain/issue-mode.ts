@@ -131,13 +131,12 @@ const EMPTY_WORK_ITEM_SENTINELS = new Set([
   "\u65E0\u963B\u585E\u9879",
 ]);
 
-const SUBAGENT_TEAM_AUTOMATION_FIELDS = [
-  "auto_accept_spec_readiness",
-  "auto_accept_issue_planning",
-  "auto_accept_issue_review",
-  "auto_accept_change_acceptance",
-  "auto_archive_after_verify",
-] as const;
+type SubagentTeamAutomationField =
+  | "auto_accept_spec_readiness"
+  | "auto_accept_issue_planning"
+  | "auto_accept_issue_review"
+  | "auto_accept_change_acceptance"
+  | "auto_archive_after_verify";
 
 const WORKTREE_SCOPE_VALUES = new Set(["shared", "change", "issue"]);
 
@@ -154,7 +153,7 @@ export interface IssueModeConfig {
   rra: {
     gate_mode: "advisory" | "enforce";
   };
-  subagent_team: Record<(typeof SUBAGENT_TEAM_AUTOMATION_FIELDS)[number], boolean>;
+  subagent_team: Record<SubagentTeamAutomationField, boolean>;
   config_path: string;
   config_exists: boolean;
 }
@@ -192,8 +191,8 @@ export const DEFAULT_CONFIG: Omit<IssueModeConfig, "config_path" | "config_exist
   worktree_root: ".worktree",
   validation_commands: ["pnpm lint", "pnpm type-check"],
   worker_worktree: {
-    enabled: false,
-    scope: "shared",
+    enabled: true,
+    scope: "change",
     mode: "detach",
     base_ref: "HEAD",
     branch_prefix: "opsx",
@@ -382,7 +381,7 @@ function normalizeWorkerWorktreeEnabled(payload: Record<string, unknown>): boole
 function normalizeWorkerWorktreeScope(payload: Record<string, unknown>, enabled: boolean): "shared" | "change" | "issue" {
   const workerWorktree = isRecord(payload.worker_worktree) ? payload.worker_worktree : null;
   if (!workerWorktree) {
-    return enabled ? "issue" : DEFAULT_CONFIG.worker_worktree.scope;
+    return Object.hasOwn(payload, "worktree_root") ? "issue" : DEFAULT_CONFIG.worker_worktree.scope;
   }
 
   const explicitScope = String(workerWorktree.scope ?? "").trim();
@@ -390,7 +389,8 @@ function normalizeWorkerWorktreeScope(payload: Record<string, unknown>, enabled:
   if (explicitScope) {
     scope = explicitScope;
   } else if (Object.hasOwn(workerWorktree, "enabled")) {
-    scope = enabled ? "issue" : "shared";
+    // 显式开关但没写 scope 时，跟随当前默认 change worktree。
+    scope = enabled ? DEFAULT_CONFIG.worker_worktree.scope : "shared";
   } else {
     const legacyConfigPresent =
       Object.hasOwn(workerWorktree, "mode") ||
@@ -933,8 +933,13 @@ export function ensureIssueDispatchAllowed(
 export function automationProfile(config: IssueModeConfig): "semi_auto" | "full_auto" | "custom" {
   const gateMode = String(config.rra.gate_mode || "advisory").trim() || "advisory";
   const team = config.subagent_team;
-  const allEnabled = SUBAGENT_TEAM_AUTOMATION_FIELDS.every((field) => Boolean(team[field]));
-  if (allEnabled && gateMode === "enforce") {
+  const reviewThroughTestingProfile =
+    team.auto_accept_spec_readiness &&
+    team.auto_accept_issue_planning &&
+    team.auto_accept_issue_review &&
+    !team.auto_accept_change_acceptance &&
+    !team.auto_archive_after_verify;
+  if (reviewThroughTestingProfile && gateMode === "enforce") {
     return "full_auto";
   }
   if (

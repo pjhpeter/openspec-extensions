@@ -126,6 +126,8 @@ test("coordinator playbook forbids implementation before complex-flow gates pass
   assert.match(playbook, /Before `runs\/SPEC-READINESS\.json` is current and passed, do not start implementation/);
   assert.match(playbook, /do not run scaffolding or bootstrap commands/);
   assert.match(playbook, /Before the first issue execution, require both a current passed `runs\/ISSUE-PLANNING\.json` and the coordinator-owned planning-doc commit/);
+  assert.match(playbook, /Once that review passes, run the required automated test\/validation plus automated manual verification closeout/);
+  assert.match(playbook, /prefer chrome devtools MCP/);
 });
 
 test("router examples and cheat sheet keep issue-mode state above generic apply wording", () => {
@@ -147,6 +149,29 @@ test("mode cheat sheet includes auto-subagent authorization wording for complex 
 
   assert.match(template, /自动启用 subagent-team 推进，不用再单独问我/);
   assert.match(template, /如需 spawned subagent，请显式使用 `<指定模型>`/);
+  assert.match(template, /review 通过后，必须补齐自动化测试\/校验和自动化手工验证/);
+  assert.match(template, /优先使用 chrome devtools MCP/);
+});
+
+test("closeout guardrails require post-review automation and prefer chrome devtools MCP for frontend", () => {
+  const readme = readRepoFile("README.md");
+  const routerSkill = readRepoFile("skills/openspec-chat-router/SKILL.md");
+  const teamSkill = readRepoFile("skills/openspec-subagent-team/SKILL.md");
+  const contract = readRepoFile("skills/openspec-chat-router/references/issue-mode-contract.md");
+  const issueModeConfig = readRepoFile("skills/openspec-chat-router/references/issue-mode-config.md");
+
+  assert.match(readme, /review 通过后，必须补齐自动化测试\/校验和自动化手工验证/);
+  assert.match(readme, /优先使用 chrome devtools MCP/);
+  assert.match(readme, /自动判断简单流程还是复杂流程，并按全自动方式推进到自动化测试收口/);
+  assert.match(routerSkill, /review current code -> automated test\/validation \+ automated manual verification -> `verify` -> `archive`/);
+  assert.match(routerSkill, /After that review passes, run the required automated test\/validation plus automated manual verification/);
+  assert.match(teamSkill, /change-level `\/review` has passed/);
+  assert.match(teamSkill, /prefer chrome devtools MCP/);
+  assert.match(contract, /After that review passes, complex flow keeps the final automated test\/validation and automated manual verification/);
+  assert.match(contract, /chrome devtools MCP/);
+  assert.match(issueModeConfig, /full_auto/);
+  assert.match(issueModeConfig, /automated-test closeout/);
+  assert.match(issueModeConfig, /stop before verify \/ archive/);
 });
 
 test("all installable skills define the same non-blocking update reminder", () => {

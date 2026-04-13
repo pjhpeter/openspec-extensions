@@ -36,7 +36,8 @@
 
 ```text
 进入 OpenSpec 模式。
-创建新 change，使用 subagent-team 工作，并为所有 spawned subagent 显式指定 `<指定模型>`。
+创建新 change，自动判断简单流程还是复杂流程，并按全自动方式推进到自动化测试收口。
+如果判定为复杂流程，使用 subagent-team 工作，并为所有 spawned subagent 显式指定 `<指定模型>`。
 需求：<需求描述>
 ```
 
@@ -66,13 +67,13 @@
 3. 直接实现
 
 ```text
-开始实现当前 change；如果任务规模仍然简单，并且当前 change 还没有进入 issue-mode，就不要拆 issue，直接完成实现并运行校验。
+开始实现当前 change；如果任务规模仍然简单，并且当前 change 还没有进入 issue-mode，就不要拆 issue。直接完成实现；收尾时先过 change-level /review，review 通过后必须补齐自动化测试/校验和自动化手工验证。
 ```
 
 4. review / verify / archive 收尾
 
 ```text
-先对当前 change 修改的代码执行 /review；review 通过后再检查当前 change 是否可以归档；如果 verify 通过，就同步 spec 并归档。
+先对当前 change 修改的代码执行 /review；review 通过后，必须补齐自动化测试/校验和自动化手工验证；如果是前端或其他浏览器可见改动，优先使用 chrome devtools MCP 跑通受影响主路径。然后再检查当前 change 是否可以归档；如果 verify 通过，就同步 spec 并归档。
 ```
 
 ### 复杂任务全生命周期链路
@@ -99,9 +100,9 @@
 
 ```text
 按当前 openspec/issue-mode.json 配置继续当前 change。
-默认入口使用 subagent-team，按全自动方式推进整个生命周期。
+默认入口使用 subagent-team，按全自动方式推进到自动化测试收口。
 设计文档编写 subagent 和编码 subagent 使用 high，其他 subagent 使用 Medium。
-在所有 issues 完成后，先对当前 change 修改的代码执行 /review，通过后再进入 verify。
+在所有 issues 完成后，先对当前 change 修改的代码执行 /review；review 通过后，必须补齐自动化测试/校验和自动化手工验证。前端或其他浏览器可见改动优先使用 chrome devtools MCP 跑通受影响主路径，然后再进入 verify。
 对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
 当前 gate 的 review/check subagent 必须等待全部完成并收齐 verdict，禁止提前关闭或提前通过 phase。
 ```
@@ -110,7 +111,8 @@
 
 ```text
 进入 OpenSpec 模式。
-创建新 change，使用 subagent-team 工作，并为所有 spawned subagent 显式指定 `<指定模型>`。
+创建新 change，自动判断简单流程还是复杂流程，并按全自动方式推进到自动化测试收口。
+如果判定为复杂流程，使用 subagent-team 工作，并为所有 spawned subagent 显式指定 `<指定模型>`。
 需求：<需求描述>
 ```
 

@@ -26,8 +26,8 @@ export const ISSUE_MODE_AUTOMATION_OVERRIDES: Record<IssueModeAutomationPreferen
       auto_accept_spec_readiness: true,
       auto_accept_issue_planning: true,
       auto_accept_issue_review: true,
-      auto_accept_change_acceptance: true,
-      auto_archive_after_verify: true
+      auto_accept_change_acceptance: false,
+      auto_archive_after_verify: false
     }
   }
 };
@@ -45,7 +45,7 @@ export async function promptIssueModeAutomationPreference(): Promise<IssueModeAu
   try {
     for (;;) {
       const answer = (await readline.question(
-        "Choose the issue-mode automation style to install: [1] Semi-automatic and controllable (recommended) [2] Fully automatic and hands-off [1/2] "
+        "Choose the issue-mode automation style to install: [1] Semi-automatic and controllable (recommended) [2] Fully automatic through automated-test closeout [1/2] "
       ))
         .trim()
         .toLowerCase();

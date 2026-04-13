@@ -65,7 +65,7 @@ openspec-extensions init /path/to/your/project
 
 如果你是在交互终端里运行 `openspec-ex init`，而当前本地 `openspec-extensions` 版本落后于 npm 最新版，命令会先用英文提示你是否升级本地 CLI。确认后会先执行 `npm install -g openspec-extensions@<latest>`，再用升级后的 `openspec-ex init` 继续本次执行。
 
-如果这次 `init` 会实际写入 `openspec/issue-mode.json`，我还会继续用英文询问你想要安装 `Semi-automatic and controllable` 还是 `Fully automatic and hands-off`。如果目标仓库里已经有配置且你没有传 `--force-config`，这一步会跳过，避免问了也不生效。
+如果这次 `init` 会实际写入 `openspec/issue-mode.json`，我还会继续用英文询问你想要安装 `Semi-automatic and controllable` 还是 `Fully automatic through automated-test closeout`。如果目标仓库里已经有配置且你没有传 `--force-config`，这一步会跳过，避免问了也不生效。
 
 如果仓库已经完成 OpenSpec 初始化，也可以只做扩展安装：
 
@@ -79,7 +79,7 @@ openspec-extensions install --target-repo /path/to/your/project
 openspec-extensions install --target-repo /path/to/your/project --force
 ```
 
-如果你在交互终端里执行 `openspec-extensions install --target-repo /path/to/your/project --force-config`，并且目标仓库已经存在 `openspec/issue-mode.json`，命令也会像 `init` 一样继续用英文询问你这次要覆盖成 `Semi-automatic and controllable` 还是 `Fully automatic and hands-off`。如果这次是首次写入配置文件，则不会额外弹这个问题，直接按默认模板安装。
+如果你在交互终端里执行 `openspec-extensions install --target-repo /path/to/your/project --force-config`，并且目标仓库已经存在 `openspec/issue-mode.json`，命令也会像 `init` 一样继续用英文询问你这次要覆盖成 `Semi-automatic and controllable` 还是 `Fully automatic through automated-test closeout`。如果这次是首次写入配置文件，则不会额外弹这个问题，直接按默认模板安装。
 
 常用选项：
 
@@ -166,18 +166,18 @@ openspec/changes/*/runs/CHANGE-REVIEW.json
 
 ### 简单任务
 
-如果任务足够小，我建议直接走 OpenSpec 的短链路：创建 change、补齐 proposal/design/tasks、完成实现、先跑自动化测试/校验、再做自动化手工验证、然后跑 change-level review、最后 verify 和 archive。这个仓库不会强迫你把所有事情都拆成多 issue。前端或其他浏览器可见改动不能只停在命令行测试，必须调用浏览器覆盖受影响主路径。
+如果任务足够小，我建议直接走 OpenSpec 的短链路：创建 change、补齐 proposal/design/tasks、完成实现、先跑 change-level review；review 通过后，必须补齐自动化测试/校验和自动化手工验证，再进入 verify 和 archive。这个仓库不会强迫你把所有事情都拆成多 issue。前端或其他浏览器可见改动不能只停在命令行测试，收尾时优先使用 chrome devtools MCP 覆盖受影响主路径；如果当前 runtime 没有该能力，再退回其他浏览器工具并如实说明。
 
 ```mermaid
 flowchart TD
     A[进入 OpenSpec 模式] --> B[创建 change 并补齐 proposal/design/tasks]
     B --> C[直接实现当前 change]
-    C --> D[运行自动化测试 / 校验]
-    D --> E[执行自动化手工验证<br/>前端需调用浏览器]
-    E --> F[运行 change-level /review]
-    F --> G{review 通过?}
-    G -- 否 --> C
-    G -- 是 --> H[verify 当前 change]
+    C --> D[运行 change-level /review]
+    D --> E{review 通过?}
+    E -- 否 --> C
+    E -- 是 --> F[运行自动化测试 / 校验]
+    F --> G[执行自动化手工验证<br/>前端优先 chrome devtools MCP]
+    G --> H[verify 当前 change]
     H --> I{verify 通过?}
     I -- 否 --> C
     I -- 是 --> J[同步 spec 并 archive]
@@ -200,13 +200,13 @@ flowchart TD
 3. 直接实现当前 change
 
 ```text
-开始实现当前 change；如果任务规模仍然简单，并且当前 change 还没有进入 issue-mode，就不要拆 issue。直接完成实现，先跑自动化测试/校验，再做自动化手工验证；如果是前端或其他浏览器可见改动，必须调用浏览器覆盖受影响主路径。
+开始实现当前 change；如果任务规模仍然简单，并且当前 change 还没有进入 issue-mode，就不要拆 issue。直接完成实现；收尾时先过 change-level /review，review 通过后必须补齐自动化测试/校验和自动化手工验证；如果是前端或其他浏览器可见改动，优先使用 chrome devtools MCP 覆盖受影响主路径。
 ```
 
 4. review / verify / archive 收尾
 
 ```text
-先确认自动化测试/校验和自动化手工验证证据都已补齐；如果是前端或其他浏览器可见改动，确认浏览器主路径已实际跑通。然后对当前分支未 push 的代码执行 change-level /review（排除 `openspec/changes/**`）；review 通过后再检查当前 change 是否可以归档；如果 verify 通过，就同步 spec 并归档。
+先对当前分支未 push 的代码执行 change-level /review（排除 `openspec/changes/**`）。review 通过后，必须补齐自动化测试/校验和自动化手工验证证据；如果是前端或其他浏览器可见改动，优先使用 chrome devtools MCP 跑通受影响主路径。然后再检查当前 change 是否可以归档；如果 verify 通过，就同步 spec 并归档。
 ```
 
 5. 如果中途会话返回过早
@@ -242,7 +242,7 @@ openspec-extensions execute seat-state set \
 
 8. development seat 只写代码和 checkpoint；如果改动让既有校验失效，只把相关 validation 标回 `pending`，不直接把 issue 标成完成，也不在该 seat 内自称校验通过。checker / reviewer 通过后，由 coordinator 先写 `runs/ISSUE-REVIEW-<issue>.json`，再做 reconcile、review、merge、commit、verify、archive。
 
-复杂流程把自动化测试/校验和自动化手工验证放在最后统一收口一次即可；所有 issue 完成后，再补齐这些验证证据。前端或其他浏览器可见改动也放在这个最终收口节点调用浏览器覆盖受影响主路径，然后再进入后续 review / verify。
+复杂流程把自动化测试/校验和自动化手工验证放在最后统一收口一次即可，不要求在每个 issue round 重复执行；但所有 issue 完成后，必须先通过 change-level `/review`，再补齐这些验证证据，然后才允许进入 verify。前端或其他浏览器可见改动也放在这个最终收口节点优先使用 chrome devtools MCP 覆盖受影响主路径；如果当前 runtime 没有该能力，再退回其他浏览器工具并如实说明。
 
 这套流程的重点不是“多开几个 agent”本身，而是把 change 的控制面放回磁盘和 coordinator 手里。这样就算会话断掉、子代理失败、或者中途需要人工接管，状态也还是可追踪的。
 
@@ -296,7 +296,8 @@ flowchart TD
 
 ```text
 进入 OpenSpec 模式。
-创建新 change，使用 subagent-team 工作，并为所有 spawned subagent 显式指定 `<指定模型>`。
+创建新 change，自动判断简单流程还是复杂流程，并按全自动方式推进到自动化测试收口。
+如果判定为复杂流程，使用 subagent-team 工作，并为所有 spawned subagent 显式指定 `<指定模型>`。
 需求：<需求描述>
 ```
 
@@ -319,10 +320,10 @@ flowchart TD
 为所有 spawned subagent 显式指定模型和 reasoning_effort，不要继承环境默认值。
 ```
 
-4. 如果我希望真正无人值守推进
+4. 如果我希望真正无人值守推进到自动化测试收口
 
 ```text
-创建一个复杂变更，默认入口使用 subagent-team，按全自动方式推进整个生命周期。
+创建一个 change，自动判断简单流程还是复杂流程；如果判定为复杂流程，默认入口使用 subagent-team，按全自动方式推进到自动化测试收口。
 如果需要等待 subagent，使用 1 小时阻塞等待，不要 30 秒短轮询。
 当前 gate 的 review/check subagent 必须全部完成并收齐 verdict 后，才能继续下一阶段。
 ```
@@ -385,15 +386,15 @@ flowchart TD
 
 - `validation_commands`：每个 issue 默认要跑的校验。
 - `worker_worktree.scope`：
-  - `shared` 表示直接在仓库根目录运行。
-  - `change` 表示同一个 change 复用一个 `.worktree/<change>`；这是默认值，也最适合串行 issue。
+  - `shared` 表示直接在仓库根目录运行；只建议兼容旧仓库或显式关闭 worktree 的场景。
+  - `change` 表示同一个 change 复用一个 `.worktree/<change>`；这是默认值，简单流程和复杂流程都优先用它。
   - `issue` 表示每个 issue 单独使用 `.worktree/<change>/<issue>`；只在确实需要并行隔离时启用。
 - `rra.gate_mode`：
   - `advisory` 只给 gate 建议，不硬拦。
   - `enforce` 把 round contract 当成硬约束。
 - `subagent_team.*`：决定哪些阶段可以自动接受并继续推进。
 
-如果你想要半自动模式，通常保留 `rra.gate_mode=advisory`，然后让关键阶段继续人工签字。如果你想要真正无人值守，通常会切到 `rra.gate_mode=enforce`，并把五个 `subagent_team` 开关全部打开。
+如果你想要半自动模式，通常保留 `rra.gate_mode=advisory`，然后让关键阶段继续人工签字。如果你想要真正无人值守地推进到自动化测试收口，通常会切到 `rra.gate_mode=enforce`，并打开 `spec_readiness`、`issue_planning`、`issue_review` 这三个自动接受开关；`change_acceptance` 和 `archive` 仍留在测试收口之后再决定。
 
 ## 配置示例
 
@@ -437,7 +438,7 @@ flowchart TD
 
 ### 全自动配置
 
-如果我的目标是尽量无人值守地推进整个复杂 change，通常会从这份配置开始：
+如果我的目标是尽量无人值守地推进简单流程或复杂流程，并自动跑到测试收口，通常会从这份配置开始：
 
 ```json
 {
@@ -457,8 +458,8 @@ flowchart TD
     "auto_accept_spec_readiness": true,
     "auto_accept_issue_planning": true,
     "auto_accept_issue_review": true,
-    "auto_accept_change_acceptance": true,
-    "auto_archive_after_verify": true
+    "auto_accept_change_acceptance": false,
+    "auto_archive_after_verify": false
   }
 }
 ```
@@ -467,9 +468,9 @@ flowchart TD
 
 - 设计评审通过后自动进入任务拆分。
 - issue planning 通过后自动提交规划文档并派发当前 round。
-- issue review 通过后自动接受并提交代码，再进入下一个 issue 或 change acceptance。
-- change-level review 和 acceptance 满足条件后自动进入 verify。
-- verify 通过后自动 archive。
+- issue review 通过后自动接受并提交代码，再进入下一个 issue 或测试前的 change closeout。
+- 简单流和复杂流都会继续推进到 change-level `/review` 与自动化测试/自动化手工验证收口。
+- 到达测试收口后默认停住，不自动继续 verify 或 archive。
 - `rra.gate_mode=enforce` 会把 round contract 当成硬约束，避免流程盲目前推。
 
 ## 运行时边界

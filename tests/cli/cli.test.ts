@@ -417,6 +417,13 @@ done_when:
 
 test("cli archive change routes to command", async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-cli-archive-"));
+  const configPath = path.join(repoRoot, "openspec", "issue-mode.json");
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.writeFileSync(configPath, JSON.stringify({
+    worker_worktree: {
+      enabled: false
+    }
+  }, null, 2));
 
   const result = await captureStdout(() =>
     main([
@@ -464,4 +471,36 @@ test("cli worktree create routes to command", async () => {
   assert.equal(payload.mode, "shared");
   assert.equal(payload.shared_workspace, true);
   assert.equal(payload.worktree_relative, ".");
+});
+
+test("cli worktree create defaults to change worktree when config is missing", async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-cli-worktree-default-"));
+
+  const result = await captureStdout(() =>
+    main([
+      "worktree",
+      "create",
+      "--repo-root",
+      repoRoot,
+      "--change",
+      "demo-change",
+      "--issue-id",
+      "ISSUE-001",
+      "--dry-run"
+    ])
+  );
+
+  const payload = JSON.parse(result.stdout.trim()) as {
+    dry_run: boolean;
+    mode: string;
+    shared_workspace: boolean;
+    workspace_scope: string;
+    worktree_relative: string;
+  };
+  assert.equal(result.exitCode, 0);
+  assert.equal(payload.dry_run, true);
+  assert.equal(payload.mode, "detach");
+  assert.equal(payload.shared_workspace, false);
+  assert.equal(payload.workspace_scope, "change");
+  assert.equal(payload.worktree_relative, ".worktree/demo-change");
 });

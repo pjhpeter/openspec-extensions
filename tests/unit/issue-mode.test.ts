@@ -55,16 +55,43 @@ test("extractOpenWorkItems ignores completed and placeholder checkbox items", ()
   assert.deepEqual(items, ["\u771f\u6b63\u5f85\u529e\u4e8b\u9879"]);
 });
 
-test("loadIssueModeConfig defaults to shared workspace when config is missing", () => {
+test("loadIssueModeConfig defaults to change-scoped worktree when config is missing", () => {
   withTempDir((repoRoot) => {
     const config = loadIssueModeConfig(repoRoot);
     const [workerWorktree, source] = issueWorkerWorktreeSetting(repoRoot, "demo-change", "ISSUE-001", config);
 
-    assert.equal(config.worker_worktree.enabled, false);
-    assert.equal(config.worker_worktree.scope, "shared");
+    assert.equal(config.worker_worktree.enabled, true);
+    assert.equal(config.worker_worktree.scope, "change");
     assert.equal(config.subagent_team.auto_accept_issue_review, true);
     assert.equal(automationProfile(config), "semi_auto");
-    assert.equal(workerWorktree, ".");
+    assert.equal(workerWorktree, ".worktree/demo-change");
+    assert.equal(source, "config_default");
+  });
+});
+
+test("loadIssueModeConfig uses change scope when enabled is explicit without scope", () => {
+  withTempDir((repoRoot) => {
+    const openspecDir = path.join(repoRoot, "openspec");
+    fs.mkdirSync(openspecDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(openspecDir, "issue-mode.json"),
+      JSON.stringify(
+        {
+          worker_worktree: {
+            enabled: true,
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    const config = loadIssueModeConfig(repoRoot);
+    const [workerWorktree, source] = issueWorkerWorktreeSetting(repoRoot, "demo-change", "ISSUE-001", config);
+
+    assert.equal(config.worker_worktree.enabled, true);
+    assert.equal(config.worker_worktree.scope, "change");
+    assert.equal(workerWorktree, ".worktree/demo-change");
     assert.equal(source, "config_default");
   });
 });
@@ -130,6 +157,36 @@ test("loadIssueModeConfig keeps legacy worker fields and strips detached worker 
     assert.equal(Object.hasOwn(configAsRecord, "persistent_host"), false);
     assert.equal(Object.hasOwn(configAsRecord, "coordinator_heartbeat"), false);
     assert.equal(Object.hasOwn(configAsRecord, "worker_launcher"), false);
+  });
+});
+
+test("automationProfile treats enforce plus review-through-testing auto gates as full_auto", () => {
+  withTempDir((repoRoot) => {
+    const openspecDir = path.join(repoRoot, "openspec");
+    fs.mkdirSync(openspecDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(openspecDir, "issue-mode.json"),
+      JSON.stringify(
+        {
+          rra: {
+            gate_mode: "enforce",
+          },
+          subagent_team: {
+            auto_accept_spec_readiness: true,
+            auto_accept_issue_planning: true,
+            auto_accept_issue_review: true,
+            auto_accept_change_acceptance: false,
+            auto_archive_after_verify: false,
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    const config = loadIssueModeConfig(repoRoot);
+
+    assert.equal(automationProfile(config), "full_auto");
   });
 });
 

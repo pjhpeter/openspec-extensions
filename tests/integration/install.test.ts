@@ -320,8 +320,8 @@ for (const testCase of [
   },
   {
     expected: {
-      autoArchiveAfterVerify: true,
-      autoAcceptChangeAcceptance: true,
+      autoArchiveAfterVerify: false,
+      autoAcceptChangeAcceptance: false,
       autoAcceptIssuePlanning: true,
       autoAcceptIssueReview: true,
       autoAcceptSpecReadiness: true,

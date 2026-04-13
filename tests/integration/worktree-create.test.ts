@@ -57,6 +57,40 @@ test("createWorkerWorktree reuses repo root for shared workspace mode", () => {
   });
 });
 
+test("createWorkerWorktree defaults to one change-scope worktree when config is missing", () => {
+  withTempDir((repoRoot) => {
+    const payload = createWorkerWorktree({
+      baseRef: "",
+      branchName: "",
+      change: "demo-change",
+      dryRun: true,
+      issueId: "ISSUE-001",
+      mode: "",
+      repoRoot
+    }) as {
+      base_ref: string;
+      branch_name: string;
+      created: boolean;
+      dry_run: boolean;
+      existed: boolean;
+      mode: string;
+      shared_workspace: boolean;
+      workspace_scope: string;
+      worktree_relative: string;
+    };
+
+    assert.equal(payload.mode, "detach");
+    assert.equal(payload.base_ref, "HEAD");
+    assert.equal(payload.branch_name, "");
+    assert.equal(payload.shared_workspace, false);
+    assert.equal(payload.workspace_scope, "change");
+    assert.equal(payload.worktree_relative, ".worktree/demo-change");
+    assert.equal(payload.created, false);
+    assert.equal(payload.existed, false);
+    assert.equal(payload.dry_run, true);
+  });
+});
+
 test("createWorkerWorktree reuses one change-scope worktree across issues", () => {
   withTempDir((repoRoot) => {
     const configPath = path.join(repoRoot, "openspec", "issue-mode.json");

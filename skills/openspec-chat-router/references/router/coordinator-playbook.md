@@ -41,8 +41,9 @@ This is the normal flow when the runtime supports delegation and the user wants 
 16. Reconcile from disk, normalize any findings into the change-level backlog, and decide whether the issue passes the round.
 17. If `auto_accept_issue_review=true` and the issue-local validation passed, accept/merge/commit it immediately from the coordinator session only after the issue review gate is current and passed. The shipped default turns this on so each validated issue lands as its own coordinator commit before the next issue starts. If that issue used a reusable change worktree, sync that worktree to the accepted commit before dispatching the next issue. Otherwise review it manually in the coordinator session first.
 18. After all approved issues are completed, run a change-level `/review` against the current change diff and write `runs/CHANGE-REVIEW.json`.
-19. Before moving into change acceptance, verify, or archive, reread `openspec/issue-mode.json` again so the gate mode, validation, and automation switches match the latest repo state.
-20. Only after that review passes, run the change-level acceptance decision and then `verify` / `archive`. If the change used change-scope worktrees, prefer the archive wrapper so successful archive also cleans up the reusable worktree.
+19. Once that review passes, run the required automated test/validation plus automated manual verification closeout before moving into change acceptance, `verify`, or `archive`. For frontend or other browser-visible changes, prefer chrome devtools MCP to drive the affected main path during that closeout step; only fall back to another browser tool when chrome devtools MCP is unavailable.
+20. Before moving into change acceptance, verify, or archive, reread `openspec/issue-mode.json` again so the gate mode, validation, and automation switches match the latest repo state.
+21. Only after review and closeout verification evidence are both in place, run the change-level acceptance decision and then `verify` / `archive`. If the change used change-scope worktrees, prefer the archive wrapper so successful archive also cleans up the reusable worktree.
 
 ## Rules
 
@@ -76,6 +77,6 @@ This is the normal flow when the runtime supports delegation and the user wants 
 - do not let issue execution subagents self-merge or create the final git commit
 - prefer artifact-based reconcile over chat memory
 - do not dispatch new issue work while `Must fix now` items from the current planning or acceptance round are still open
-- do not move from "all issues completed" to `verify` or `archive` without both a passed change-level `/review` and a change-level acceptance decision
+- do not move from "all issues completed" to `verify` or `archive` without a passed change-level `/review`, the required automated test/validation + automated manual verification closeout, and a change-level acceptance decision
 - after successful archive of a change that used change scope, clean up the reusable change worktree
 - even in unattended mode, coordinator-owned merge/commit boundaries remain in the coordinator session
