@@ -147,12 +147,6 @@ If spawned subagents are needed, explicitly use `<specified-model>`.
 Requirement: <requirement-description>
 ```
 
-If you want the anti-drift version in one line without over-promoting medium work, use this:
-
-```text
-After entering OpenSpec mode, always run explicit complexity triage first; lock into issue-mode -> subagent-team only for `4+` or when issue-mode artifacts already exist; send `2-3` through `new`/`ff` and re-evaluate before any coding.
-```
-
 ### Small Changes
 
 If the task is small enough, I recommend staying on the short OpenSpec path: create a change, fill in proposal/design/tasks, implement it, run automated tests and validation, perform automated manual verification, then run change-level review, verify, and archive. This repository does not force every task into multi-issue execution. Frontend or other browser-visible changes must not stop at command-line checks; they also need browser-driven coverage of the affected main path.

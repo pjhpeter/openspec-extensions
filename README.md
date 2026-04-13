@@ -164,12 +164,6 @@ openspec/changes/*/runs/CHANGE-REVIEW.json
 继续 <change> change，根据原来判断的复杂度继续；如果是复杂流程，启用 subagent-team，spawned subagent 显式使用 `<指定模型>`。
 ```
 
-如果你想把防呆做得更硬，但又不想误伤中等任务，我建议把规则收敛成一句：
-
-```text
-进入 OpenSpec 模式后，必须先做显式复杂度 triage；4+ 或已有 issue-mode 工件时锁定复杂流并进入 issue-mode -> subagent-team；2-3 时先走 new/ff 补 proposal/design 后重判；未完成这些闸门前不得开始编码。
-```
-
 ### 简单任务
 
 如果任务足够小，我建议直接走 OpenSpec 的短链路：创建 change、补齐 proposal/design/tasks、完成实现、先跑自动化测试/校验、再做自动化手工验证、然后跑 change-level review、最后 verify 和 archive。这个仓库不会强迫你把所有事情都拆成多 issue。前端或其他浏览器可见改动不能只停在命令行测试，必须调用浏览器覆盖受影响主路径。
