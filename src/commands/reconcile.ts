@@ -7,6 +7,7 @@ import { runMergeIssueCommand } from "./merge-issue";
 import {
   issueReviewArtifactIsCurrent,
   issueReviewArtifactPath,
+  isCanonicalIssueDocName,
   issueReviewStatus,
   issueTeamDispatchPath,
   planningDocStatus,
@@ -197,8 +198,8 @@ function collectIssues(repoRoot: string, change: string): IssuePayload[] {
   }
 
   const issueDocs = fs.readdirSync(issuesDir)
-    .filter((name) => /^ISSUE-.*\.md$/.test(name))
-    .filter((name) => !name.endsWith(".dispatch.md"))
+    // 只把 canonical issue doc 计入列表，避免把 seat handoff 等辅助工件误判成 pending issue。
+    .filter((name) => isCanonicalIssueDocName(name))
     .sort();
 
   const issues: IssuePayload[] = [];

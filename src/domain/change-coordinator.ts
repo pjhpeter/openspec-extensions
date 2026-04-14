@@ -66,6 +66,10 @@ export function changeDirPath(repoRoot: string, change: string): string {
   return path.join(repoRoot, "openspec", "changes", change);
 }
 
+export function isCanonicalIssueDocName(name: string): boolean {
+  return /^ISSUE-[^.]+\.md$/u.test(name);
+}
+
 export function planningDocPaths(repoRoot: string, change: string): string[] {
   const changeDir = changeDirPath(repoRoot, change);
   const issuesDir = path.join(changeDir, "issues");
@@ -78,8 +82,8 @@ export function planningDocPaths(repoRoot: string, change: string): string[] {
 
   const issueDocs = fs.existsSync(issuesDir)
     ? fs.readdirSync(issuesDir)
-        .filter((name) => /^ISSUE-.*\.md$/.test(name))
-        .filter((name) => !name.endsWith(".dispatch.md") && !name.endsWith(".team.dispatch.md"))
+        // planning scope 只跟 canonical issue doc 绑定，辅助工件不能污染 gate/currentness。
+        .filter((name) => isCanonicalIssueDocName(name))
         .sort()
         .map((name) => path.join(issuesDir, name))
     : [];

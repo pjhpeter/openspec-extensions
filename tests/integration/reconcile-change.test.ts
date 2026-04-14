@@ -409,6 +409,33 @@ test("stale completed round auto advances to the next pending issue", () => {
   });
 });
 
+test("seat handoff artifacts do not create fake pending issues", () => {
+  withTempDir((repoRoot) => {
+    const change = "demo-change";
+    const issueId = "ISSUE-001";
+    writeIssueDoc(repoRoot, change, issueId);
+    writeIssueProgress(repoRoot, change, {
+      issueId,
+      status: "completed",
+      boundaryStatus: "accepted",
+      nextAction: ""
+    });
+    fs.writeFileSync(
+      path.join(repoRoot, "openspec", "changes", change, "issues", `${issueId}.seat-handoffs.md`),
+      "# seat handoffs\n"
+    );
+
+    const payload = reconcileChange({ repoRoot, change });
+
+    assert.equal(payload.issue_count, 1);
+    assert.equal(payload.next_action, "review_change_code");
+    assert.deepEqual(
+      (payload.issues as Array<{ issue_id: string }>).map((issue) => issue.issue_id),
+      [issueId]
+    );
+  });
+});
+
 test("verify step can pause or auto_run based on config", () => {
   withTempDir((repoRoot) => {
     writeIssueDoc(repoRoot, "demo-change");
