@@ -30,6 +30,12 @@ function captureStdout(run: () => number): { exitCode: number; stdout: string } 
   }
 }
 
+function createStubWorktree(repoRoot: string, relativePath: string): void {
+  const worktreePath = path.join(repoRoot, relativePath);
+  fs.mkdirSync(worktreePath, { recursive: true });
+  fs.writeFileSync(path.join(worktreePath, ".git"), "gitdir: /tmp/fake-worktree\n");
+}
+
 test("renders team dispatch from issue and control artifacts", () => {
   const repoRoot = makeTempRepo();
   const changeDir = path.join(repoRoot, "openspec", "changes", "demo-change");
@@ -88,6 +94,7 @@ validation:
       2
     )
   );
+  createStubWorktree(repoRoot, ".worktree/demo-change/ISSUE-001");
 
   const { exitCode, stdout } = captureStdout(() =>
     runIssueTeamDispatchRenderer([
@@ -140,6 +147,8 @@ validation:
   assert.match(dispatchText, /agent \u914d\u989d/);
   assert.match(dispatchText, /agent \/ runtime \u4e0d\u652f\u6301 subagent \u6216 delegation/);
   assert.match(dispatchText, /\u4e32\u884c round contract/);
+  assert.match(dispatchText, /Do not activate this serial fallback just because the main session can code locally/);
+  assert.match(dispatchText, /When delegation is available, the coordinator stays orchestration-only/);
   assert.match(dispatchText, /development -> check -> repair -> review/);
   assert.match(dispatchText, /\u4e00\u6b21\u53ea\u5904\u7406\u8fd9\u4e2a issue/);
   assert.match(dispatchText, /Gate-bearing subagent roster with seat \/ agent_id \/ status/);
@@ -340,6 +349,7 @@ validation:
 ## Next Action
 - reconcile and continue
 `);
+  createStubWorktree(repoRoot, ".worktree/demo-change");
 
   const { exitCode, stdout } = captureStdout(() =>
     runIssueTeamDispatchRenderer([
@@ -357,4 +367,38 @@ validation:
   assert.equal((payload.control_gate as { status: string }).status, "approved_for_dispatch");
   assert.equal((payload.control_gate as { action: string }).action, "dispatch_next_issue");
   assert.match(String((payload.control_gate as { reason: string }).reason), /当前 round 只覆盖已收敛 issue/);
+});
+
+test("team dispatch blocks when dedicated worker workspace is not ready", () => {
+  const repoRoot = makeTempRepo();
+  const changeDir = path.join(repoRoot, "openspec", "changes", "demo-change");
+  const issuesDir = path.join(changeDir, "issues");
+  fs.mkdirSync(issuesDir, { recursive: true });
+  fs.writeFileSync(path.join(issuesDir, "ISSUE-001.md"), `---
+issue_id: ISSUE-001
+title: 缺少 workspace
+worker_worktree: .worktree/demo-change/ISSUE-001
+allowed_scope:
+  - src/demo.ts
+out_of_scope:
+  - electron/
+done_when:
+  - packet is blocked
+validation:
+  - pnpm lint
+---
+`);
+
+  assert.throws(
+    () =>
+      runIssueTeamDispatchRenderer([
+        "--repo-root",
+        repoRoot,
+        "--change",
+        "demo-change",
+        "--issue-id",
+        "ISSUE-001"
+      ]),
+    /Issue workspace for ISSUE-001 is not ready/
+  );
 });

@@ -15,8 +15,9 @@ This is the normal flow when the runtime supports delegation and the user wants 
 6. Before the first issue execution, require both a current passed `runs/ISSUE-PLANNING.json` and the coordinator-owned planning-doc commit. Do not let generic implementation wording or `subagent-team` wording skip those prerequisites.
 7. Dispatch only issues that are approved for the active round.
 8. Create or reuse the worker workspace before handoff. The installed template defaults to one change-level `.worktree/<change>` reused across that change's serial issues. Shared workspace remains the compatibility fallback when repo config is missing, and issue-level `.worktree/<change>/<issue>` stays opt-in for truly parallel work.
-9. By default, render the subagent-team lifecycle packet and use it as the round control packet.
-10. Explicitly set `reasoning_effort` when spawning subagents:
+9. When delegation is available, keep the main session coordinator-only during issue execution. Do not let “complex flow”, “issue_execution”, “start implementing”, or similar wording turn the coordinator into the code-writing worker.
+10. By default, render the subagent-team lifecycle packet and use it as the round control packet.
+11. Explicitly set `reasoning_effort` when spawning subagents:
    - design author: `high`
    - any code-writing implementation or verify-fix subagent: `high`
    - design reviewers, planning authors, checkers, reviewers, and closeout-only subagents: `medium`
@@ -50,6 +51,7 @@ This is the normal flow when the runtime supports delegation and the user wants 
 - one issue-scoped execution context handles one issue only
 - use subagent-team rounds as the default issue-mode coordinator topology
 - selecting the complex flow is only a routing decision; it must not be treated as permission to implement or scaffold before the required gates pass
+- do not activate serial fallback just because the task still looks manageable in one main session; use it only after explicit runtime evidence that delegation is unavailable or the required seats cannot be run stably
 - do not let subagents inherit the session-wide reasoning default blindly; set role-based `reasoning_effort` explicitly
 - `auto_accept_*` only removes human sign-off after gate-bearing subagents have all finished and their verdicts are in hand
 - do not start a new lifecycle phase from stale config memory; reread `openspec/issue-mode.json` first whenever the repo provides it

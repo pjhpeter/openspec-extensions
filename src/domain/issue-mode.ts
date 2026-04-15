@@ -160,6 +160,18 @@ export interface IssueModeConfig {
 
 export type IssueWorktreeSource = "issue_doc" | "config_default";
 
+export interface IssueWorkerWorkspaceState {
+  exists: boolean;
+  git_metadata_present: boolean;
+  ready: boolean;
+  shared_workspace: boolean;
+  status: "ready" | "shared_workspace" | "missing_path" | "missing_git_metadata";
+  worktree: string;
+  worktree_relative: string;
+  worktree_source: IssueWorktreeSource;
+  workspace_scope: "shared" | "change" | "issue";
+}
+
 export interface IssueDispatchGate {
   action: string;
   active: boolean;
@@ -636,6 +648,66 @@ export function issueWorkerWorktreePath(
 
 export function isSharedWorkerWorkspace(repoRoot: string, targetPath: string): boolean {
   return path.resolve(targetPath) === path.resolve(repoRoot);
+}
+
+export function issueWorkerWorkspaceState(
+  repoRoot: string,
+  change: string,
+  issueId: string,
+  config: IssueModeConfig
+): IssueWorkerWorkspaceState {
+  const [worktreePath, worktreeRelative, worktreeSource] = issueWorkerWorktreePath(repoRoot, change, issueId, config);
+  const sharedWorkspace = isSharedWorkerWorkspace(repoRoot, worktreePath);
+  const workspaceScope = inferWorkerWorktreeScope(repoRoot, worktreePath, config, change, issueId);
+  if (sharedWorkspace) {
+    return {
+      exists: true,
+      git_metadata_present: true,
+      ready: true,
+      shared_workspace: true,
+      status: "shared_workspace",
+      worktree: worktreePath,
+      worktree_relative: worktreeRelative,
+      worktree_source: worktreeSource,
+      workspace_scope: workspaceScope
+    };
+  }
+
+  const exists = fs.existsSync(worktreePath);
+  const gitMetadataPresent = exists && fs.existsSync(path.join(worktreePath, ".git"));
+  const ready = exists && gitMetadataPresent;
+
+  return {
+    exists,
+    git_metadata_present: gitMetadataPresent,
+    ready,
+    shared_workspace: false,
+    status: !exists ? "missing_path" : gitMetadataPresent ? "ready" : "missing_git_metadata",
+    worktree: worktreePath,
+    worktree_relative: worktreeRelative,
+    worktree_source: worktreeSource,
+    workspace_scope: workspaceScope
+  };
+}
+
+export function ensureIssueWorkerWorkspaceReady(
+  repoRoot: string,
+  change: string,
+  issueId: string,
+  config: IssueModeConfig
+): IssueWorkerWorkspaceState {
+  const workspace = issueWorkerWorkspaceState(repoRoot, change, issueId, config);
+  if (workspace.ready) {
+    return workspace;
+  }
+
+  const reason = workspace.status === "missing_path"
+    ? "target path does not exist"
+    : "target path exists but is not a git worktree";
+  throw new Error(
+    `Issue workspace for ${issueId} is not ready: ${workspace.worktree_relative} (${reason}). ` +
+    `Run \`openspec-extensions worktree create --repo-root ${repoRoot} --change ${change} --issue-id ${issueId}\` first.`
+  );
 }
 
 export function inferWorkerWorktreeScope(

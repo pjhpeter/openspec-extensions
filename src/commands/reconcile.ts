@@ -22,7 +22,14 @@ import {
   type PhaseGate,
   type JsonRecord
 } from "../domain/change-coordinator";
-import { automationProfile, loadIssueModeConfig, readChangeControlState, resolveRoundDispatchWindow, type IssueModeConfig } from "../domain/issue-mode";
+import {
+  automationProfile,
+  issueWorkerWorkspaceState,
+  loadIssueModeConfig,
+  readChangeControlState,
+  resolveRoundDispatchWindow,
+  type IssueModeConfig
+} from "../domain/issue-mode";
 import {
   readActiveSeatDispatch,
   readSeatStatesForDispatch,
@@ -565,7 +572,18 @@ function continuationPolicy(nextAction: string, recommendedIssueId: string): Jso
       human_confirmation_required: false,
       must_not_stop_at_checkpoint: true,
       summary: "当前阶段已经放行，coordinator 必须继续派发下一 issue。",
-      instruction: `\`dispatch_next_issue\` 不是 terminal checkpoint；不要只停在 control-plane ready。 立即为${issueSuffix} 渲染 team dispatch，并继续 subagent-team 主链。`
+      instruction: `\`dispatch_next_issue\` 不是 terminal checkpoint；不要只停在 control-plane ready。 确认${issueSuffix} 的 worker workspace 已就绪后，立即渲染 team dispatch，并继续 subagent-team 主链。`
+    };
+  }
+  if (nextAction === "prepare_issue_workspace") {
+    const issueSuffix = recommendedIssueId ? ` \`${recommendedIssueId}\`` : "";
+    return {
+      mode: "continue_immediately",
+      pause_allowed: false,
+      human_confirmation_required: false,
+      must_not_stop_at_checkpoint: true,
+      summary: "当前已放行 issue dispatch，但 worker workspace 还未准备好。",
+      instruction: `\`prepare_issue_workspace\` 不是 terminal checkpoint；立即为${issueSuffix} 运行 \`openspec-extensions worktree create\`，然后重新 reconcile 并继续 subagent-team 主链。`
     };
   }
   if (nextAction === "commit_planning_docs") {
@@ -676,6 +694,27 @@ function seatBarrierReason(summary: SeatBarrierSummary): string {
   return "";
 }
 
+function recommendedIssueWorkspaceState(
+  repoRoot: string,
+  change: string,
+  issueId: string,
+  config: IssueModeConfig
+): JsonRecord {
+  if (!issueId.trim()) {
+    return {};
+  }
+
+  try {
+    return issueWorkerWorkspaceState(repoRoot, change, issueId, config) as unknown as JsonRecord;
+  } catch (error) {
+    return {
+      issue_id: issueId,
+      ready: false,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
 export function reconcileChange(args: ParsedChangeArgs): JsonRecord {
   const config = loadIssueModeConfig(args.repoRoot);
   const issues = collectIssues(args.repoRoot, args.change);
@@ -701,6 +740,22 @@ export function reconcileChange(args: ParsedChangeArgs): JsonRecord {
     const seatBarrierBlockingAction = ["wait_for_gate_seats", "resolve_seat_failure"].includes(nextAction);
     if (!docGateBlockingAction && !seatBarrierBlockingAction && !(["review_change_code", "resolve_change_review_failure"].includes(nextAction) && controlGate[0] === "change_acceptance_required")) {
       [nextAction, recommendedIssueId, reason] = controlGate;
+    }
+  }
+  const recommendedIssueWorkspace = recommendedIssueWorkspaceState(
+    args.repoRoot,
+    args.change,
+    recommendedIssueId,
+    config
+  );
+  if (nextAction === "dispatch_next_issue" && recommendedIssueId) {
+    const workspaceError = String(recommendedIssueWorkspace.error ?? "").trim();
+    if (workspaceError) {
+      nextAction = "inspect_change";
+      reason = `当前 approved issue 的 worker workspace 配置无效：${workspaceError}`;
+    } else if (recommendedIssueWorkspace.ready !== true) {
+      nextAction = "prepare_issue_workspace";
+      reason = `当前 approved issue 的 worker workspace \`${recommendedIssueWorkspace.worktree_relative}\` 尚未就绪；派发前必须先创建或复用该 workspace。`;
     }
   }
 
@@ -744,7 +799,15 @@ export function reconcileChange(args: ParsedChangeArgs): JsonRecord {
       archive_after_verify: config.subagent_team.auto_archive_after_verify
     },
     seat_barrier: seatBarrier,
+    execution_policy: {
+      main_session_role: "coordinator",
+      main_session_direct_implementation_allowed: false,
+      issue_workspace_required_before_dispatch: true,
+      serial_fallback_requires_runtime_no_delegation: true,
+      serial_fallback_requires_explicit_runtime_evidence: true
+    },
     planning_docs: planningDocs,
+    recommended_issue_workspace: recommendedIssueWorkspace,
     issues
   };
 }

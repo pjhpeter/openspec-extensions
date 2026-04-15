@@ -34,6 +34,12 @@ function commitAll(repoRoot: string, message: string): void {
   git(repoRoot, "commit", "-m", message);
 }
 
+function createStubWorktree(repoRoot: string, relativePath: string): void {
+  const worktreePath = path.join(repoRoot, relativePath);
+  fs.mkdirSync(worktreePath, { recursive: true });
+  fs.writeFileSync(path.join(worktreePath, ".git"), "gitdir: /tmp/fake-worktree\n");
+}
+
 function writePhaseGateArtifact(repoRoot: string, change: string, phase: PhaseGate, status = "passed"): void {
   const artifactPath = phaseGateArtifactPath(repoRoot, change, phase);
   fs.mkdirSync(path.dirname(artifactPath), { recursive: true });
@@ -279,6 +285,7 @@ validation:
     writePhaseGateArtifact(repoRoot, "demo-change", "spec_readiness");
     writePhaseGateArtifact(repoRoot, "demo-change", "issue_planning");
     commitAll(repoRoot, "commit planning docs");
+    createStubWorktree(repoRoot, ".worktree/demo-change/ISSUE-001");
 
     const payload = renderLifecycleDispatch({
       repoRoot,
@@ -450,6 +457,7 @@ validation:
     }, null, 2));
     writePhaseGateArtifact(repoRoot, "demo-change", "spec_readiness");
     writePhaseGateArtifact(repoRoot, "demo-change", "issue_planning");
+    createStubWorktree(repoRoot, ".worktree/demo-change/ISSUE-001");
 
     const payload = renderLifecycleDispatch({
       repoRoot,
@@ -518,6 +526,7 @@ validation:
     }, null, 2));
     writePhaseGateArtifact(repoRoot, "demo-change", "spec_readiness");
     writePhaseGateArtifact(repoRoot, "demo-change", "issue_planning");
+    createStubWorktree(repoRoot, ".worktree/demo-change/ISSUE-001");
 
     const payload = renderLifecycleDispatch({
       repoRoot,
@@ -571,6 +580,7 @@ validation:
     }, null, 2));
     writePhaseGateArtifact(repoRoot, "demo-change", "spec_readiness");
     writePhaseGateArtifact(repoRoot, "demo-change", "issue_planning");
+    createStubWorktree(repoRoot, ".worktree/demo-change/ISSUE-001");
 
     const payload = renderLifecycleDispatch({
       repoRoot,

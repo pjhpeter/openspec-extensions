@@ -28,6 +28,9 @@ test("subagent-team agent prompt scopes coordinator defaults to the main session
   assert.match(prompt, /continuation_policy\.mode=continue_immediately/);
   assert.match(prompt, /do not stop at `control-plane ready`/);
   assert.match(prompt, /do not self-certify the gate/);
+  assert.match(prompt, /keep the main session coordinator-only during issue execution/);
+  assert.match(prompt, /Use serial fallback only after explicit evidence that the runtime cannot delegate/);
+  assert.match(prompt, /create or reuse that workspace first/);
 });
 
 test("chat-router agent prompt does not reroute spawned seat sessions", () => {
@@ -55,6 +58,10 @@ test("chat-router agent prompt does not reroute spawned seat sessions", () => {
   assert.match(prompt, /issue-mode artifacts already exist/);
   assert.match(prompt, /higher priority than generic implementation wording/);
   assert.match(prompt, /reconcile first and continue the subagent-team main path/);
+  assert.match(prompt, /Selecting the complex flow does not authorize main-session implementation/);
+  assert.match(prompt, /keep the main session coordinator-only/);
+  assert.match(prompt, /do not use the serial issue fallback just because the current issue looks manageable/);
+  assert.match(prompt, /create or reuse that workspace before rendering issue\/team dispatch or starting implementation/);
   assert.match(prompt, /Only treat control-plane artifacts under `openspec\/changes\/<change>\/\.\.\.` as workflow state/);
   assert.match(prompt, /task_plan\.md/);
   assert.match(prompt, /continuation_policy/);
@@ -99,6 +106,8 @@ test("chat-router skill defines explainable complexity triage before choosing si
   assert.match(skill, /Before final completion, audit whether the selected route was actually followed/);
   assert.match(skill, /explicitly upgrade to the complex flow and state why/);
   assert.match(skill, /complex -> auto subagent-team/);
+  assert.match(skill, /Do not activate the main-session serial fallback just because the current issue looks manageable/);
+  assert.match(skill, /the main session remains coordinator-only during issue execution/);
 });
 
 test("issue-mode contract includes persisted route decision artifact", () => {
@@ -127,6 +136,8 @@ test("coordinator playbook forbids implementation before complex-flow gates pass
   assert.match(playbook, /Before `runs\/SPEC-READINESS\.json` is current and passed, do not start implementation/);
   assert.match(playbook, /do not run scaffolding or bootstrap commands/);
   assert.match(playbook, /Before the first issue execution, require both a current passed `runs\/ISSUE-PLANNING\.json` and the coordinator-owned planning-doc commit/);
+  assert.match(playbook, /keep the main session coordinator-only during issue execution/);
+  assert.match(playbook, /do not activate serial fallback just because the task still looks manageable in one main session/);
   assert.match(playbook, /Once that review passes, run the required automated test\/validation plus automated manual verification closeout/);
   assert.match(playbook, /prefer chrome devtools MCP/);
 });

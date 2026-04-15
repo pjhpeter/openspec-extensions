@@ -3,8 +3,9 @@ import path from "node:path";
 
 import {
   collectIssueDispatchStateSnapshots,
+  ensureIssueWorkerWorkspaceReady,
   ensureIssueDispatchAllowed,
-  issueWorkerWorktreeSetting,
+  issueWorkerWorkspaceState,
   loadIssueModeConfig,
   parseFrontmatter,
   readChangeControlState,
@@ -35,6 +36,10 @@ export interface RenderIssueDispatchResult {
   validation_source: "issue_doc" | "config_default";
   worker_worktree: string;
   worker_worktree_source: "issue_doc" | "config_default";
+  worker_workspace_exists: boolean;
+  worker_workspace_ready: boolean;
+  worker_workspace_scope: "shared" | "change" | "issue";
+  worker_workspace_status: string;
 }
 
 function requireList(frontmatter: Frontmatter, key: string): string[] {
@@ -174,12 +179,9 @@ export function renderIssueDispatch(args: RenderIssueDispatchArgs): RenderIssueD
     throw new Error("Issue doc missing valid frontmatter.");
   }
 
-  const [workerWorktree, workerWorktreeSource] = issueWorkerWorktreeSetting(
-    repoRoot,
-    args.change,
-    args.issueId,
-    config
-  );
+  const workerWorkspace = dryRun
+    ? issueWorkerWorkspaceState(repoRoot, args.change, args.issueId, config)
+    : ensureIssueWorkerWorkspaceReady(repoRoot, args.change, args.issueId, config);
   const [validation, validationSource] = issueValidationCommands(
     repoRoot,
     args.change,
@@ -189,7 +191,7 @@ export function renderIssueDispatch(args: RenderIssueDispatchArgs): RenderIssueD
   const dispatchText = renderIssueDispatchMarkdown(
     args.change,
     frontmatter,
-    workerWorktree,
+    workerWorkspace.worktree_relative,
     validation,
     repoRoot,
     runId,
@@ -211,7 +213,11 @@ export function renderIssueDispatch(args: RenderIssueDispatchArgs): RenderIssueD
     run_id: runId,
     validation,
     validation_source: validationSource,
-    worker_worktree: workerWorktree,
-    worker_worktree_source: workerWorktreeSource
+    worker_worktree: workerWorkspace.worktree_relative,
+    worker_worktree_source: workerWorkspace.worktree_source,
+    worker_workspace_exists: workerWorkspace.exists,
+    worker_workspace_ready: workerWorkspace.ready,
+    worker_workspace_scope: workerWorkspace.workspace_scope,
+    worker_workspace_status: workerWorkspace.status
   };
 }

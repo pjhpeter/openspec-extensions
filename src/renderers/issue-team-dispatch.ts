@@ -5,9 +5,10 @@ import { parseArgs } from "node:util";
 import { issueReviewArtifactPath } from "../domain/change-coordinator";
 import {
   collectIssueDispatchStateSnapshots,
+  ensureIssueWorkerWorkspaceReady,
   ensureIssueDispatchAllowed,
+  issueWorkerWorkspaceState,
   loadIssueModeConfig,
-  issueWorkerWorktreeSetting,
   parseFrontmatter,
   readChangeControlState,
   type IssueDispatchGate,
@@ -61,6 +62,10 @@ export type IssueTeamDispatchPayload = {
   validation_source: "issue_doc" | "config_default";
   worker_worktree: string;
   worker_worktree_source: "issue_doc" | "config_default";
+  worker_workspace_exists: boolean;
+  worker_workspace_ready: boolean;
+  worker_workspace_scope: "shared" | "change" | "issue";
+  worker_workspace_status: string;
 };
 
 const REVIEW_EXCLUDED_DIRS = new Set(["node_modules", "dist", "build", ".next", "coverage"]);
@@ -563,6 +568,8 @@ function renderDispatch(input: {
 
 \u5982\u679c\u5f53\u524d agent / runtime \u4e0d\u652f\u6301 subagent \u6216 delegation\uff0c\u4e0d\u8981\u5361\u4f4f\u3002\u628a\u8fd9\u4efd team dispatch \u5f53\u4f5c\u4e3b\u4f1a\u8bdd\u7684\u4e32\u884c round contract\uff1a\u5f53\u524d\u4f1a\u8bdd\u81ea\u5df1\u5b8c\u6210 development -> check -> repair -> review\uff0c\u4e00\u6b21\u53ea\u5904\u7406\u8fd9\u4e2a issue\uff0c\u7ee7\u7eed\u5199 issue-local progress / run \u5de5\u4ef6\uff0c\u4e0d\u8981\u518d\u6d3e\u751f\u65b0\u7684 issue-only subagent \u6216 team\u3002
 
+Do not activate this serial fallback just because the main session can code locally. Only use it after explicit evidence that the runtime cannot delegate or cannot launch and recover the required seats stably. When delegation is available, the coordinator stays orchestration-only and must not implement business code directly.
+
 ## Seat Handoff Source
 
 - Spawned seat subagent \u5fc5\u987b\u4f7f\u7528\u5355\u72ec\u7684 seat handoff artifact\uff0c\u4e0d\u8981\u76f4\u63a5\u5403\u8fd9\u4efd coordinator packet\uff1a
@@ -796,12 +803,9 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
   const allowedScope = requireList(frontmatter, "allowed_scope");
   const outOfScope = requireList(frontmatter, "out_of_scope");
   const doneWhen = requireList(frontmatter, "done_when");
-  const [workerWorktree, workerWorktreeSource] = issueWorkerWorktreeSetting(
-    args.repoRoot,
-    args.change,
-    args.issueId,
-    config
-  );
+  const workerWorkspace = args.dryRun
+    ? issueWorkerWorkspaceState(args.repoRoot, args.change, args.issueId, config)
+    : ensureIssueWorkerWorkspaceReady(args.repoRoot, args.change, args.issueId, config);
   const [validation, validationSource] = issueValidationCommands(frontmatter, config);
   const progressPath = issueProgressPath(args.repoRoot, args.change, args.issueId);
   const progressSnapshot = readProgressSnapshot(progressPath);
@@ -844,7 +848,7 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
     targetModeOverride: args.targetMode,
     title,
     validation,
-    workerWorktree,
+    workerWorktree: workerWorkspace.worktree_relative,
     seatHandoffsPath: seatHandoffsDisplayPath,
     seatStateDir: seatStateDirPath,
   });
@@ -861,7 +865,7 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
     seatStateDir: seatStateDirPath,
     title,
     validation,
-    workerWorktree,
+    workerWorktree: workerWorkspace.worktree_relative,
   });
 
   if (!args.dryRun) {
@@ -878,8 +882,12 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
     seat_handoffs_path: seatHandoffsDisplayPath,
     seat_state_dir: seatStateDirPath,
     team_dispatch_path: path.relative(args.repoRoot, teamDispatchPath).split(path.sep).join("/"),
-    worker_worktree: workerWorktree,
-    worker_worktree_source: workerWorktreeSource,
+    worker_worktree: workerWorkspace.worktree_relative,
+    worker_worktree_source: workerWorkspace.worktree_source,
+    worker_workspace_exists: workerWorkspace.exists,
+    worker_workspace_ready: workerWorkspace.ready,
+    worker_workspace_scope: workerWorkspace.workspace_scope,
+    worker_workspace_status: workerWorkspace.status,
     progress_path: displayPath(args.repoRoot, progressPath),
     validation,
     validation_source: validationSource,

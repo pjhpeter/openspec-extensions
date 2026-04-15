@@ -128,6 +128,12 @@ function writeIssueModeConfig(repoRoot: string, payload: Record<string, unknown>
   fs.writeFileSync(configPath, JSON.stringify(payload, null, 2));
 }
 
+function createStubWorktree(repoRoot: string, relativePath: string): void {
+  const worktreePath = path.join(repoRoot, relativePath);
+  fs.mkdirSync(worktreePath, { recursive: true });
+  fs.writeFileSync(path.join(worktreePath, ".git"), "gitdir: /tmp/fake-worktree\n");
+}
+
 function writeRouteDecision(repoRoot: string, change: string, payload: Record<string, unknown>): void {
   const routeDecisionPath = path.join(repoRoot, "openspec", "changes", change, "control", "ROUTE-DECISION.json");
   fs.mkdirSync(path.dirname(routeDecisionPath), { recursive: true });
@@ -197,12 +203,29 @@ test("auto_issue_planning dispatches first issue", () => {
 
     const payload = reconcileChange({ repoRoot, change: "demo-change" });
 
-    assert.equal(payload.next_action, "dispatch_next_issue");
+    assert.equal(payload.next_action, "prepare_issue_workspace");
     assert.equal(payload.recommended_issue_id, "ISSUE-001");
     assert.equal((payload.automation as Record<string, boolean>).accept_issue_planning, true);
     assert.equal((payload.continuation_policy as Record<string, string>).mode, "continue_immediately");
     assert.equal((payload.continuation_policy as Record<string, boolean>).pause_allowed, false);
     assert.equal((payload.continuation_policy as Record<string, boolean>).must_not_stop_at_checkpoint, true);
+    assert.equal((payload.recommended_issue_workspace as Record<string, unknown>).ready, false);
+  });
+});
+
+test("auto_issue_planning dispatches after worker workspace is ready", () => {
+  withTempDir((repoRoot) => {
+    writeIssueDoc(repoRoot, "demo-change");
+    writeIssueModeConfig(repoRoot, { subagent_team: { auto_accept_issue_planning: true } });
+    createStubWorktree(repoRoot, ".worktree/demo-change/ISSUE-001");
+    initGitRepo(repoRoot);
+    commitAll(repoRoot, "commit planning docs");
+
+    const payload = reconcileChange({ repoRoot, change: "demo-change" });
+
+    assert.equal(payload.next_action, "dispatch_next_issue");
+    assert.equal((payload.recommended_issue_workspace as Record<string, unknown>).ready, true);
+    assert.equal((payload.recommended_issue_workspace as Record<string, unknown>).worktree_relative, ".worktree/demo-change/ISSUE-001");
   });
 });
 
@@ -399,6 +422,7 @@ test("stale completed round auto advances to the next pending issue", () => {
 ## Next Action
 - reconcile and continue
 `);
+    createStubWorktree(repoRoot, ".worktree/demo-change/ISSUE-002");
 
     const payload = reconcileChange({ repoRoot, change });
 

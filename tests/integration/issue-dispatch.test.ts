@@ -27,6 +27,12 @@ function writeIssueDoc(
   return issuePath;
 }
 
+function createStubWorktree(repoRoot: string, relativePath: string): void {
+  const worktreePath = path.join(repoRoot, relativePath);
+  fs.mkdirSync(worktreePath, { recursive: true });
+  fs.writeFileSync(path.join(worktreePath, ".git"), "gitdir: /tmp/fake-worktree\n", "utf8");
+}
+
 test("renders issue dispatch and writes artifact", () => {
   withTempDir((repoRoot) => {
     writeIssueDoc(
@@ -46,6 +52,7 @@ validation:
 ---
 `
     );
+    createStubWorktree(repoRoot, ".worktree/demo-change/ISSUE-001");
     fs.mkdirSync(path.join(repoRoot, "openspec", "changes", "demo-change", "control"), { recursive: true });
     fs.writeFileSync(
       path.join(repoRoot, "openspec", "changes", "demo-change", "control", "ROUND-01.md"),
@@ -69,6 +76,7 @@ validation:
 
     assert.equal(payload.worker_worktree, ".worktree/demo-change/ISSUE-001");
     assert.equal(payload.worker_worktree_source, "issue_doc");
+    assert.equal(payload.worker_workspace_ready, true);
     assert.deepEqual(payload.validation, ["pnpm lint"]);
     assert.equal(payload.validation_source, "issue_doc");
     assert.equal(payload.control_gate.status, "approved_for_dispatch");
@@ -132,14 +140,53 @@ done_when:
     assert.equal(payload.dry_run, true);
     assert.equal(fs.existsSync(dispatchPath), false);
     assert.equal(payload.worker_worktree, ".worktree/demo-change");
+    assert.equal(payload.worker_workspace_ready, false);
     assert.equal(payload.validation_source, "config_default");
     assert.deepEqual(payload.validation, ["pnpm lint", "pnpm type-check"]);
     assert.equal(payload.control_gate.status, "not_applicable");
   });
 });
 
+test("fails when dedicated worker workspace is not ready", () => {
+  withTempDir((repoRoot) => {
+    writeIssueDoc(
+      repoRoot,
+      `---
+issue_id: ISSUE-001
+title: Missing workspace
+worker_worktree: .worktree/demo-change/ISSUE-001
+allowed_scope:
+  - src/demo.ts
+out_of_scope:
+  - electron/
+done_when:
+  - packet is blocked
+validation:
+  - pnpm lint
+---
+`
+    );
+
+    assert.throws(
+      () =>
+        renderIssueDispatch({
+          change: "demo-change",
+          issueId: "ISSUE-001",
+          repoRoot
+        }),
+      /Issue workspace for ISSUE-001 is not ready/
+    );
+  });
+});
+
 test("fails when issue doc is missing required frontmatter fields", () => {
   withTempDir((repoRoot) => {
+    fs.mkdirSync(path.join(repoRoot, "openspec"), { recursive: true });
+    fs.writeFileSync(
+      path.join(repoRoot, "openspec", "issue-mode.json"),
+      JSON.stringify({ worker_worktree: { enabled: false } }, null, 2),
+      "utf8"
+    );
     writeIssueDoc(
       repoRoot,
       `---
