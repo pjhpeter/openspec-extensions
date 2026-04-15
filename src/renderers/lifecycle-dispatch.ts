@@ -750,8 +750,9 @@ function renderTeamTopology(items: TeamTopologyItem[]): string {
   ].join("\n")).join("\n");
 }
 
-function renderGateBearingSeats(items: TeamTopologyItem[]): string {
+function renderGateBearingSeats(phase: string, items: TeamTopologyItem[]): string {
   return items
+    .filter((item) => !(phase === "issue_execution" && item.key === "development_group"))
     .map((item) => `- ${item.label}: ${item.count} required completion${item.count === 1 ? "" : "s"}`)
     .join("\n");
 }
@@ -1055,7 +1056,7 @@ ${renderTeamTopology(teamTopology)}
   - cancelled=${seatBarrier.required_cancelled.length}
   - missing=${seatBarrier.required_missing.length}
 - Gate-bearing seats for this phase:
-${renderGateBearingSeats(teamTopology)}
+${renderGateBearingSeats(phase, teamTopology)}
 - Barrier rules:
   - 当前 phase 里真正拉起的这些 gate-bearing subagent 必须记录 seat、\`agent_id\` 和状态。
   - 对 gate-bearing subagent 使用最长 1 小时的 blocking wait，不要 30 秒短轮询。

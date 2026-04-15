@@ -102,6 +102,9 @@ validation:
   const payload = JSON.parse(stdout.trim()) as Record<string, unknown>;
   const dispatchPath = path.join(repoRoot, String(payload.team_dispatch_path));
   const seatHandoffsPath = path.join(repoRoot, String(payload.seat_handoffs_path));
+  const activeSeatDispatch = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, String(payload.active_seat_dispatch_path)), "utf8")
+  ) as { seats: Array<{ gate_bearing: boolean; required: boolean; seat: string }> };
   const dispatchText = fs.readFileSync(dispatchPath, "utf8");
   const seatHandoffsText = fs.readFileSync(seatHandoffsPath, "utf8");
 
@@ -127,7 +130,9 @@ validation:
   assert.match(dispatchText, /dispatch_id=`DISPATCH-\d{8}T\d{6}`/);
   assert.match(dispatchText, /ACTIVE-SEAT-DISPATCH\.json/);
   assert.match(dispatchText, /seat-state/);
+  assert.match(dispatchText, /Development group: implementation seats only write progress \/ handoff；它们不参与 seat barrier/);
   assert.match(dispatchText, /execute seat-state set --repo-root/);
+  assert.match(dispatchText, /--gate-bearing false --required false --reasoning-effort high/);
   assert.match(dispatchText, /\u6700\u957f 1 \u5c0f\u65f6\u7684 blocking wait/);
   assert.match(dispatchText, /\u4e0d\u8981\u5f53\u4f5c `explorer` sidecar/);
   assert.match(dispatchText, /final status/);
@@ -159,6 +164,7 @@ validation:
   assert.match(dispatchText, /openspec-extensions execute update-progress checkpoint --repo-root/);
   assert.match(dispatchText, /development seat \u4e0d\u5141\u8bb8\u81ea\u5df1\u5199 `stop`/);
   assert.match(dispatchText, /\u628a\u76f8\u5173 validation \u6807\u8bb0\u56de `pending`/);
+  assert.match(dispatchText, /development seat 的 seat-state 只用于审计和恢复；真正阻塞当前 round 的 gate-bearing barrier 只看 checker \/ reviewer/);
   assert.match(dispatchText, /development seat \u4e0d\u662f\u5f53\u524d issue \u7684 validation \/ check \/ review owner/);
   assert.match(dispatchText, /\u5f53\u524d round \u7684 seat \u7ed3\u679c\u4e00\u65e6\u5df2\u7ecf\u5f52\u5e76\u8fdb round output \u6216 gate artifact/);
   assert.doesNotMatch(dispatchText, /\u5c40\u90e8 validation|\u5c40\u90e8\u6821\u9a8c/);
@@ -176,6 +182,28 @@ validation:
   assert.match(seatHandoffsText, /\u4e0d\u8981\u51b3\u5b9a\u662f\u5426\u9700\u8981\u989d\u5916 checker \/ reviewer/);
   assert.match(seatHandoffsText, /## Checker 1 \(functional correctness \/ main path \/ edge cases\)/);
   assert.match(seatHandoffsText, /## Reviewer 1 \(scope-first pass \/ fail owner\)/);
+  assert.deepEqual(
+    activeSeatDispatch.seats.filter((seat) => seat.seat.startsWith("Developer")).map((seat) => ({
+      gate_bearing: seat.gate_bearing,
+      required: seat.required
+    })),
+    [
+      { gate_bearing: false, required: false },
+      { gate_bearing: false, required: false },
+      { gate_bearing: false, required: false }
+    ]
+  );
+  assert.deepEqual(
+    activeSeatDispatch.seats.filter((seat) => !seat.seat.startsWith("Developer")).map((seat) => ({
+      gate_bearing: seat.gate_bearing,
+      required: seat.required
+    })),
+    [
+      { gate_bearing: true, required: true },
+      { gate_bearing: true, required: true },
+      { gate_bearing: true, required: true }
+    ]
+  );
 });
 
 test("falls back to issue-local round contract when latest round is still planning", () => {

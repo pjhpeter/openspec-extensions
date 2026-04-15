@@ -273,9 +273,10 @@ function seatLensTitle(seat: string, role: string): string {
 
 function issueTeamSeats(): ActiveSeatDefinition[] {
   return [
-    { seat: "Developer 1", role: "core implementation owner", gate_bearing: true, required: true, reasoning_effort: "high" },
-    { seat: "Developer 2", role: "dependent module or integration owner", gate_bearing: true, required: true, reasoning_effort: "high" },
-    { seat: "Developer 3", role: "tests, fixtures, cleanup owner", gate_bearing: true, required: true, reasoning_effort: "high" },
+    // issue_execution 里的 development seat 只负责实现交接，不参与 gate barrier。
+    { seat: "Developer 1", role: "core implementation owner", gate_bearing: false, required: false, reasoning_effort: "high" },
+    { seat: "Developer 2", role: "dependent module or integration owner", gate_bearing: false, required: false, reasoning_effort: "high" },
+    { seat: "Developer 3", role: "tests, fixtures, cleanup owner", gate_bearing: false, required: false, reasoning_effort: "high" },
     { seat: "Checker 1", role: "functional correctness / main path / edge cases", gate_bearing: true, required: true, reasoning_effort: "medium" },
     { seat: "Checker 2", role: "direct dependency regression risk / tests / evidence gaps", gate_bearing: true, required: true, reasoning_effort: "medium" },
     { seat: "Reviewer 1", role: "scope-first pass / fail owner", gate_bearing: true, required: true, reasoning_effort: "medium" }
@@ -638,7 +639,7 @@ ${bulletList(input.validation)}
   - manifest=\`${input.activeSeatDispatchPath}\`
   - seat_state_dir=\`${input.seatStateDir}\`
 - Gate-bearing seats for this round:
-  - Development group: launched seats must complete or explicitly report no-op before round close
+  - Development group: implementation seats only write progress / handoff；它们不参与 seat barrier
   - Check group: all launched checker seats must complete and be normalized before repair / review decisions
   - Review group: all launched reviewer seats must complete and be collected before the round can pass
 - Barrier rules:
@@ -717,7 +718,7 @@ ${bulletList(deferredItems)}
 - \u5c3d\u91cf\u6309\u6587\u4ef6/\u6a21\u5757 ownership \u5206\u914d\uff0c\u51cf\u5c11\u5199\u96c6\u91cd\u53e0\u3002
 - \u8d1f\u8d23\u5b9e\u73b0\u6216\u4fee\u590d repo \u4ee3\u7801\u7684 development subagent \u5fc5\u987b\u663e\u5f0f\u4f7f\u7528 \`reasoning_effort=high\`\u3002
 - coordinator 拉起 development seat 前先写：
-  - \`openspec-extensions execute seat-state set --repo-root "${input.repoRoot}" --change "${input.change}" --dispatch-id "${input.dispatchId}" --phase issue_execution --issue-id "${input.issueId}" --seat "<Developer N>" --status launching --agent-id "<agent_id>" --gate-bearing true --required true --reasoning-effort high\`
+  - \`openspec-extensions execute seat-state set --repo-root "${input.repoRoot}" --change "${input.change}" --dispatch-id "${input.dispatchId}" --phase issue_execution --issue-id "${input.issueId}" --seat "<Developer N>" --status launching --agent-id "<agent_id>" --gate-bearing false --required false --reasoning-effort high\`
 - \u9996\u4e2a\u771f\u6b63\u5f00\u59cb\u5199\u4ee3\u7801\u7684 development seat \u5148\u5199\uff1a
   - \`openspec-extensions execute update-progress start --repo-root "${input.repoRoot}" --change "${input.change}" --issue-id "${input.issueId}" --status in_progress --boundary-status working --next-action continue_issue --summary "\u5df2\u8fdb\u5165 subagent team repair round\u3002"\`
 - development seat 接手后先写：
@@ -726,6 +727,7 @@ ${bulletList(deferredItems)}
   - \`openspec-extensions execute update-progress checkpoint --repo-root "${input.repoRoot}" --change "${input.change}" --issue-id "${input.issueId}" --status in_progress --boundary-status working --next-action continue_issue --summary "development seat \u5df2\u5b8c\u6210\u5f53\u524d\u5b9e\u73b0\uff0c\u7b49\u5f85 checker / reviewer\u3002" --validation "<repo-validation-command>=pending" --changed-file "<path>"\`
 - development seat 结束前还要回写：
   - \`openspec-extensions execute seat-state set --repo-root "${input.repoRoot}" --change "${input.change}" --dispatch-id "${input.dispatchId}" --phase issue_execution --issue-id "${input.issueId}" --seat "<Developer N>" --status completed --agent-id "<agent_id>"\`
+- development seat 的 seat-state 只用于审计和恢复；真正阻塞当前 round 的 gate-bearing barrier 只看 checker / reviewer。
 - development seat \u4e0d\u5141\u8bb8\u81ea\u5df1\u5199 \`stop\` \u6216\u628a issue \u6807\u6210 \`completed + review_required\`\uff1b\u90a3\u4e2a\u72b6\u6001\u53ea\u80fd\u7531 coordinator \u5728 checker / reviewer gate \u901a\u8fc7\u540e\u7edf\u4e00\u843d\u76d8\u3002
 - development seat \u53ea\u8d1f\u8d23\u5b9e\u73b0\u3001changed_files \u548c progress checkpoint\uff1b\u5982\u679c\u5f53\u524d\u6539\u52a8\u4f1a\u4f7f\u5df2\u6709\u6821\u9a8c\u7ed3\u8bba\u5931\u6548\uff0c\u5c31\u628a\u76f8\u5173 validation \u6807\u8bb0\u56de \`pending\`\uff0c\u4e0d\u8981\u5728\u672c seat \u5185\u5ba3\u79f0 \`passed\`\u3002
 - development seat \u4e0d\u662f\u5f53\u524d issue \u7684 validation / check / review owner\uff1b\u8fd9\u4e9b\u7ed3\u8bba\u7531 checker / reviewer / coordinator \u5728\u540e\u7eed gate \u91cc\u6536\u655b\u3002
