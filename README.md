@@ -148,21 +148,23 @@ openspec/changes/*/runs/CHANGE-REVIEW.json
 - `先按简单流程走，因为范围集中且不需要 issue 拆分。`
 - `改走复杂流程，因为已经跨模块，并且需要 design review 和 issue 拆分。`
 
-如果你希望 AI 不只是判断复杂度，还在判定为复杂流程时直接使用 `subagent-team`，最好把授权写进提示词里，例如：
+如果你已经触发“进入 OpenSpec 模式”，我建议把后续话术收敛成三句：
+
+1. 创建新需求
 
 ```text
-进入 OpenSpec 模式。
 你自己判断需求复杂度；如果属于复杂流程，自动启用 subagent-team 推进，不用再单独问我。
 如需 spawned subagent，请显式使用 `<指定模型>`。
 需求：<需求描述>
 ```
 
-如果中断的会话想要继续完成之前的 change，也可以直接这样说：
+2. 继续现有需求
 
 ```text
-进入 OpenSpec 模式。
 继续 <change> change，根据原来判断的复杂度继续；如果是复杂流程，启用 subagent-team，spawned subagent 显式使用 `<指定模型>`。
 ```
+
+3. 也可以直接问我：`常用的话术模版`
 
 ### 简单任务
 
@@ -292,14 +294,19 @@ flowchart TD
 
 如果我要让 agent 按复杂任务全生命周期推进，我常用的话术是：
 
-0. 一句话启动无人值守
+0. 进入 OpenSpec 模式后，优先用这三句之一启动
 
 ```text
-进入 OpenSpec 模式。
-创建新 change，自动判断简单流程还是复杂流程，并按全自动方式推进到自动化测试收口。
-如果判定为复杂流程，使用 subagent-team 工作，并为所有 spawned subagent 显式指定 `<指定模型>`。
+你自己判断需求复杂度；如果属于复杂流程，自动启用 subagent-team 推进，不用再单独问我。
+如需 spawned subagent，请显式使用 `<指定模型>`。
 需求：<需求描述>
 ```
+
+```text
+继续 <change> change，根据原来判断的复杂度继续；如果是复杂流程，启用 subagent-team，spawned subagent 显式使用 `<指定模型>`。
+```
+
+`常用的话术模版`
 
 1. 进入 OpenSpec 模式
 

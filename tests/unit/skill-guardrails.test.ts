@@ -71,8 +71,9 @@ test("chat-router skill metadata includes the spaced OpenSpec mode trigger", () 
 test("mode cheat sheet includes unattended kickoff with explicit model and requirement placeholders", () => {
   const template = readRepoFile("skills/openspec-chat-router/references/router/mode-cheatsheet.md");
 
-  assert.match(template, /常用的话术有哪些/);
-  assert.match(template, /创建新 change/);
+  assert.match(template, /常用的话术模版/);
+  assert.match(template, /创建新需求/);
+  assert.match(template, /继续 <change> change/);
   assert.match(template, /subagent-team/);
   assert.match(template, /<指定模型>/);
   assert.match(template, /需求：<需求描述>/);
@@ -162,7 +163,8 @@ test("closeout guardrails require post-review automation and prefer chrome devto
 
   assert.match(readme, /review 通过后，必须补齐自动化测试\/校验和自动化手工验证/);
   assert.match(readme, /优先使用 chrome devtools MCP/);
-  assert.match(readme, /自动判断简单流程还是复杂流程，并按全自动方式推进到自动化测试收口/);
+  assert.match(readme, /你自己判断需求复杂度；如果属于复杂流程，自动启用 subagent-team 推进，不用再单独问我/);
+  assert.match(readme, /继续 <change> change，根据原来判断的复杂度继续/);
   assert.match(routerSkill, /review current code -> automated test\/validation \+ automated manual verification -> `verify` -> `archive`/);
   assert.match(routerSkill, /After that review passes, run the required automated test\/validation plus automated manual verification/);
   assert.match(teamSkill, /change-level `\/review` has passed/);

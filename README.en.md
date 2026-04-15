@@ -138,14 +138,23 @@ The route explanation should stay short and concrete, for example:
 - `Start with the short path because the scope is concentrated and does not need issue splitting.`
 - `Switch to the complex path because the change already crosses modules and needs design review plus issue splitting.`
 
-If you want the AI to do more than classify complexity and to directly use `subagent-team` when the result is complex, put that authorization into the prompt itself, for example:
+After you have already triggered "Enter OpenSpec mode", I recommend collapsing the next step to three short prompts:
+
+1. Create a new request
 
 ```text
-Enter OpenSpec mode.
 Judge the requirement complexity yourself; if it belongs to the complex path, automatically enable subagent-team and proceed without asking me again.
 If spawned subagents are needed, explicitly use `<specified-model>`.
 Requirement: <requirement-description>
 ```
+
+2. Continue an existing request
+
+```text
+Continue the `<change>` change according to the previously judged complexity. If it is on the complex path, enable subagent-team and explicitly use `<specified-model>` for spawned subagents.
+```
+
+3. You can also ask directly for `common prompt templates`
 
 ### Small Changes
 
@@ -263,13 +272,19 @@ flowchart TD
 
 If I want an agent to follow the full lifecycle for a complex change, these are the prompts I usually use:
 
-0. One-line unattended kickoff
+0. After entering OpenSpec mode, start with one of these three short prompts
 
 ```text
-Enter OpenSpec mode.
-Create a new change, use subagent-team for execution, and explicitly use `<specified-model>` for all spawned subagents.
+Judge the requirement complexity yourself; if it belongs to the complex path, automatically enable subagent-team and proceed without asking me again.
+If spawned subagents are needed, explicitly use `<specified-model>`.
 Requirement: <requirement-description>
 ```
+
+```text
+Continue the `<change>` change according to the previously judged complexity. If it is on the complex path, enable subagent-team and explicitly use `<specified-model>` for spawned subagents.
+```
+
+`common prompt templates`
 
 1. Enter OpenSpec mode
 

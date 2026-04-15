@@ -1,7 +1,7 @@
 # OpenSpec Mode Cheat Sheet
 
 已进入 OpenSpec 模式。
-你也可以直接问我：常用的话术有哪些？
+你也可以直接问我：常用的话术模版。
 
 注意：
 
@@ -28,27 +28,25 @@
   - `对当前 subagent team 使用长等待，直到 subagent 完成再返回`
   - `当前 gate 的 review/check subagent 必须等待全部完成并收齐 verdict，禁止提前关闭或提前通过 phase`
 
-完整链路案例：
+最常用的三句话：
 
-### 启动无人值守
-
-如果你想在进入 OpenSpec 模式后，直接给出一条可复制的无人值守启动话术，可以直接这样说：
+1. 创建新需求
 
 ```text
-进入 OpenSpec 模式。
-创建新 change，自动判断简单流程还是复杂流程，并按全自动方式推进到自动化测试收口。
-如果判定为复杂流程，使用 subagent-team 工作，并为所有 spawned subagent 显式指定 `<指定模型>`。
-需求：<需求描述>
-```
-
-如果你希望 agent 先自行判断复杂度，并在判定为复杂流程时自动启用 `subagent-team`，可以直接这样说：
-
-```text
-进入 OpenSpec 模式。
 你自己判断需求复杂度；如果属于复杂流程，自动启用 subagent-team 推进，不用再单独问我。
 如需 spawned subagent，请显式使用 `<指定模型>`。
 需求：<需求描述>
 ```
+
+2. 继续现有需求
+
+```text
+继续 <change> change，根据原来判断的复杂度继续；如果是复杂流程，启用 subagent-team，spawned subagent 显式使用 `<指定模型>`。
+```
+
+3. 也可以直接问我：`常用的话术模版`
+
+完整链路案例：
 
 ### 简单任务短链路
 
@@ -105,24 +103,6 @@
 在所有 issues 完成后，先对当前 change 修改的代码执行 /review；review 通过后，必须补齐自动化测试/校验和自动化手工验证。前端或其他浏览器可见改动优先使用 chrome devtools MCP 跑通受影响主路径，然后再进入 verify。
 对 subagent 使用 1 小时阻塞等待，不要 30 秒短轮询，直到 subagent 完成再返回。
 当前 gate 的 review/check subagent 必须等待全部完成并收齐 verdict，禁止提前关闭或提前通过 phase。
-```
-
-如果你希望把“创建 change + 指定 subagent 模型 + 填需求”合成一条启动话术，也可以直接这样写：
-
-```text
-进入 OpenSpec 模式。
-创建新 change，自动判断简单流程还是复杂流程，并按全自动方式推进到自动化测试收口。
-如果判定为复杂流程，使用 subagent-team 工作，并为所有 spawned subagent 显式指定 `<指定模型>`。
-需求：<需求描述>
-```
-
-如果你更希望把“复杂度判断 + 自动启用 subagent-team”合成一条启动话术，也可以直接这样写：
-
-```text
-进入 OpenSpec 模式。
-你自己判断需求复杂度；如果属于复杂流程，自动启用 subagent-team 推进，不用再单独问我。
-如需 spawned subagent，请显式使用 `<指定模型>`。
-需求：<需求描述>
 ```
 
 5. 如果你想先看设计评审和任务拆分

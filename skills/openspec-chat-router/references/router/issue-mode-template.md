@@ -1,7 +1,7 @@
 # OpenSpec Issue Mode Template
 
 已进入 OpenSpec Issue 模式。
-如果你想快速拿可复制提示词，也可以直接问我：常用的话术有哪些？
+如果你想快速拿可复制提示词，也可以直接问我：常用的话术模版。
 
 说明：
 
@@ -44,24 +44,25 @@
 - design / planning / check / review seat 只产出当前 phase 的结论和证据，不继续推进后续 phase
 - 任一 seat 如果缺上下文、结果回传异常或 runtime 不稳定，应该报告 blocker 并停止，不要私自改 topology、补开 worker 或扩大 scope
 
-如果你要的是“从进入 OpenSpec 模式开始”的复杂任务完整链路，直接复制下面这一套：
+如果你想先用最常用的三句话启动，直接复制下面这组：
 
-0. 一句话启动无人值守
-
-```text
-进入 OpenSpec 模式。
-创建新 change，使用 subagent-team 工作，并为所有 spawned subagent 显式指定 `<指定模型>`。
-需求：<需求描述>
-```
-
-0b. 让 agent 先判断复杂度，复杂时自动启用 `subagent-team`
+1. 创建新需求
 
 ```text
-进入 OpenSpec 模式。
 你自己判断需求复杂度；如果属于复杂流程，自动启用 subagent-team 推进，不用再单独问我。
 如需 spawned subagent，请显式使用 `<指定模型>`。
 需求：<需求描述>
 ```
+
+2. 继续现有需求
+
+```text
+继续 <change> change，根据原来判断的复杂度继续；如果是复杂流程，启用 subagent-team，spawned subagent 显式使用 `<指定模型>`。
+```
+
+3. 也可以直接问我：`常用的话术模版`
+
+如果你要完整链路，再继续看下面：
 
 1. 进入 OpenSpec 模式
 
