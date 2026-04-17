@@ -6,7 +6,6 @@
 注意：
 
 - 当前会话首次触发任一 `openspec-extensions` skill 时，应先做一次非阻塞版本检查；如果发现 npm 有更新版本，只提醒，不中断当前流程
-- 发现新版本时，推荐使用这条高亮提醒：`【更新提醒】检测到 openspec-extensions 有新版本。可先退出到命令行执行 \`npm update -g openspec-extensions\` 更新 openspec-extensions，再执行 \`openspec-ex install --target-repo /path/to/your/project --force --force-config\` 刷新当前仓库插件；当前流程继续，不受这条提醒影响。`
 - issue-mode 的默认 coordinator 入口是 `subagent-team`
 - 如果用户没有明确指定 stage，就先做显式复杂度 triage；不要因为“看起来我自己能直接做完”而跳过这个闸门
 - `2-3` 分是边界态，不是开始实现的授权；默认先走 `new` / `ff` 补 proposal/design，再重判
@@ -150,3 +149,7 @@
 | 检查一下当前变更能不能归档 | /opsx:verify | 做归档前校验 |
 | 把这个 change 的 delta spec 同步到主 spec | /opsx:sync-specs | 同步主 spec |
 | 这个变更做完了，帮我归档 | /opsx:archive | 收尾归档 |
+
+如果这次非阻塞版本检查检测到新版本，把下面这条高亮提醒追加在整段输出最后，不要放在最上面：
+
+`【更新提醒】检测到 openspec-extensions 有新版本。可先退出到命令行执行 \`npm update -g openspec-extensions\` 更新 openspec-extensions，再执行 \`openspec-ex install --target-repo /path/to/your/project --force --force-config\` 刷新当前仓库插件；当前流程继续，不受这条提醒影响。`

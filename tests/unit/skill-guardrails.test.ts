@@ -45,6 +45,7 @@ test("chat-router agent prompt does not reroute spawned seat sessions", () => {
   assert.match(prompt, /best-effort non-blocking version check/);
   assert.match(prompt, /openspec\/openspec-extensions\.json/);
   assert.match(prompt, /repo-recorded plugin version/);
+  assert.match(prompt, /append one highlighted reminder at the end of the cheat-sheet output/);
   assert.match(prompt, /npm update -g openspec-extensions/);
   assert.match(prompt, /openspec-ex install --target-repo \/path\/to\/your\/project --force --force-config/);
   assert.match(prompt, /treat that as the `mode` path/);
@@ -163,6 +164,18 @@ test("mode cheat sheet includes auto-subagent authorization wording for complex 
   assert.match(template, /如需 spawned subagent，请显式使用 `<指定模型>`/);
   assert.match(template, /review 通过后，必须补齐自动化测试\/校验和自动化手工验证/);
   assert.match(template, /优先使用 chrome devtools MCP/);
+});
+
+test("mode cheat sheet keeps the update reminder at the very end", () => {
+  const template = readRepoFile("skills/openspec-chat-router/references/router/mode-cheatsheet.md");
+  const commandTableIndex = template.indexOf("对应命令：");
+  const reminderSectionIndex = template.indexOf("如果这次非阻塞版本检查检测到新版本");
+  const reminderIndex = template.indexOf("【更新提醒】");
+
+  assert.ok(commandTableIndex >= 0);
+  assert.ok(reminderSectionIndex > commandTableIndex);
+  assert.ok(reminderIndex > reminderSectionIndex);
+  assert.match(template, /追加在整段输出最后，不要放在最上面/);
 });
 
 test("closeout guardrails require post-review automation and prefer chrome devtools MCP for frontend", () => {

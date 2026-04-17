@@ -14,6 +14,7 @@ The user should be able to speak normally in chat or IM instead of typing `/opsx
 - 如果仓库里有 `openspec/openspec-extensions.json`，先读取其中的 `installed_version` 作为仓库记录版本。
 - 版本检查优先比较 npm 最新版本与仓库记录版本；如果仓库元数据缺失，再退回比较当前已安装 CLI 版本。检查失败时直接跳过，不要阻塞当前流程。
 - 如果发现 npm 有更新版本，只打印一条高亮提醒，然后继续后续逻辑，不要要求用户先升级，也不要中断当前执行。
+- 如果当前走的是 `mode` 路径，把这条高亮提醒追加在 cheat sheet 主体全部内容之后，作为最后一段输出；不要把提醒放在最上面。
 - 高亮提醒统一使用这句：
   - `【更新提醒】检测到 openspec-extensions 有新版本。可先退出到命令行执行 \`npm update -g openspec-extensions\` 更新 openspec-extensions，再执行 \`openspec-ex install --target-repo /path/to/your/project --force --force-config\` 刷新当前仓库插件；当前流程继续，不受这条提醒影响。`
 - spawned seat / worker 子会话不要重复这条提醒；这条提醒只属于当前用户可见的主会话或 coordinator 会话。
