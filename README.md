@@ -19,7 +19,7 @@
 
 - 这是 `openspec-extensions` 的源码仓库，也是发布到 npm 的包内容。
 - 它提供 TypeScript CLI、`issue-mode` 相关 render/execute/reconcile 逻辑、可安装 skills，以及默认的 `issue-mode` 模板。
-- 它会随包安装 OpenSpec `1.2.x`，并在 `init` 时优先调用这份官方 CLI；我没有在这里重造一套 OpenSpec。
+- 它会随包安装 OpenSpec `1.3.x`，并在 `init` 时优先调用这份官方 CLI；我没有在这里重造一套 OpenSpec。
 - 这里已经不再保留 detached worker、heartbeat、monitor-worker 这一套旧 fallback runtime。当前主链就是 coordinator 加 issue-mode artifacts，加上可选的 subagent team。
 
 ## 快速开始

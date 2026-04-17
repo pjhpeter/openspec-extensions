@@ -19,7 +19,7 @@ I built this repository to make OpenSpec feel like a durable engineering workflo
 
 - This is the source repository for `openspec-extensions`, and it is also the package published to npm.
 - It ships the TypeScript CLI, `issue-mode` render/execute/reconcile logic, installable skills, and the default `issue-mode` template.
-- It installs OpenSpec `1.2.x` as a bundled runtime dependency and prefers that official CLI during `init`. I am not rebuilding OpenSpec here.
+- It installs OpenSpec `1.3.x` as a bundled runtime dependency and prefers that official CLI during `init`. I am not rebuilding OpenSpec here.
 - It no longer carries the old detached-worker, heartbeat, or monitor-worker fallback runtime. The current model is coordinator plus issue-mode artifacts, with optional subagent-team execution on top.
 
 ## Quick Start
@@ -30,7 +30,7 @@ Install the CLI globally:
 npm install -g openspec-extensions
 ```
 
-That install also pulls in `@fission-ai/openspec@~1.2.0` as a runtime dependency of `openspec-extensions` and exposes three global commands: `openspec`, `openspec-ex`, and `openspec-extensions`. A fresh machine does not need a separate manual OpenSpec install first.
+That install also pulls in `@fission-ai/openspec@~1.3.0` as a runtime dependency of `openspec-extensions` and exposes three global commands: `openspec`, `openspec-ex`, and `openspec-extensions`. A fresh machine does not need a separate manual OpenSpec install first.
 
 Then initialize from the target project:
 
@@ -57,7 +57,7 @@ Equivalent form:
 openspec-extensions init /path/to/your/project
 ```
 
-This command checks whether the target repo already has `openspec/config.yaml`. If it does not, I first call the bundled official `openspec init`. Only when that bundled OpenSpec is unavailable do I fall back to `npx @fission-ai/openspec@~1.2.0`, then continue with extension installation.
+This command checks whether the target repo already has `openspec/config.yaml`. If it does not, I first call the bundled official `openspec init`. Only when that bundled OpenSpec is unavailable do I fall back to `npx @fission-ai/openspec@~1.3.0`, then continue with extension installation.
 
 If you do not pass `--openspec-tools`, I hand the current terminal straight to the official `openspec init`, so you get the same interactive tool picker as the native command. I only switch to a non-interactive pass-through when the user explicitly provides `--openspec-tools <tools>`.
 
