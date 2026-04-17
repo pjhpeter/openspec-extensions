@@ -30,12 +30,12 @@ test("withBundledOpenSpecPath keeps the bundled node bin unique", () => {
   assert.equal(env.PATH, [bundledNodeBin, "/usr/bin", "/bin"].join(path.delimiter));
 });
 
-test("package manifest keeps openspec within the 1.2.x runtime range", () => {
+test("package manifest keeps openspec within the 1.3.x runtime range", () => {
   const packageJson = JSON.parse(
     readFileSync(path.resolve(process.cwd(), "package.json"), "utf8")
   ) as {
     dependencies?: Record<string, string>;
   };
 
-  assert.equal(packageJson.dependencies?.["@fission-ai/openspec"], "~1.2.0");
+  assert.equal(packageJson.dependencies?.["@fission-ai/openspec"], "~1.3.0");
 });

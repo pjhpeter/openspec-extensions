@@ -18,7 +18,7 @@ import {
   type IssueModeAutomationPreference
 } from "./issue-mode-automation";
 
-const OPENSPEC_NPM_PACKAGE = "@fission-ai/openspec@~1.2.0";
+const OPENSPEC_NPM_PACKAGE = "@fission-ai/openspec@~1.3.0";
 const EXTENSIONS_NPM_PACKAGE = "openspec-extensions";
 const SELF_UPDATE_SKIP_ENV = "OPENSPEC_EXTENSIONS_SKIP_SELF_UPDATE_CHECK";
 const PACKAGE_VERSION = readOwnPackageVersion();

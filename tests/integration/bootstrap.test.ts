@@ -164,7 +164,7 @@ test("init initializes OpenSpec before installing extension skills", async () =>
   assert.deepEqual(payload.openspec_init.fallback_command, [
     "npx",
     "--yes",
-    "@fission-ai/openspec@~1.2.0",
+    "@fission-ai/openspec@~1.3.0",
     "init",
     targetRepo
   ]);
@@ -262,7 +262,7 @@ test("init preserves explicit openspec tool selection", async () => {
   assert.deepEqual(payload.openspec_init.fallback_command, [
     "npx",
     "--yes",
-    "@fission-ai/openspec@~1.2.0",
+    "@fission-ai/openspec@~1.3.0",
     "init",
     "--tools",
     "codex",

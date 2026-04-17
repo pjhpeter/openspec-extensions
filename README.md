@@ -30,7 +30,7 @@
 npm install -g openspec-extensions
 ```
 
-这一步会同时把 `@fission-ai/openspec@~1.2.0` 装进 `openspec-extensions` 自己的依赖，并暴露三个全局命令：`openspec`、`openspec-ex`、`openspec-extensions`。所以全新环境不需要再单独手工安装一遍 OpenSpec。
+这一步会同时把 `@fission-ai/openspec@~1.3.0` 装进 `openspec-extensions` 自己的依赖，并暴露三个全局命令：`openspec`、`openspec-ex`、`openspec-extensions`。所以全新环境不需要再单独手工安装一遍 OpenSpec。
 
 在目标项目里初始化：
 
@@ -57,7 +57,7 @@ openspec-ex --version
 openspec-extensions init /path/to/your/project
 ```
 
-这条命令会先检查目标仓库有没有 `openspec/config.yaml`。如果还没有，我会先调用随包安装的官方 `openspec init`；只有 bundled OpenSpec 不可用时，才会回退到 `npx @fission-ai/openspec@~1.2.0`，然后继续安装扩展。
+这条命令会先检查目标仓库有没有 `openspec/config.yaml`。如果还没有，我会先调用随包安装的官方 `openspec init`；只有 bundled OpenSpec 不可用时，才会回退到 `npx @fission-ai/openspec@~1.3.0`，然后继续安装扩展。
 
 如果你没有显式传 `--openspec-tools`，我会把当前终端直接交给官方 `openspec init`，所以你会看到和原生命令一致的工具选择交互；只有当你明确传入 `--openspec-tools <tools>` 时，才会改成无交互透传。
 
