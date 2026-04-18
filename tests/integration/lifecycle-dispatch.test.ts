@@ -343,6 +343,70 @@ validation:
   });
 });
 
+test("seat handoff artifacts do not create fake pending issues in lifecycle dispatch", () => {
+  withTempDir((repoRoot) => {
+    const changeDir = path.join(repoRoot, "openspec", "changes", "demo-change");
+    const issuesDir = path.join(changeDir, "issues");
+    const controlDir = path.join(changeDir, "control");
+    fs.mkdirSync(issuesDir, { recursive: true });
+    fs.mkdirSync(controlDir, { recursive: true });
+
+    fs.writeFileSync(path.join(changeDir, "proposal.md"), "# proposal\n");
+    fs.writeFileSync(path.join(changeDir, "design.md"), "# design\n");
+    fs.writeFileSync(path.join(changeDir, "tasks.md"), "- [ ] 1.1 ship issue flow\n");
+    fs.writeFileSync(path.join(issuesDir, "INDEX.md"), "- `ISSUE-001` `1.1`\n");
+    fs.writeFileSync(path.join(issuesDir, "ISSUE-001.md"), `---
+issue_id: ISSUE-001
+title: 生命周期执行
+worker_worktree: .worktree/demo-change/ISSUE-001
+allowed_scope:
+  - src/demo.ts
+out_of_scope:
+  - electron/
+done_when:
+  - 输出 issue team packet
+validation:
+  - pnpm lint
+---
+`);
+    fs.writeFileSync(path.join(issuesDir, "ISSUE-001.seat-handoffs.md"), "# seat handoffs\n");
+    fs.writeFileSync(path.join(controlDir, "BACKLOG.md"), "## Must Fix Now\n- none\n");
+    fs.writeFileSync(path.join(controlDir, "ROUND-01.md"), `## Round Target
+- 推进 ISSUE-001
+
+## Target Mode
+- quality
+
+## Scope In Round
+- ISSUE-001
+
+## Acceptance Criteria
+- ISSUE-001 可继续执行
+
+## Next Action
+- 继续 ISSUE-001
+`);
+    initGitRepo(repoRoot);
+    writePhaseGateArtifact(repoRoot, "demo-change", "spec_readiness");
+    writePhaseGateArtifact(repoRoot, "demo-change", "issue_planning");
+    commitAll(repoRoot, "commit planning docs");
+    createStubWorktree(repoRoot, ".worktree/demo-change/ISSUE-001");
+
+    const payload = renderLifecycleDispatch({
+      repoRoot,
+      change: "demo-change",
+      phase: "auto",
+      issueId: "",
+      dryRun: false
+    });
+
+    assert.equal(payload.phase, "issue_execution");
+    assert.equal(payload.focus_issue_id, "ISSUE-001");
+    assert.equal(payload.issue_count, 1);
+    assert.match(payload.issue_team_dispatch_path, /ISSUE-001\.team\.dispatch\.md$/);
+  });
+});
+
 test("completed team dispatch issue stays in issue_execution until review gate exists", () => {
   withTempDir((repoRoot) => {
     const changeDir = path.join(repoRoot, "openspec", "changes", "demo-change");
