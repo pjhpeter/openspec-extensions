@@ -123,6 +123,13 @@ validation:
   assert.equal((payload.reasoning_policy as { development_group: string }).development_group, "high");
   assert.equal((payload.reasoning_policy as { check_group: string }).check_group, "medium");
   assert.equal((payload.reasoning_policy as { review_group: string }).review_group, "medium");
+  assert.deepEqual(payload.tool_resource_guard, {
+    max_concurrent_seats: "rendered_topology",
+    min_open_files: 16384,
+    on_resource_error: "recover_and_rerun_gate",
+    rerun_scope: "active_dispatch",
+    resource_errors: ["EMFILE", "ENFILE", "Too many open files"]
+  });
   assert.match(String(payload.seat_handoffs_path), /ISSUE-001\.seat-handoffs\.md$/);
   assert.match(dispatchText, /subagent team \u4e3b\u94fe/);
   assert.match(dispatchText, /Seat Handoff Source/);
@@ -134,6 +141,12 @@ validation:
   assert.match(dispatchText, /Checker 2: direct dependency regression risk, tests, evidence gaps/);
   assert.match(dispatchText, /Reviewer 1: scope-first target path \/ direct dependency \/ evidence pass or fail/);
   assert.match(dispatchText, /## Gate Barrier/);
+  assert.match(dispatchText, /## Tool Resource Guardrails/);
+  assert.match(dispatchText, /ulimit -n/);
+  assert.match(dispatchText, /16384/);
+  assert.match(dispatchText, /Too many open files/);
+  assert.match(dispatchText, /rerun the current checker\/reviewer gate from the active dispatch/);
+  assert.match(dispatchText, /never self-certify or skip that gate/);
   assert.match(dispatchText, /dispatch_id=`DISPATCH-\d{8}T\d{6}`/);
   assert.match(dispatchText, /ACTIVE-SEAT-DISPATCH\.json/);
   assert.match(dispatchText, /seat-state/);

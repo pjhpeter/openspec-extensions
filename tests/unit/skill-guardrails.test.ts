@@ -28,6 +28,11 @@ test("subagent-team agent prompt scopes coordinator defaults to the main session
   assert.match(prompt, /continuation_policy\.mode=continue_immediately/);
   assert.match(prompt, /do not stop at `control-plane ready`/);
   assert.match(prompt, /do not self-certify the gate/);
+  assert.match(prompt, /ulimit -n/);
+  assert.match(prompt, /16384/);
+  assert.match(prompt, /EMFILE/);
+  assert.match(prompt, /Too many open files/);
+  assert.match(prompt, /rerun the current gate from the active dispatch/);
   assert.match(prompt, /keep the main session coordinator-only during issue execution/);
   assert.match(prompt, /Use serial fallback only after explicit evidence that the runtime cannot delegate/);
   assert.match(prompt, /create or reuse that workspace first/);
@@ -62,6 +67,10 @@ test("chat-router agent prompt does not reroute spawned seat sessions", () => {
   assert.match(prompt, /Selecting the complex flow does not authorize main-session implementation/);
   assert.match(prompt, /keep the main session coordinator-only/);
   assert.match(prompt, /do not use the serial issue fallback just because the current issue looks manageable/);
+  assert.match(prompt, /ulimit -n/);
+  assert.match(prompt, /EMFILE/);
+  assert.match(prompt, /Too many open files/);
+  assert.match(prompt, /never self-certify or skip a missing checker\/reviewer verdict/);
   assert.match(prompt, /create or reuse that workspace before rendering issue\/team dispatch or starting implementation/);
   assert.match(prompt, /Only treat control-plane artifacts under `openspec\/changes\/<change>\/\.\.\.` as workflow state/);
   assert.match(prompt, /task_plan\.md/);
@@ -119,6 +128,9 @@ test("issue-mode contract includes persisted route decision artifact", () => {
   assert.match(contract, /Only issue-mode artifacts under `openspec\/changes\/<change>\/\.\.\.` count as workflow state/);
   assert.match(contract, /task_plan\.md/);
   assert.match(contract, /After an external disconnect or fresh reconnect/);
+  assert.match(contract, /ulimit -n/);
+  assert.match(contract, /Too many open files/);
+  assert.match(contract, /rerun the current gate from the active dispatch/);
 });
 
 test("reconcile skill resume rules ignore repo-root helper noise and honor continuation policy", () => {
@@ -139,6 +151,9 @@ test("coordinator playbook forbids implementation before complex-flow gates pass
   assert.match(playbook, /Before the first issue execution, require both a current passed `runs\/ISSUE-PLANNING\.json` and the coordinator-owned planning-doc commit/);
   assert.match(playbook, /keep the main session coordinator-only during issue execution/);
   assert.match(playbook, /do not activate serial fallback just because the task still looks manageable in one main session/);
+  assert.match(playbook, /ulimit -n/);
+  assert.match(playbook, /EMFILE/);
+  assert.match(playbook, /rerun the active dispatch gate/);
   assert.match(playbook, /Once that review passes, run the required automated test\/validation plus automated manual verification closeout/);
   assert.match(playbook, /prefer chrome devtools MCP/);
 });
@@ -186,18 +201,43 @@ test("closeout guardrails require post-review automation and prefer chrome devto
   const issueModeConfig = readRepoFile("skills/openspec-chat-router/references/issue-mode-config.md");
 
   assert.match(readme, /review 通过后，必须补齐自动化测试\/校验和自动化手工验证/);
+  assert.match(readme, /ulimit -n/);
+  assert.match(readme, /Too many open files/);
+  assert.match(readme, /从 active dispatch 重跑当前 gate/);
   assert.match(readme, /优先使用 chrome devtools MCP/);
   assert.match(readme, /你自己判断需求复杂度；如果属于复杂流程，自动启用 subagent-team 推进，不用再单独问我/);
   assert.match(readme, /继续 <change> change，根据原来判断的复杂度继续/);
   assert.match(routerSkill, /review current code -> automated test\/validation \+ automated manual verification -> `verify` -> `archive`/);
   assert.match(routerSkill, /After that review passes, run the required automated test\/validation plus automated manual verification/);
   assert.match(teamSkill, /change-level `\/review` has passed/);
+  assert.match(teamSkill, /open-files limit is below `16384`/);
+  assert.match(teamSkill, /EMFILE/);
+  assert.match(teamSkill, /rerun the current gate from the active dispatch/);
   assert.match(teamSkill, /prefer chrome devtools MCP/);
   assert.match(contract, /After that review passes, complex flow keeps the final automated test\/validation and automated manual verification/);
+  assert.match(contract, /tool-resource blocker/);
   assert.match(contract, /chrome devtools MCP/);
   assert.match(issueModeConfig, /full_auto/);
   assert.match(issueModeConfig, /automated-test closeout/);
   assert.match(issueModeConfig, /stop before verify \/ archive/);
+});
+
+test("tool resource guardrails prevent EMFILE gates from being self-certified", () => {
+  const routerSkill = readRepoFile("skills/openspec-chat-router/SKILL.md");
+  const teamSkill = readRepoFile("skills/openspec-subagent-team/SKILL.md");
+  const teamTemplate = readRepoFile("skills/openspec-subagent-team/references/team-templates.md");
+  const configReference = readRepoFile("skills/openspec-chat-router/references/issue-mode-config.md");
+
+  for (const text of [routerSkill, teamSkill, teamTemplate, configReference]) {
+    assert.match(text, /ulimit -n/);
+    assert.match(text, /16384/);
+    assert.match(text, /EMFILE/);
+    assert.match(text, /Too many open files/);
+  }
+  assert.match(routerSkill, /Do not self-certify or skip the checker\/reviewer gate/);
+  assert.match(teamSkill, /never self-certify or skip that gate/);
+  assert.match(teamTemplate, /不能自证通过或跳过/);
+  assert.match(configReference, /rerun the active dispatch gate/);
 });
 
 test("all installable skills define the same non-blocking update reminder", () => {

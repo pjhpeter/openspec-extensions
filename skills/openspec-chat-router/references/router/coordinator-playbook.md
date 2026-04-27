@@ -60,6 +60,9 @@ This is the normal flow when the runtime supports delegation and the user wants 
 - do not pass a gate while any required reviewer/checker for that gate is still running
 - do not close unfinished gate-bearing subagents early
 - after a gate-bearing seat reaches a final status and its result has been collected, do not keep that finished seat open longer than needed; close it before the next round or phase spawns more seats
+- before unattended gate-bearing batches, check `ulimit -n` when shell access is available; if it is below `16384`, restart or recover the tool session with a larger open-files limit before spawning checker/reviewer seats
+- keep concurrently active seats within the rendered topology; do not add extra checker/reviewer seats until final-state seats are normalized and closed
+- `EMFILE`, `ENFILE`, or `Too many open files` means the current gate verdict is missing; recover or restart the tool session, clear stale running seats, and rerun the active dispatch gate instead of self-certifying or skipping it
 - gate-bearing review/check subagents must not be treated as `explorer` sidecars
 - the lifecycle packet is coordinator-only; when spawning design-author / design-review / planning / check / review seats, give them a seat-local handoff instead of the full coordinator packet
 - do not fork the full coordinator thread/context into gate-bearing seats; seat-local handoff plus minimal file references must remain the only executable context for that seat

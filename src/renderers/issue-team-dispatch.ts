@@ -28,6 +28,14 @@ import { displayPath } from "../utils/path";
 
 type JsonRecord = Record<string, unknown>;
 
+type ToolResourceGuard = {
+  max_concurrent_seats: "rendered_topology";
+  min_open_files: number;
+  on_resource_error: "recover_and_rerun_gate";
+  rerun_scope: "active_dispatch";
+  resource_errors: string[];
+};
+
 type ParsedArgs = {
   change: string;
   dryRun: boolean;
@@ -58,6 +66,7 @@ export type IssueTeamDispatchPayload = {
   seat_handoffs_path: string;
   seat_state_dir: string;
   team_dispatch_path: string;
+  tool_resource_guard: ToolResourceGuard;
   validation: string[];
   validation_source: "issue_doc" | "config_default";
   worker_worktree: string;
@@ -69,6 +78,14 @@ export type IssueTeamDispatchPayload = {
 };
 
 const REVIEW_EXCLUDED_DIRS = new Set(["node_modules", "dist", "build", ".next", "coverage"]);
+// JSON payload 也带资源策略，便于自动化 runner 不解析 Markdown。
+const TOOL_RESOURCE_GUARD: ToolResourceGuard = {
+  max_concurrent_seats: "rendered_topology",
+  min_open_files: 16384,
+  on_resource_error: "recover_and_rerun_gate",
+  rerun_scope: "active_dispatch",
+  resource_errors: ["EMFILE", "ENFILE", "Too many open files"]
+};
 
 function parseCommandArgs(argv: string[]): ParsedArgs {
   const { values } = parseArgs({
@@ -286,6 +303,18 @@ function issueTeamSeats(): ActiveSeatDefinition[] {
     { seat: "Checker 2", role: "direct dependency regression risk / tests / evidence gaps", gate_bearing: true, required: true, reasoning_effort: "medium" },
     { seat: "Reviewer 1", role: "scope-first pass / fail owner", gate_bearing: true, required: true, reasoning_effort: "medium" }
   ];
+}
+
+function renderToolResourceGuardrails(): string {
+  // 资源恢复规则必须随 packet 下发，否则安装后的 coordinator 不会执行。
+  return `## Tool Resource Guardrails
+
+- Before an unattended gate-bearing batch, run \`ulimit -n\` when shell access is available; if the open-files limit is below \`16384\`, pause before spawning checker/reviewer seats and restart the tool session with a larger limit.
+- Keep concurrently active seats at or below the rendered topology for this round; do not launch extra checker/reviewer seats until final-state seats have been normalized and closed.
+- Close finished subagents before starting another gate batch or lifecycle phase so completed seats do not keep file descriptors, shells, or agent slots open.
+- If shell/process creation fails with \`EMFILE\`, \`ENFILE\`, or \`Too many open files\`, treat the current gate verdict as missing, not failed and not passed.
+- After any \`EMFILE\` / \`Too many open files\` event, recover or restart the tool session, clear stale running seats, then rerun the current checker/reviewer gate from the active dispatch; never self-certify or skip that gate.
+`;
 }
 
 function renderSeatHandoffArtifact(input: {
@@ -661,6 +690,8 @@ ${bulletList(input.validation)}
   - gate-bearing check/review subagent \u4e0d\u8981\u5f53\u4f5c \`explorer\` sidecar\u3002
   - \`auto_accept_issue_review=true\` \u53ea\u8df3\u8fc7\u4eba\u5de5\u7b7e\u5b57\uff0c\u4e0d\u8df3\u8fc7 gate-bearing subagent \u7684\u5b8c\u6210\u7b49\u5f85\u3002
 
+${renderToolResourceGuardrails()}
+
 ## Scope-First Review Focus
 
 - checker / reviewer \u5148\u770b\u5f53\u524d issue progress \u91cc\u7684 \`changed_files\`\uff1b\u5982\u679c\u8fd8\u6ca1\u6709\uff0c\u5c31\u4ece \`allowed_scope\` \u5f00\u59cb\u3002
@@ -900,7 +931,8 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
     },
     config_path: config.config_path,
     dry_run: args.dryRun,
-    seat_barrier: seatBarrier
+    seat_barrier: seatBarrier,
+    tool_resource_guard: TOOL_RESOURCE_GUARD
   };
 }
 

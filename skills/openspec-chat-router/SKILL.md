@@ -79,6 +79,8 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - `auto_accept_*` only skips human chat sign-off after those gate-bearing subagents have finished and their verdicts have been normalized.
 - For long-running gate-bearing subagents, prefer blocking waits up to 1 hour instead of short polling.
 - Do not launch gate-bearing review/check seats as `explorer`, and do not close them while their phase still depends on their verdicts.
+- Before unattended gate-bearing batches, check `ulimit -n` when shell access is available; if it is below `16384`, pause and restart the tool session with a larger open-files limit before spawning checker/reviewer seats.
+- If shell/process creation fails with `EMFILE`, `ENFILE`, or `Too many open files`, treat the current gate verdict as missing, recover or restart the tool session, clear stale running seats, and rerun the current gate from the active dispatch. Do not self-certify or skip the checker/reviewer gate.
 - If the intent is still ambiguous after doing all non-blocked work, ask exactly one short targeted question.
 
 ## Complexity Triage
@@ -175,8 +177,9 @@ Preferred flow:
 11. Use one issue-only execution subagent for one approved issue only when the user explicitly narrows execution to that one issue, or the current step is already a bounded single-issue handoff. Do not reuse that full worker contract for development/check/review seats inside an issue-team round.
 11. In subagent-team `issue_execution`, development seats stop at implementation and progress checkpoint. If code changes invalidate prior validation, they only mark those validation entries back to `pending`; checker/reviewer and the coordinator own the later validation/review gate. Only after checker/reviewer finish and the coordinator records `runs/ISSUE-REVIEW-<issue>.json` should the issue move to `review_required`, after which manual review or `auto_accept_issue_review=true` may merge/commit it.
 12. In every gate-bearing phase, record launched seat ids, wait for completion, normalize the verdicts, and do not advance while any required gate subagent is still running.
-13. Repeat for the next approved issue, then run a change-level `/review`.
-14. After that review passes, run the required automated test/validation plus automated manual verification as the final closeout step before the change-level acceptance decision, `verify`, and `archive`. For frontend or other browser-visible changes, prefer chrome devtools MCP to drive the affected main path in that final closeout step; only fall back to another browser tool when chrome devtools MCP is unavailable.
+13. Before each unattended gate-bearing batch, keep active seats within the rendered topology, close final-state seats before spawning more, and treat `EMFILE` / `Too many open files` as a tool-resource blocker that requires recovery plus rerunning the current gate from disk.
+14. Repeat for the next approved issue, then run a change-level `/review`.
+15. After that review passes, run the required automated test/validation plus automated manual verification as the final closeout step before the change-level acceptance decision, `verify`, and `archive`. For frontend or other browser-visible changes, prefer chrome devtools MCP to drive the affected main path in that final closeout step; only fall back to another browser tool when chrome devtools MCP is unavailable.
 
 ## Special Path: `mode`
 
@@ -228,6 +231,7 @@ Summary rule:
 - if delegation is unavailable, keep the same packet and round contract but run it serially in the main session
 - use role-based launch settings: design-author and code-writing subagents `high`, all other subagents `medium`
 - keep gate-bearing review/check subagents alive until their completion states and verdicts are explicitly collected
+- treat `EMFILE` / `Too many open files` as a recover-and-rerun gate blocker, not as a passed or failed verdict
 - once a seat reaches final status and its result is written into the round output or gate artifact, close that finished subagent before launching more seats
 
 ## Special Path: `reconcile`

@@ -97,13 +97,16 @@ Read these first:
 12. Treat every launched seat in the current phase as a gate-bearing participant, not a disposable sidecar:
    - record the agent id, seat name, and current status
    - use the rendered `dispatch_id`, `ACTIVE-SEAT-DISPATCH.json`, and `control/seat-state/<dispatch_id>/` as the seat control plane
+   - before an unattended gate-bearing batch, run `ulimit -n` when shell access is available; if the open-files limit is below `16384`, pause before spawning checker/reviewer seats and restart the tool session with a larger limit
    - before the coordinator spawns a gate-bearing seat, write a `launching` seat-state entry
    - after a seat takes over, it must write its own `running` state, then finish with `completed`, `failed`, or `blocked`
    - use `default` or `worker` style delegation for these gate-bearing seats; do not launch check/review gate seats as `explorer`
    - when the phase depends on their verdicts, wait up to 1 hour for completion instead of short polling
    - do not accept the phase, mark it passed, or close those subagents while any required gate-bearing seat is still running
+   - keep concurrently active seats at or below the rendered topology for the phase; do not launch extra check/review seats until final-state seats have been normalized and closed
    - once a gate-bearing seat reaches a final status and its verdict / blocker / artifact update has been normalized into round output or a gate artifact, close that finished subagent before launching more seats so old seats do not consume the agent cap
    - if a launched gate-bearing seat cannot return a stable result, treat that as a phase blocker; relaunch or stop, but do not self-certify the missing verdict and do not downgrade that same gate into serial fallback
+   - if shell/process creation fails with `EMFILE`, `ENFILE`, or `Too many open files`, the current checker/reviewer verdict is missing; recover or restart the tool session, clear stale running seats, and rerun the current gate from the active dispatch instead of self-certifying or skipping it
 13. `auto_accept_*` only removes human chat sign-off after the gate team has finished:
    - it does not mean "spawned already, so the phase may pass"
    - it does not allow skipping review/check verdict collection
@@ -151,6 +154,9 @@ Read these first:
 - Do not mark a phase passed while any gate-bearing reviewer/checker for that phase is still running.
 - Do not close unfinished gate-bearing subagents just because the coordinator thinks the phase outcome is obvious.
 - 对已经进入最终态、且结果已归并落盘的 gate-bearing subagent，要尽快关闭；不要把 completed / failed / cancelled 的 seat 长时间挂着占用 agent 配额。
+- Gate-bearing batches must stay within the rendered topology, and completed seats must be closed before new gate batches or lifecycle phases so old shells and file descriptors are released.
+- Before unattended checker/reviewer gates, check `ulimit -n` when shell access is available; if the limit is below `16384`, pause and restart the tool session with a higher limit before spawning seats.
+- `EMFILE`, `ENFILE`, or `Too many open files` is a tool-resource blocker, not a valid checker/reviewer verdict. Recover or restart the tool session, clear stale running seats, and rerun the current gate from the active dispatch; never self-certify or skip that gate.
 - Gate-bearing review/check subagents must not be launched as `explorer`; treat them as gate owners whose completion status must be collected explicitly.
 - 在 `issue_execution` 里，开发组 / 检查组 / 审查组仍沿用 `rra` 的 lens 家族，但默认快路径只激活最小必要 seat：
   - Development 1/2/3 = core implementation / dependent integration / tests-cleanup

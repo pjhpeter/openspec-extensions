@@ -73,6 +73,13 @@ test("detects spec_readiness when core docs are missing", () => {
     assert.equal(payload.team_topology[0]?.label, "Design author");
     assert.equal(payload.team_topology[0]?.count, 1);
     assert.equal(payload.team_topology[0]?.reasoning_effort, "high");
+    assert.deepEqual(payload.tool_resource_guard, {
+      max_concurrent_seats: "rendered_topology",
+      min_open_files: 16384,
+      on_resource_error: "recover_and_rerun_gate",
+      rerun_scope: "active_dispatch",
+      resource_errors: ["EMFILE", "ENFILE", "Too many open files"]
+    });
     assert.equal(payload.team_topology[1]?.label, "Design review");
     assert.equal(payload.team_topology[1]?.count, 2);
     assert.equal(payload.team_topology[1]?.reasoning_effort, "medium");
@@ -84,6 +91,12 @@ test("detects spec_readiness when core docs are missing", () => {
     assert.match(dispatchText, /Launch with `reasoning_effort=medium`/);
     assert.match(dispatchText, /当前 phase 的标准循环是：设计编写 -> 双评审 -> 修订 -> 双评审/);
     assert.match(dispatchText, /## Gate Barrier/);
+    assert.match(dispatchText, /## Tool Resource Guardrails/);
+    assert.match(dispatchText, /ulimit -n/);
+    assert.match(dispatchText, /16384/);
+    assert.match(dispatchText, /Too many open files/);
+    assert.match(dispatchText, /rerun the current gate from the active dispatch/);
+    assert.match(dispatchText, /never self-certify or skip that gate/);
     assert.match(dispatchText, /Design author: 1 required completion/);
     assert.match(dispatchText, /Design review: 2 required completions/);
     assert.match(dispatchText, /最长 1 小时的 blocking wait/);
@@ -312,6 +325,9 @@ validation:
     assert.match(lifecycleText, /Seat-local handoff packet for spawned seats/);
     assert.match(lifecycleText, /ISSUE-001\.seat-handoffs\.md/);
     assert.match(lifecycleText, /Gate-bearing seats for this phase/);
+    assert.match(lifecycleText, /## Tool Resource Guardrails/);
+    assert.match(lifecycleText, /Too many open files/);
+    assert.match(lifecycleText, /rerun the current gate from the active dispatch/);
     assert.match(lifecycleText, /ACTIVE-SEAT-DISPATCH\.json/);
     assert.match(lifecycleText, /Current barrier summary/);
     assert.doesNotMatch(lifecycleText, /Development group: 3 required completions/);
@@ -324,6 +340,8 @@ validation:
     assert.doesNotMatch(lifecycleText, /局部验证/);
     assert.match(lifecycleText, /不要读取 `node_modules`、`dist`、`build`、`\.next`、`coverage`/);
     assert.match(issueTeamText, /Development group: 3 subagents/);
+    assert.match(issueTeamText, /## Tool Resource Guardrails/);
+    assert.match(issueTeamText, /rerun the current checker\/reviewer gate from the active dispatch/);
     assert.match(issueTeamText, /Check group: 2 subagents/);
     assert.match(issueTeamText, /Review group: 1 subagent/);
     assert.match(issueTeamText, /Developer 2: dependent module or integration owner/);

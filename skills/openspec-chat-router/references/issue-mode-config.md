@@ -81,6 +81,8 @@ Important:
 - even when `auto_accept_change_acceptance=true`, a passed change-level `/review` is still required before verify
 - when a change-level worktree is in use, archive should normally run through `openspec-extensions archive change --repo-root . --change "<change>"` so the successful archive also cleans up the reusable worktree
 - gate-bearing design-review / check / review seats should not be launched as `explorer`, and should use up to 1 hour blocking waits when unattended progression matters
+- before unattended gate-bearing batches, coordinators should check `ulimit -n` when shell access is available and restart with a larger open-files limit if it is below `16384`
+- `EMFILE`, `ENFILE`, or `Too many open files` means the current gate verdict is missing; recover the tool session and rerun the active dispatch gate instead of treating it as passed
 - role-based `reasoning_effort` is currently a skill/dispatch contract, not an `issue-mode.json` field:
   - design-author subagent: `high`
   - any code-writing implementation or verify-fix subagent: `high`

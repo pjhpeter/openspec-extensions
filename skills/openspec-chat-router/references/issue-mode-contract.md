@@ -142,6 +142,9 @@ If repo config is missing, compatibility fallback remains shared workspace mode 
 - Once a gate-bearing subagent reaches a final status and its result has been normalized into the current round output or gate artifact, the coordinator should close that finished subagent before spawning more seats.
 - Gate-bearing design-review / check / review seats must not be treated as `explorer` sidecars.
 - For unattended progression, prefer up to 1 hour blocking waits for gate-bearing subagents instead of short polling.
+- Before unattended gate-bearing batches, check `ulimit -n` when shell access is available; if the limit is below `16384`, recover or restart the tool session with a larger open-files limit before spawning checker/reviewer seats.
+- Keep concurrently active seats within the rendered topology, and close final-state seats before launching another gate batch or lifecycle phase.
+- `EMFILE`, `ENFILE`, or `Too many open files` is a tool-resource blocker, not a valid gate verdict. Recover or restart the tool session, clear stale running seats, and rerun the current gate from the active dispatch; never self-certify or skip the checker/reviewer gate.
 
 ## Worker Rules
 

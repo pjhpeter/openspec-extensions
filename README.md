@@ -243,6 +243,7 @@ openspec-extensions execute seat-state set \
 ```
 
 8. development seat 只写代码和 checkpoint；如果改动让既有校验失效，只把相关 validation 标回 `pending`，不直接把 issue 标成完成，也不在该 seat 内自称校验通过。checker / reviewer 通过后，由 coordinator 先写 `runs/ISSUE-REVIEW-<issue>.json`，再做 reconcile、review、merge、commit、verify、archive。
+9. unattended gate-bearing batch 启动前，如果能创建 shell，coordinator 先检查 `ulimit -n`；低于 `16384` 时先重启/恢复工具会话并提高 open-files 限制，再拉 checker / reviewer。并发 seat 数不能超过当前 packet 渲染的 topology，final-state seat 结果归并落盘后要尽快关闭。若出现 `EMFILE`、`ENFILE` 或 `Too many open files`，当前 gate verdict 视为缺失；恢复/重启工具会话、清理 stale running seat 后，必须从 active dispatch 重跑当前 gate，不能自证通过或跳过 checker / reviewer。
 
 复杂流程把自动化测试/校验和自动化手工验证放在最后统一收口一次即可，不要求在每个 issue round 重复执行；但所有 issue 完成后，必须先通过 change-level `/review`，再补齐这些验证证据，然后才允许进入 verify。前端或其他浏览器可见改动也放在这个最终收口节点优先使用 chrome devtools MCP 覆盖受影响主路径；如果当前 runtime 没有该能力，再退回其他浏览器工具并如实说明。
 
@@ -333,6 +334,7 @@ flowchart TD
 创建一个 change，自动判断简单流程还是复杂流程；如果判定为复杂流程，默认入口使用 subagent-team，按全自动方式推进到自动化测试收口。
 如果需要等待 subagent，使用 1 小时阻塞等待，不要 30 秒短轮询。
 当前 gate 的 review/check subagent 必须全部完成并收齐 verdict 后，才能继续下一阶段。
+如果出现 EMFILE / Too many open files，恢复或重启工具会话后重跑当前 gate，不要跳过 checker / reviewer。
 ```
 
 5. 如果我想先看设计文档和任务拆分，再人工决定是否继续

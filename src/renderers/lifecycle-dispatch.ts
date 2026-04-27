@@ -51,6 +51,23 @@ const PHASES = new Set([
   "ready_for_archive"
 ]);
 
+type ToolResourceGuard = {
+  max_concurrent_seats: "rendered_topology";
+  min_open_files: number;
+  on_resource_error: "recover_and_rerun_gate";
+  rerun_scope: "active_dispatch";
+  resource_errors: string[];
+};
+
+// JSON payload 也带资源策略，便于自动化 runner 不解析 Markdown。
+const TOOL_RESOURCE_GUARD: ToolResourceGuard = {
+  max_concurrent_seats: "rendered_topology",
+  min_open_files: 16384,
+  on_resource_error: "recover_and_rerun_gate",
+  rerun_scope: "active_dispatch",
+  resource_errors: ["EMFILE", "ENFILE", "Too many open files"]
+};
+
 type ParsedArgs = {
   change: string;
   dryRun: boolean;
@@ -97,6 +114,7 @@ export type LifecycleDispatchPayload = {
   seat_barrier: SeatBarrierSummary;
   seat_state_dir: string;
   team_topology: TeamTopologyItem[];
+  tool_resource_guard: ToolResourceGuard;
 };
 
 type TeamTopologyItem = {
@@ -758,6 +776,18 @@ function renderGateBearingSeats(phase: string, items: TeamTopologyItem[]): strin
     .join("\n");
 }
 
+function renderToolResourceGuardrails(): string {
+  // 资源恢复规则必须随 packet 下发，否则安装后的 coordinator 不会执行。
+  return `## Tool Resource Guardrails
+
+- Before an unattended gate-bearing batch, run \`ulimit -n\` when shell access is available; if the open-files limit is below \`16384\`, pause before spawning phase seats and restart the tool session with a larger limit.
+- Keep concurrently active seats at or below the rendered topology for this phase; do not launch extra check/review seats until final-state seats have been normalized and closed.
+- Close finished subagents before starting another gate batch or lifecycle phase so completed seats do not keep file descriptors, shells, or agent slots open.
+- If shell/process creation fails with \`EMFILE\`, \`ENFILE\`, or \`Too many open files\`, treat the current gate verdict as missing, not failed and not passed.
+- After any \`EMFILE\` / \`Too many open files\` event, recover or restart the tool session, clear stale running seats, then rerun the current gate from the active dispatch; never self-certify or skip that gate.
+`;
+}
+
 function topologySeats(items: TeamTopologyItem[]): ActiveSeatDefinition[] {
   const seats: ActiveSeatDefinition[] = [];
 
@@ -1067,6 +1097,8 @@ ${renderGateBearingSeats(phase, teamTopology)}
   - design review / check / review 这类 gate-bearing seat 不要当作 \`explorer\` sidecar。
   - \`auto_accept_*\` 只跳过人工签字，不跳过 gate-bearing subagent 的完成等待。
 
+${renderToolResourceGuardrails()}
+
 ## Coordinator Rules
 
 - 主代理负责整个 change 的 lifecycle orchestration，不只负责单个 issue。
@@ -1251,7 +1283,8 @@ export function renderLifecycleDispatch(args: ParsedArgs): LifecycleDispatchPayl
     seat_state_dir: seatStateDirPath,
     control_state: controlState,
     issue_count: issues.length,
-    dry_run: args.dryRun
+    dry_run: args.dryRun,
+    tool_resource_guard: TOOL_RESOURCE_GUARD
   };
 }
 

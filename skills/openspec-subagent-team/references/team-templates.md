@@ -21,7 +21,10 @@ Gate barrier policy:
 - 对 gate-bearing subagent 使用最长 1 小时的 blocking wait，不要 30 秒短轮询
 - 任一 required gate-bearing subagent 仍在运行时，不允许提前通过当前 phase
 - 任一 required gate-bearing subagent 仍在运行时，不允许提前关闭它
+- unattended gate-bearing batch 启动前，如果能创建 shell，先检查 `ulimit -n`；低于 `16384` 时先重启/恢复工具会话并提高限制，不要继续拉 checker / reviewer
+- 并发 seat 数不能超过当前 packet 渲染的 topology；上一批 final-state seat 归并并关闭前，不要追加新的 checker / reviewer
 - gate-bearing subagent 一旦进入最终态，且其 verdict / blocker / artifact 更新已经被主控归并落盘，就应尽快关闭，避免旧 seat 长时间占用 agent 配额
+- 如果 shell/process creation 报 `EMFILE`、`ENFILE` 或 `Too many open files`，当前 gate verdict 视为缺失；恢复/重启工具会话、清理 stale running seat 后，必须从 active dispatch 重跑当前 gate，不能自证通过或跳过
 - gate-bearing design review / check / review subagent 不要用 `explorer` 身份启动
 
 Seat override policy:
@@ -46,6 +49,7 @@ Issue：<issue-id>
 按 development -> check -> repair -> review 的轮次推进。
 主控 agent 负责统一 backlog、scope control 和 stop decision。
 当前 phase 的 gate-bearing subagent 都必须等待完成并收齐 verdict；如果任务会跑很久，使用 1 小时 blocking wait。
+如果出现 EMFILE / Too many open files，恢复或重启工具会话后重跑当前 gate，不要跳过 checker / reviewer。
 checker / reviewer 默认先看 changed files；没有 changed files 时再看 allowed_scope，不要做 repo-wide 扫描。
 ```
 
