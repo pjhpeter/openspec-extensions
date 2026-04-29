@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { mergeIssue } from "../../src/commands/merge-issue";
+import { acceptIssue, mergeChange, mergeIssue } from "../../src/commands/merge-issue";
 import { issueReviewArtifactPath } from "../../src/domain/change-coordinator";
 
 function withTempDir(run: (repoRoot: string) => void): void {
@@ -314,6 +314,190 @@ validation:
     assert.equal(syncedDemo, "export const demo = 2;\n");
     assert.equal(workerHead, repoHead);
     assert.equal(headMessage, `opsx(${change}): accept ${issueId} Change workspace issue`);
+  });
+});
+
+test("acceptIssue defers change-scope worktree merge without committing", () => {
+  withTempDir((repoRoot) => {
+    const change = "demo-change";
+    const issueId = "ISSUE-001";
+    const changeDir = path.join(repoRoot, "openspec", "changes", change);
+    const issuesDir = path.join(changeDir, "issues");
+    const runsDir = path.join(changeDir, "runs");
+    const srcDir = path.join(repoRoot, "src");
+    fs.mkdirSync(issuesDir, { recursive: true });
+    fs.mkdirSync(runsDir, { recursive: true });
+    fs.mkdirSync(srcDir, { recursive: true });
+
+    initGitRepo(repoRoot);
+    fs.mkdirSync(path.join(repoRoot, "openspec"), { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "openspec", "issue-mode.json"), JSON.stringify({
+      worker_worktree: {
+        enabled: true,
+        scope: "change",
+        mode: "branch",
+        base_ref: "HEAD",
+        branch_prefix: "opsx"
+      }
+    }, null, 2));
+    fs.writeFileSync(path.join(srcDir, "demo.ts"), "export const demo = 1;\n");
+    fs.writeFileSync(path.join(changeDir, "tasks.md"), "- [ ] 1.1 first task\n");
+    fs.writeFileSync(path.join(issuesDir, "INDEX.md"), "- `ISSUE-001` `1.1`\n");
+    fs.writeFileSync(path.join(issuesDir, `${issueId}.md`), `---
+issue_id: ${issueId}
+title: Deferred issue
+worker_worktree: .worktree/${change}
+allowed_scope:
+  - src/demo.ts
+out_of_scope:
+  - electron/
+done_when:
+  - accept without merge
+validation:
+  - pnpm lint
+---
+`);
+    const progressPath = path.join(issuesDir, `${issueId}.progress.json`);
+    fs.writeFileSync(progressPath, JSON.stringify({
+      change,
+      issue_id: issueId,
+      status: "completed",
+      boundary_status: "review_required",
+      next_action: "coordinator_review",
+      validation: { lint: "passed" },
+      run_id: "RUN-20260405T000000-ISSUE-001",
+      updated_at: "2026-04-05T00:00:00+08:00"
+    }, null, 2));
+    fs.writeFileSync(path.join(runsDir, "RUN-20260405T000000-ISSUE-001.json"), JSON.stringify({
+      run_id: "RUN-20260405T000000-ISSUE-001",
+      issue_id: issueId
+    }, null, 2));
+
+    git(repoRoot, "add", ".");
+    git(repoRoot, "commit", "-m", "init deferred artifacts");
+    git(repoRoot, "worktree", "add", "-b", "opsx/demo-change", path.join(repoRoot, ".worktree", change), "HEAD");
+    const workerRoot = path.join(repoRoot, ".worktree", change);
+    fs.writeFileSync(path.join(workerRoot, "src", "demo.ts"), "export const demo = 2;\n");
+
+    const payload = acceptIssue({
+      change,
+      dryRun: false,
+      force: false,
+      issueId,
+      repoRoot
+    }) as { merge_deferred: boolean; workspace_scope: string };
+    const progress = JSON.parse(fs.readFileSync(progressPath, "utf8")) as { boundary_status: string; next_action: string };
+    const status = git(repoRoot, "status", "--short");
+
+    assert.equal(payload.merge_deferred, true);
+    assert.equal(payload.workspace_scope, "change");
+    assert.equal(progress.boundary_status, "accepted");
+    assert.equal(progress.next_action, "");
+    assert.equal(fs.readFileSync(path.join(repoRoot, "src", "demo.ts"), "utf8"), "export const demo = 1;\n");
+    assert.equal(git(repoRoot, "log", "-1", "--pretty=%s"), "init deferred artifacts");
+    assert.match(status, /M openspec\/changes\/demo-change\/issues\/ISSUE-001\.progress\.json/);
+    assert.match(status, /M openspec\/changes\/demo-change\/tasks\.md/);
+  });
+});
+
+test("mergeChange commits accepted change-scope issues once", () => {
+  withTempDir((repoRoot) => {
+    const change = "demo-change";
+    const changeDir = path.join(repoRoot, "openspec", "changes", change);
+    const issuesDir = path.join(changeDir, "issues");
+    const runsDir = path.join(changeDir, "runs");
+    const srcDir = path.join(repoRoot, "src");
+    fs.mkdirSync(issuesDir, { recursive: true });
+    fs.mkdirSync(runsDir, { recursive: true });
+    fs.mkdirSync(srcDir, { recursive: true });
+
+    initGitRepo(repoRoot);
+    fs.mkdirSync(path.join(repoRoot, "openspec"), { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "openspec", "issue-mode.json"), JSON.stringify({
+      worker_worktree: {
+        enabled: true,
+        scope: "change",
+        mode: "branch",
+        base_ref: "HEAD",
+        branch_prefix: "opsx"
+      }
+    }, null, 2));
+    fs.writeFileSync(path.join(srcDir, "demo.ts"), "export const demo = 1;\n");
+    fs.writeFileSync(path.join(changeDir, "tasks.md"), "- [ ] 1.1 first task\n- [ ] 1.2 second task\n");
+    fs.writeFileSync(path.join(issuesDir, "INDEX.md"), "- `ISSUE-001` `1.1`\n- `ISSUE-002` `1.2`\n");
+    for (const issueId of ["ISSUE-001", "ISSUE-002"]) {
+      fs.writeFileSync(path.join(issuesDir, `${issueId}.md`), `---
+issue_id: ${issueId}
+title: ${issueId}
+worker_worktree: .worktree/${change}
+allowed_scope:
+  - src/demo.ts
+out_of_scope:
+  - electron/
+done_when:
+  - merge accepted change
+---
+`);
+      fs.writeFileSync(path.join(issuesDir, `${issueId}.progress.json`), JSON.stringify({
+        change,
+        issue_id: issueId,
+        status: "completed",
+        boundary_status: "accepted",
+        next_action: "",
+        run_id: `RUN-20260405T000000-${issueId}`,
+        updated_at: "2026-04-05T00:00:00+08:00"
+      }, null, 2));
+      fs.writeFileSync(path.join(runsDir, `RUN-20260405T000000-${issueId}.json`), JSON.stringify({
+        run_id: `RUN-20260405T000000-${issueId}`,
+        issue_id: issueId
+      }, null, 2));
+    }
+
+    git(repoRoot, "add", ".");
+    git(repoRoot, "commit", "-m", "init accepted artifacts");
+    git(repoRoot, "worktree", "add", "-b", "opsx/demo-change", path.join(repoRoot, ".worktree", change), "HEAD");
+    const workerRoot = path.join(repoRoot, ".worktree", change);
+    fs.writeFileSync(path.join(workerRoot, "src", "demo.ts"), "export const demo = 4;\n");
+    fs.writeFileSync(path.join(workerRoot, "src", "extra.ts"), "export const extra = 1;\n");
+    fs.writeFileSync(path.join(issuesDir, "ISSUE-001.progress.json"), JSON.stringify({
+      change,
+      issue_id: "ISSUE-001",
+      status: "completed",
+      boundary_status: "accepted",
+      next_action: "",
+      run_id: "RUN-20260405T000000-ISSUE-001",
+      updated_at: "2026-04-05T00:01:00+08:00"
+    }, null, 2));
+
+    const payload = mergeChange({
+      change,
+      commitMessage: "",
+      dryRun: false,
+      force: false,
+      repoRoot
+    }) as { commit_sha: string; issue_ids: string[]; workspace_scope: string };
+    const firstProgress = JSON.parse(fs.readFileSync(path.join(issuesDir, "ISSUE-001.progress.json"), "utf8")) as { boundary_status: string };
+    const secondProgress = JSON.parse(fs.readFileSync(path.join(issuesDir, "ISSUE-002.progress.json"), "utf8")) as { boundary_status: string };
+    const headFiles = git(repoRoot, "show", "--pretty=", "--name-only", "HEAD")
+      .split(/\r?\n/)
+      .filter(Boolean);
+
+    assert.match(payload.commit_sha, /^[0-9a-f]{40}$/);
+    assert.deepEqual(payload.issue_ids, ["ISSUE-001", "ISSUE-002"]);
+    assert.equal(payload.workspace_scope, "change");
+    assert.equal(firstProgress.boundary_status, "done");
+    assert.equal(secondProgress.boundary_status, "done");
+    assert.equal(fs.readFileSync(path.join(repoRoot, "src", "demo.ts"), "utf8"), "export const demo = 4;\n");
+    assert.equal(
+      git(repoRoot, "status", "--short")
+        .split(/\r?\n/)
+        .filter((line) => line.trim() && !line.includes(".worktree/"))
+        .join("\n"),
+      ""
+    );
+    assert.equal(git(repoRoot, "log", "-1", "--pretty=%s"), `opsx(${change}): merge accepted issues`);
+    assert.ok(headFiles.includes("src/demo.ts"));
+    assert.ok(headFiles.includes(`openspec/changes/${change}/issues/ISSUE-001.progress.json`));
   });
 });
 

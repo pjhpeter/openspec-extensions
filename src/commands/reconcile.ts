@@ -3,7 +3,7 @@ import path from "node:path";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { parseArgs } from "node:util";
 
-import { runMergeIssueCommand } from "./merge-issue";
+import { runAcceptIssueCommand, runMergeChangeCommand, runMergeIssueCommand } from "./merge-issue";
 import {
   issueReviewArtifactIsCurrent,
   issueReviewArtifactPath,
@@ -24,6 +24,8 @@ import {
 } from "../domain/change-coordinator";
 import {
   automationProfile,
+  inferWorkerWorktreeScope,
+  issueWorkerWorktreePath,
   issueWorkerWorkspaceState,
   loadIssueModeConfig,
   readChangeControlState,
@@ -79,6 +81,8 @@ type IssuePayload = JsonRecord & {
 const RECONCILE_HELP_TEXT = `Usage:
   openspec-extensions reconcile change --repo-root <path> --change <change>
   openspec-extensions reconcile commit-planning-docs --repo-root <path> --change <change> [--commit-message <message>] [--dry-run]
+  openspec-extensions reconcile accept-issue --repo-root <path> --change <change> --issue-id <issue> [--dry-run] [--force]
+  openspec-extensions reconcile merge-change --repo-root <path> --change <change> [--commit-message <message>] [--dry-run] [--force]
   openspec-extensions reconcile merge-issue --repo-root <path> --change <change> --issue-id <issue> [--commit-message <message>] [--dry-run] [--force]
 `;
 
@@ -263,6 +267,37 @@ function issueValidationPassed(issue: IssuePayload): boolean {
   return Object.values(validation).every((value) => PASSING_VALIDATION_STATUSES.has(String(value).trim().toLowerCase()));
 }
 
+function issueUsesChangeScopedWorktree(
+  repoRoot: string,
+  change: string,
+  issueId: string,
+  config: IssueModeConfig
+): boolean {
+  if (!issueId.trim()) {
+    return false;
+  }
+  try {
+    const [worktreePath] = issueWorkerWorktreePath(repoRoot, change, issueId, config);
+    return inferWorkerWorktreeScope(repoRoot, worktreePath, config, change, issueId) === "change";
+  } catch {
+    return false;
+  }
+}
+
+function hasDeferredAcceptedChangeWorktreeIssue(
+  repoRoot: string,
+  change: string,
+  issues: IssuePayload[],
+  config: IssueModeConfig
+): boolean {
+  return issues.some((issue) => {
+    const issueId = String(issue.issue_id ?? "").trim();
+    return issue.status === "completed" &&
+      String(issue.boundary_status ?? "").trim() === "accepted" &&
+      issueUsesChangeScopedWorktree(repoRoot, change, issueId, config);
+  });
+}
+
 function currentReviewState(repoRoot: string, change: string, issues: IssuePayload[]): JsonRecord {
   const artifact = readJson(reviewArtifactPath(repoRoot, change));
   const current = Object.keys(artifact).length > 0 && reviewArtifactIsCurrent(repoRoot, issues, artifact);
@@ -424,20 +459,20 @@ function determineBaseNextAction(
         return [
           "complete_issue_review_gate",
           String(candidate.issue_id ?? ""),
-          `当前 issue 的 checker/reviewer gate 已过期；需先重新收敛检查/审查结论并刷新 ${reviewGate.path}，之后才能 merge。`
+          `当前 issue 的 checker/reviewer gate 已过期；需先重新收敛检查/审查结论并刷新 ${reviewGate.path}，之后才能接受。`
         ];
       }
       return [
         "complete_issue_review_gate",
         String(candidate.issue_id ?? ""),
-        `当前 issue 使用了 team dispatch；在 merge 前必须先完成 checker/reviewer gate，并写入 ${reviewGate.path}。`
+        `当前 issue 使用了 team dispatch；在接受前必须先完成 checker/reviewer gate，并写入 ${reviewGate.path}。`
       ];
     }
     if (autoAcceptIssueReview && issueValidationPassed(candidate)) {
       return [
         "auto_accept_issue",
         String(candidate.issue_id ?? ""),
-        "当前 issue 已完成且 issue-local validation 全部通过，配置允许 coordinator 自动接受并继续推进。"
+        "当前 issue 已完成且 issue-local validation 全部通过，配置允许 coordinator 自动接受；change 级 worktree 会延后到全部 issue 完成后再合并。"
       ];
     }
     if (autoAcceptIssueReview) {
@@ -486,6 +521,10 @@ function determineBaseNextAction(
 
   const completed = issues.filter((issue) => issue.status === "completed");
   if (completed.length > 0 && completed.length === issues.length) {
+    if (hasDeferredAcceptedChangeWorktreeIssue(repoRoot, change, issues, config)) {
+      return ["merge_change", "", "全部 issue 已接受；当前 change 级 worktree 需要一次性合并到 coordinator 分支。"];
+    }
+
     const reviewState = currentReviewState(repoRoot, change, issues);
     if (reviewState.failed === true) {
       return ["resolve_change_review_failure", "", "全部 issue 已完成，但最近一次 change-level /review 未通过。"];
@@ -604,7 +643,17 @@ function continuationPolicy(nextAction: string, recommendedIssueId: string): Jso
       human_confirmation_required: false,
       must_not_stop_at_checkpoint: true,
       summary: "当前 issue 已满足自动接受条件，coordinator 必须立即收敛并继续。",
-      instruction: `\`auto_accept_issue\` 不是 terminal checkpoint；不要停在 control-plane ready。 立即接受并 merge${issueSuffix}，然后重新 reconcile 并继续主链。`
+      instruction: `\`auto_accept_issue\` 不是 terminal checkpoint；不要停在 control-plane ready。 立即运行 \`openspec-extensions reconcile accept-issue\` 接受${issueSuffix}，然后重新 reconcile 并继续主链；change 级 worktree 等全部 issue 接受后再统一 merge。`
+    };
+  }
+  if (nextAction === "merge_change") {
+    return {
+      mode: "continue_immediately",
+      pause_allowed: false,
+      human_confirmation_required: false,
+      must_not_stop_at_checkpoint: true,
+      summary: "全部 issue 已接受，coordinator 必须统一合并 change worktree。",
+      instruction: "`merge_change` 不是 terminal checkpoint；立即运行 `openspec-extensions reconcile merge-change`，然后重新 reconcile 进入 change-level review / verify。"
     };
   }
   if (nextAction === "verify_change") {
@@ -866,6 +915,12 @@ export function runReconcileCommand(argv: string[]): number {
       }
       process.stdout.write(`${JSON.stringify(commitPlanningDocs(parsedCommitArgs), null, 2)}\n`);
       return 0;
+    }
+    if (subcommand === "accept-issue") {
+      return runAcceptIssueCommand(rest);
+    }
+    if (subcommand === "merge-change") {
+      return runMergeChangeCommand(rest);
     }
     if (subcommand === "merge-issue") {
       return runMergeIssueCommand(rest);

@@ -44,7 +44,7 @@ If this file is missing, the helpers fall back to these defaults:
 - `rra.gate_mode`: `advisory` or `enforce`.
 - `subagent_team.auto_accept_spec_readiness`: automatically accept the spec-readiness gate once proposal/design have passed the dedicated `1` author + `2` reviewers design review, then continue into task splitting / issue planning without waiting for human sign-off.
 - `subagent_team.auto_accept_issue_planning`: automatically accept the issue-planning gate once `tasks.md` plus INDEX/ISSUE docs are dispatch-ready, then commit the planning docs and dispatch the approved issue set without waiting for human sign-off.
-- `subagent_team.auto_accept_issue_review`: automatically accept an eligible `review_required` issue after its issue-local validation passes and, for team-dispatch issues, the current `runs/ISSUE-REVIEW-<issue>.json` gate also passed; then merge/commit it and continue to the next issue or change acceptance. This is enabled in the shipped default config so each accepted issue lands as its own coordinator commit.
+- `subagent_team.auto_accept_issue_review`: automatically accept an eligible `review_required` issue after its issue-local validation passes and, for team-dispatch issues, the current `runs/ISSUE-REVIEW-<issue>.json` gate also passed. In the shipped default change-scoped worktree, accepted issues continue accumulating in the change worktree and merge/commit happens once after all issues are accepted.
 - `subagent_team.auto_accept_change_acceptance`: automatically accept the change-acceptance gate and continue into change-level verify.
 - `subagent_team.auto_archive_after_verify`: continue from a passed verify result into archive automatically.
 
@@ -93,7 +93,7 @@ Important:
 
 The runtime derives a profile from `rra.gate_mode` plus the `subagent_team.*` switches:
 
-- `semi_auto`: `rra.gate_mode=advisory`, while `spec_readiness`, `issue_planning`, `change_acceptance`, and `archive` still wait for manual confirmation. Before the first issue dispatch, the coordinator also pauses for the planning-doc commit. `auto_accept_issue_review` may be `false` or `true`; when it is `true`, issue execution still auto-commits each validated issue.
+- `semi_auto`: `rra.gate_mode=advisory`, while `spec_readiness`, `issue_planning`, `change_acceptance`, and `archive` still wait for manual confirmation. Before the first issue dispatch, the coordinator also pauses for the planning-doc commit. `auto_accept_issue_review` may be `false` or `true`; when it is `true`, issue execution auto-accepts each validated issue, then the change-scoped worktree merges once after all issues are accepted.
 - `full_auto`: `rra.gate_mode=enforce`, `auto_accept_spec_readiness=true`, `auto_accept_issue_planning=true`, `auto_accept_issue_review=true`, and both `auto_accept_change_acceptance` / `auto_archive_after_verify` remain `false`
 - `custom`: any mixed combination
 
@@ -144,7 +144,7 @@ Behavior:
 - RRA keeps emitting guidance, but does not hard-block progression
 - issues reuse one change-level worktree by default (`.worktree/<change>`)
 - after each accepted issue, that change worktree is synced to the latest accepted commit before the next issue starts
-- if you also want every validated issue to land as its own commit without changing the rest of the gate behavior, keep this profile and set `auto_accept_issue_review=true`
+- if you also want every validated issue to be accepted without changing the rest of the gate behavior, keep this profile and set `auto_accept_issue_review=true`; default change-scoped worktrees still merge once after all issues are accepted
 
 ### Full-Automatic
 
@@ -180,7 +180,7 @@ Behavior:
 - issue planning is auto-accepted, then the coordinator immediately commits the planning docs before dispatching approved issues
 - a `commit_planning_docs` result must be executed immediately; it must not be skipped or reframed as a terminal checkpoint
 - a `dispatch_next_issue` result must be executed immediately; it must not be reframed as a terminal checkpoint or chat-only summary
-- eligible issue review is auto-accepted and immediately merges/continues
+- eligible issue review is auto-accepted and continues; default change-scoped worktrees merge once after all issues are accepted
 - simple or complex flow continues automatically through change-level `/review` and the required automated test/validation plus automated manual verification closeout
 - after that test closeout, the flow pauses; verify and archive remain manual unless you explicitly build a custom profile
 - each auto-advance still waits for the phase's gate-bearing subagents to finish and for their verdicts to be collected

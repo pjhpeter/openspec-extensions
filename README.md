@@ -242,7 +242,7 @@ openspec-extensions execute seat-state set \
   --agent-id "<agent-id>"
 ```
 
-8. development seat 只写代码和 checkpoint；如果改动让既有校验失效，只把相关 validation 标回 `pending`，不直接把 issue 标成完成，也不在该 seat 内自称校验通过。checker / reviewer 通过后，由 coordinator 先写 `runs/ISSUE-REVIEW-<issue>.json`，再做 reconcile、review、merge、commit、verify、archive。
+8. development seat 只写代码和 checkpoint；如果改动让既有校验失效，只把相关 validation 标回 `pending`，不直接把 issue 标成完成，也不在该 seat 内自称校验通过。checker / reviewer 通过后，由 coordinator 先写 `runs/ISSUE-REVIEW-<issue>.json`，再做 reconcile；默认 change 级 worktree 只 accept 当前 issue，等全部 issue accepted 后统一 merge/commit，然后进入 review、verify、archive。
 9. unattended gate-bearing batch 启动前，如果能创建 shell，coordinator 先检查 `ulimit -n`；低于 `16384` 时先重启/恢复工具会话并提高 open-files 限制，再拉 checker / reviewer。并发 seat 数不能超过当前 packet 渲染的 topology，final-state seat 结果归并落盘后要尽快关闭。若出现 `EMFILE`、`ENFILE` 或 `Too many open files`，当前 gate verdict 视为缺失；恢复/重启工具会话、清理 stale running seat 后，必须从 active dispatch 重跑当前 gate，不能自证通过或跳过 checker / reviewer。
 
 复杂流程把自动化测试/校验和自动化手工验证放在最后统一收口一次即可，不要求在每个 issue round 重复执行；但所有 issue 完成后，必须先通过 change-level `/review`，再补齐这些验证证据，然后才允许进入 verify。前端或其他浏览器可见改动也放在这个最终收口节点优先使用 chrome devtools MCP 覆盖受影响主路径；如果当前 runtime 没有该能力，再退回其他浏览器工具并如实说明。
@@ -359,7 +359,8 @@ flowchart TD
 - `tasks.md`、`issues/*.md`、`issues/*.progress.json`、`runs/*.json` 都是控制面的一部分。
 - coordinator 通过 `reconcile` 从这些磁盘工件收敛状态，而不是只依赖聊天上下文。
 - `subagent_team.*` 负责控制哪些 gate 可以自动接受，`rra.gate_mode` 负责决定 gate 只是给建议，还是直接阻断流程。
-- 默认安装模板会让每个 issue 在通过 issue-local validation 后自动 accept 并提交一次代码，这样跨会话恢复时更容易知道 change 目前落在哪个检查点。
+- 默认安装模板会让每个 issue 在通过 issue-local validation 后自动 accept；change 级 worktree 会累计所有 issue 改动，并在全部 accepted 后统一 merge/commit。
+- 对应 CLI 是 `openspec-extensions reconcile accept-issue` 和 `openspec-extensions reconcile merge-change`；`merge-issue` 仍保留给 shared workspace 或 issue 级隔离 worktree 的兼容路径。
 
 如果你关心的是“昨天跑到哪里了”“这个 issue 上一轮 review 为什么没过”“现在是不是已经可以 verify”，这些答案应该优先从工件里拿，而不是从聊天记录里猜。
 
@@ -443,7 +444,7 @@ flowchart TD
 - verify 和 archive 仍由我手动放行。
 - RRA 继续提供 round contract 建议，但不会硬拦流程。
 
-如果我只想让每个 issue 在通过 issue-local validation 后自动提交一次代码，可以只把 `auto_accept_issue_review` 单独打开；但对 team dispatch issue，仍然要先收齐 checker / reviewer 结论并写出 `runs/ISSUE-REVIEW-<issue>.json`。
+如果我只想让每个 issue 在通过 issue-local validation 后自动接受并继续，可以只把 `auto_accept_issue_review` 单独打开；但对 team dispatch issue，仍然要先收齐 checker / reviewer 结论并写出 `runs/ISSUE-REVIEW-<issue>.json`。默认 change 级 worktree 不会每个 issue 自动提交一次代码，而是所有 issue accepted 后统一 merge/commit。
 
 ### 全自动配置
 

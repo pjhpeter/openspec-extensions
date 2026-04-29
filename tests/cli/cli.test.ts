@@ -326,6 +326,28 @@ done_when:
   assert.deepEqual(payload.changed_files, ["src.ts"]);
 });
 
+test("cli reconcile accept-issue and merge-change expose help", async () => {
+  const acceptResult = await captureStdout(() =>
+    main([
+      "reconcile",
+      "accept-issue",
+      "--help"
+    ])
+  );
+  const mergeResult = await captureStdout(() =>
+    main([
+      "reconcile",
+      "merge-change",
+      "--help"
+    ])
+  );
+
+  assert.equal(acceptResult.exitCode, 0);
+  assert.match(acceptResult.stdout, /reconcile accept-issue/);
+  assert.equal(mergeResult.exitCode, 0);
+  assert.match(mergeResult.stdout, /reconcile merge-change/);
+});
+
 test("cli review change routes to command", async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-cli-review-"));
   const issuePath = path.join(repoRoot, "openspec", "changes", "demo-change", "issues", "ISSUE-001.md");

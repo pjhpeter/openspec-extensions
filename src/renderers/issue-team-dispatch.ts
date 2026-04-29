@@ -355,6 +355,8 @@ function renderSeatHandoffArtifact(input: {
     "`openspec-extensions dispatch lifecycle`",
     "`openspec-extensions dispatch issue-team`",
     "`openspec-extensions reconcile change`",
+    "`openspec-extensions reconcile accept-issue`",
+    "`openspec-extensions reconcile merge-change`",
     "`openspec-extensions reconcile merge-issue`",
     "`openspec-extensions review change`",
     "`openspec-extensions verify change`",
@@ -497,7 +499,7 @@ ${renderSeat(
   [
     "优先看 `changed_files`、`allowed_scope`、validation 和 checker 已归并结果。",
     "不要把审查扩成全仓 review。",
-    "你不是 merge owner；不要宣布 issue 已可 merge。"
+    "你不是 accept / merge owner；不要宣布 issue 已可接受或可 merge。"
   ]
 )}
 `;

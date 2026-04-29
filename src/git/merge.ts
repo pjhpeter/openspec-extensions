@@ -23,7 +23,8 @@ export function gitBinaryOutput(repoRoot: string, ...args: string[]): Buffer {
 }
 
 export function gitStatusLines(repoRoot: string): string[] {
-  return gitOutput(repoRoot, "status", "--porcelain")
+  // porcelain 状态前两列有意义，不能 trim 掉行首空格。
+  return runGitCommand(["status", "--porcelain"], { cwd: repoRoot }).stdout
     .split(/\r?\n/)
     .filter((line) => line.trim());
 }
@@ -34,7 +35,7 @@ function isIgnoredTargetStatus(line: string, ignoredPrefixes: string[]): boolean
     return false;
   }
   return paths.every((currentPath) => {
-    const normalized = currentPath.replace(/\\/g, "/").replace(/^[./]+/, "");
+    const normalized = currentPath.replace(/\\/g, "/").replace(/^\.\//, "");
     return ignoredPrefixes.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`));
   });
 }

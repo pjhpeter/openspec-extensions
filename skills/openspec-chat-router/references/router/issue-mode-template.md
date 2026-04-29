@@ -31,7 +31,7 @@
 8. team dispatch 里的 development seat 只写代码和 progress checkpoint；如果代码改动让既有校验失效，只把对应 validation 标回 `pending`，不直接把 issue 标成 `completed + review_required`，也不在该 seat 内自称校验已通过。checker / reviewer 通过后，由主会话把结果写成 `runs/ISSUE-REVIEW-<issue>.json`
 9. issue 执行回合不要求在每个 issue 上重复跑最终自动化测试；自动化测试/校验和自动化手工验证统一留到所有 issue 完成后的最终收口节点
 10. issue 执行 subagent 不直接合并、不直接提交
-11. 主会话用 reconcile 收敛状态；如果 `auto_accept_issue_review=true` 且 issue-local validation 通过，主会话应在 gate-bearing 审查 subagent 全部完成、`runs/ISSUE-REVIEW-<issue>.json` 已通过后直接自动 merge/commit 并继续下一轮。若当前 issue 使用的是 change 级 worktree，merge/commit 后还要把该 worktree 同步到最新接受 commit，再开始后续 issue
+11. 主会话用 reconcile 收敛状态；如果 `auto_accept_issue_review=true` 且 issue-local validation 通过，主会话应在 gate-bearing 审查 subagent 全部完成、`runs/ISSUE-REVIEW-<issue>.json` 已通过后自动 accept 当前 issue 并继续下一轮。默认 change 级 worktree 不在每个 issue 后 merge/commit，而是等全部 issue accepted 后统一 `merge-change`
 12. 所有 issue 都被主会话接受后，先确认自动化测试/校验与自动化手工验证证据齐全，再对当前 change 修改的代码运行一次 `/review`，把结果落成 `runs/CHANGE-REVIEW.json`
 13. change-level `/review` 通过后，再做一轮 change 级 acceptance；如果 `auto_accept_change_acceptance=true`，这一关不需要人工签字，然后进入 verify / archive。对于 change 级 worktree，archive 时应一起清理对应 `.worktree/<change>`
 

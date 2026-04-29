@@ -30,6 +30,8 @@ Usage:
   openspec-extensions execute seat-state set [options]
   openspec-extensions reconcile change [options]
   openspec-extensions reconcile commit-planning-docs [options]
+  openspec-extensions reconcile accept-issue [options]
+  openspec-extensions reconcile merge-change [options]
   openspec-extensions reconcile merge-issue [options]
   openspec-extensions review change [options]
   openspec-extensions verify change [options]
@@ -46,7 +48,9 @@ Commands:
   execute seat-state      Update seat lifecycle state for the active dispatch.
   reconcile change        Reconcile change state and continuation policy.
   reconcile commit-planning-docs Commit planning docs for a change.
-  reconcile merge-issue   Accept and merge one reviewed issue into the coordinator branch.
+  reconcile accept-issue  Accept one reviewed issue while deferring change worktree merge.
+  reconcile merge-change  Merge all accepted change worktree issues into the coordinator branch.
+  reconcile merge-issue   Compatibility helper to accept and merge one reviewed issue into the coordinator branch.
   review change           Run change-level coordinator review.
   verify change           Run change-level coordinator verify.
   archive change          Archive a change and clean up change worktree state.

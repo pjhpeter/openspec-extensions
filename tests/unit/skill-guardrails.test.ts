@@ -140,6 +140,9 @@ test("reconcile skill resume rules ignore repo-root helper noise and honor conti
   assert.match(skill, /task_plan\.md/);
   assert.match(skill, /continuation_policy\.mode=continue_immediately/);
   assert.match(skill, /external disconnect or a fresh reconnect/);
+  assert.match(skill, /reconcile accept-issue/);
+  assert.match(skill, /reconcile merge-change/);
+  assert.match(skill, /do not merge\/commit until reconcile emits `merge_change`/);
 });
 
 test("coordinator playbook forbids implementation before complex-flow gates pass", () => {
@@ -207,6 +210,7 @@ test("closeout guardrails require post-review automation and prefer chrome devto
   assert.match(readme, /优先使用 chrome devtools MCP/);
   assert.match(readme, /你自己判断需求复杂度；如果属于复杂流程，自动启用 subagent-team 推进，不用再单独问我/);
   assert.match(readme, /继续 <change> change，根据原来判断的复杂度继续/);
+  assert.match(readme, /所有 issue accepted 后统一 merge\/commit/);
   assert.match(routerSkill, /review current code -> automated test\/validation \+ automated manual verification -> `verify` -> `archive`/);
   assert.match(routerSkill, /After that review passes, run the required automated test\/validation plus automated manual verification/);
   assert.match(teamSkill, /change-level `\/review` has passed/);
@@ -220,6 +224,24 @@ test("closeout guardrails require post-review automation and prefer chrome devto
   assert.match(issueModeConfig, /full_auto/);
   assert.match(issueModeConfig, /automated-test closeout/);
   assert.match(issueModeConfig, /stop before verify \/ archive/);
+});
+
+test("change-scoped worktrees defer merge until all issues are accepted", () => {
+  const readme = readRepoFile("README.md");
+  const reconcileSkill = readRepoFile("skills/openspec-reconcile-change/SKILL.md");
+  const routerSkill = readRepoFile("skills/openspec-chat-router/SKILL.md");
+  const teamSkill = readRepoFile("skills/openspec-subagent-team/SKILL.md");
+  const contract = readRepoFile("skills/openspec-chat-router/references/issue-mode-contract.md");
+  const playbook = readRepoFile("skills/openspec-chat-router/references/router/coordinator-playbook.md");
+
+  assert.match(readme, /change 级 worktree 会累计所有 issue 改动/);
+  assert.match(reconcileSkill, /accept-issue/);
+  assert.match(reconcileSkill, /merge-change/);
+  assert.match(reconcileSkill, /Merge\/commit only after all issues are accepted/);
+  assert.match(routerSkill, /merge\/commit waits until all issues are accepted/);
+  assert.match(teamSkill, /merge\/commit is deferred until all issues are accepted/);
+  assert.match(contract, /defer merge\/commit until all issues are accepted/);
+  assert.match(playbook, /merged\/committed once after all issues are accepted/);
 });
 
 test("tool resource guardrails prevent EMFILE gates from being self-certified", () => {

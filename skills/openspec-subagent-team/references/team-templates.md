@@ -167,7 +167,7 @@ Fast-path activation:
 - development seat 还必须按 seat contract 写自己的 `seat-state running/completed/failed/blocked`，但不得覆盖其他 seat 的 artifact
 - 如果当前改动让既有校验失效，只把相关 validation 标记回 `pending`，不要在 development seat 内宣称 `passed`
 - development seat 不是当前 issue 的 validation / check / review owner；这些结论留给 checker / reviewer / coordinator 收敛
-- checker / reviewer 通过后，由 coordinator 统一写 `runs/ISSUE-REVIEW-<issue>.json`，再把 issue progress 收敛到可 merge 状态
+- checker / reviewer 通过后，由 coordinator 统一写 `runs/ISSUE-REVIEW-<issue>.json`，再把 issue progress 收敛到可接受状态；change 级 worktree 等全部 issue 接受后再统一 merge
 ```
 
 ## Review Prompt

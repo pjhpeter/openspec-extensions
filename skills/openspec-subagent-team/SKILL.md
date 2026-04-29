@@ -170,7 +170,7 @@ Read these first:
 - `auto_accept_spec_readiness=true` means spec-readiness does not wait for human sign-off once proposal/design have passed the `1` author + `2` reviewers design review.
 - `auto_accept_issue_planning=true` means issue planning does not wait for human sign-off once tasks.md plus INDEX/ISSUE docs are dispatch-ready; the coordinator still commits the planning docs before the first issue dispatch.
 - `dispatch_next_issue` means "continue now"; it is not a pause point, not a terminal checkpoint, and not a prompt to wait for another user instruction.
-- `auto_accept_issue_review=true` means eligible `review_required` issues are coordinator-accepted, merged, and committed automatically only after issue-local validation passed and the current team review gate artifact also passed.
+- `auto_accept_issue_review=true` means eligible `review_required` issues are coordinator-accepted automatically only after issue-local validation passed and the current team review gate artifact also passed. In the default change-scoped worktree, merge/commit is deferred until all issues are accepted.
 - `auto_accept_change_acceptance=true` means change acceptance does not wait for human sign-off once a passed change-level `/review` has already made verify allowed.
 - unattended progression should use long blocking waits for gate-bearing subagents, typically up to 1 hour
 - One issue stays one bounded execution unit even when multiple subagents participate in the round.

@@ -118,7 +118,7 @@ If repo config is missing, compatibility fallback remains shared workspace mode 
 6. Default decisions:
    - unresolved `Must fix now` items in the active control backlog -> stop and resolve them before dispatch, verify, or archive
    - any `blocked` -> stop and resolve blocker
-   - any `review_required` -> if `subagent_team.auto_accept_issue_review=true`, issue-local validation passed, and the team-dispatch issue review gate (when required) also passed, accept/commit it automatically; otherwise review it in the coordinator session first
+   - any `review_required` -> if `subagent_team.auto_accept_issue_review=true`, issue-local validation passed, and the team-dispatch issue review gate (when required) also passed, accept it automatically; otherwise review it in the coordinator session first. In change-scoped worktrees, defer merge/commit until all issues are accepted.
    - after an issue is accepted, its code should already be captured in exactly one coordinator-owned commit before the next issue dispatch or change-level verify
    - if the accepted issue used a reusable change worktree, sync that worktree to the latest accepted commit before dispatching the next issue
    - if the first issue has not started yet and planning docs are still dirty in git -> create the coordinator-owned planning-doc commit first

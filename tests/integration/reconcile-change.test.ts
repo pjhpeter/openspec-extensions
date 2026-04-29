@@ -67,7 +67,7 @@ function writeIssueDoc(
   repoRoot: string,
   change: string,
   issueId = "ISSUE-001",
-  options: { includeGateArtifacts?: boolean } = {}
+  options: { includeGateArtifacts?: boolean; workerWorktree?: string } = {}
 ): void {
   const changeDir = path.join(repoRoot, "openspec", "changes", change);
   const issuesDir = path.join(changeDir, "issues");
@@ -80,7 +80,7 @@ function writeIssueDoc(
   fs.writeFileSync(issuePath, `---
 issue_id: ${issueId}
 title: Demo issue
-worker_worktree: .worktree/${change}/${issueId}
+worker_worktree: ${options.workerWorktree ?? `.worktree/${change}/${issueId}`}
 allowed_scope:
   - src/demo.ts
 out_of_scope:
@@ -395,6 +395,34 @@ test("team dispatch issue can auto accept after review gate passes", () => {
 
     assert.equal(payload.next_action, "auto_accept_issue");
     assert.equal(payload.recommended_issue_id, issueId);
+  });
+});
+
+test("accepted change worktree issues merge once after all issues finish", () => {
+  withTempDir((repoRoot) => {
+    const change = "demo-change";
+    writeIssueDoc(repoRoot, change, "ISSUE-001", { workerWorktree: `.worktree/${change}` });
+    writeIssueDoc(repoRoot, change, "ISSUE-002", { workerWorktree: `.worktree/${change}` });
+    writeIssueProgress(repoRoot, change, {
+      issueId: "ISSUE-001",
+      status: "completed",
+      boundaryStatus: "accepted",
+      nextAction: "",
+    });
+    writeIssueProgress(repoRoot, change, {
+      issueId: "ISSUE-002",
+      status: "completed",
+      boundaryStatus: "accepted",
+      nextAction: "",
+    });
+
+    const payload = reconcileChange({ repoRoot, change });
+
+    assert.equal(payload.next_action, "merge_change");
+    assert.equal(payload.recommended_issue_id, "");
+    assert.match(String(payload.reason), /一次性合并/);
+    assert.equal((payload.continuation_policy as Record<string, string>).mode, "continue_immediately");
+    assert.match(String((payload.continuation_policy as Record<string, string>).instruction), /merge-change/);
   });
 });
 

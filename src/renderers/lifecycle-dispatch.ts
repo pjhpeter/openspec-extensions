@@ -413,7 +413,7 @@ function determinePhase(
       if (Object.keys(reviewGate.artifact as JsonRecord).length > 0 && reviewGate.current !== true) {
         return ["issue_execution", String(reviewRequiredIssue.issue_id ?? ""), `当前 issue 的 checker/reviewer gate 已过期；需先重新收敛检查/审查结论并刷新 \`${reviewGate.path}\`。`];
       }
-      return ["issue_execution", String(reviewRequiredIssue.issue_id ?? ""), `当前 issue 使用了 team dispatch；在 merge 前必须先完成 checker/reviewer gate，并写入 \`${reviewGate.path}\`。`];
+      return ["issue_execution", String(reviewRequiredIssue.issue_id ?? ""), `当前 issue 使用了 team dispatch；在接受前必须先完成 checker/reviewer gate，并写入 \`${reviewGate.path}\`。`];
     }
   }
   const incomplete = issues.filter((issue) => String(issue.status ?? "").trim() !== "completed");
@@ -1009,9 +1009,9 @@ function renderPhasePacket(
             "checker / reviewer 必须先看 `changed_files`（若 progress artifact 已记录），没有时先看 `allowed_scope` 和 issue validation，再按需扩到直接依赖面。",
             "默认不要读取 `node_modules`、`dist`、`build`、`.next`、`coverage` 这类生成/供应商目录；只有当前 issue 明确把这些路径写进 `allowed_scope` 时才允许查看。",
             "不要把 issue check/review 扩成 repo-wide 扫描；只有出现跨边界架构风险或证据争议时，coordinator 才升级更多 checker / reviewer seat。",
-            "checker / reviewer 全部通过后，coordinator 必须先写当前通过的 `runs/ISSUE-REVIEW-<issue>.json`，再把 issue 收敛到 `review_required` 并决定是否 merge。",
+            "checker / reviewer 全部通过后，coordinator 必须先写当前通过的 `runs/ISSUE-REVIEW-<issue>.json`，再把 issue 收敛到 `review_required` 并决定是否接受。",
             autoAcceptIssueReview
-              ? "当 `auto_accept_issue_review=true` 时，coordinator 会在 gate-bearing check/review subagent 全部完成、`runs/ISSUE-REVIEW-<issue>.json` 已通过且 issue-local validation 全部通过后自动接受并 merge 当前 issue，再继续后续 phase。"
+              ? "当 `auto_accept_issue_review=true` 时，coordinator 会在 gate-bearing check/review subagent 全部完成、`runs/ISSUE-REVIEW-<issue>.json` 已通过且 issue-local validation 全部通过后自动接受当前 issue；change 级 worktree 等全部 issue 接受后再统一 merge。"
               : "审查组通过后默认停住，让 coordinator 先确认是否派发下一个 issue。",
             "审查组不通过则回到开发组下一轮。"
           ]
