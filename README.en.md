@@ -143,6 +143,7 @@ After you have already triggered "Enter OpenSpec mode", I recommend collapsing t
 1. Create a new request
 
 ```text
+Enter OpenSpec mode.
 Judge the requirement complexity yourself; if it belongs to the complex path, automatically enable subagent-team and proceed without asking me again.
 If spawned subagents are needed, explicitly use `<specified-model>`.
 Requirement: <requirement-description>
@@ -151,6 +152,7 @@ Requirement: <requirement-description>
 2. Continue an existing request
 
 ```text
+Enter OpenSpec mode.
 Continue the `<change>` change according to the previously judged complexity. If it is on the complex path, enable subagent-team and explicitly use `<specified-model>` for spawned subagents.
 ```
 
@@ -275,12 +277,14 @@ If I want an agent to follow the full lifecycle for a complex change, these are 
 0. After entering OpenSpec mode, start with one of these three short prompts
 
 ```text
+Enter OpenSpec mode.
 Judge the requirement complexity yourself; if it belongs to the complex path, automatically enable subagent-team and proceed without asking me again.
 If spawned subagents are needed, explicitly use `<specified-model>`.
 Requirement: <requirement-description>
 ```
 
 ```text
+Enter OpenSpec mode.
 Continue the `<change>` change according to the previously judged complexity. If it is on the complex path, enable subagent-team and explicitly use `<specified-model>` for spawned subagents.
 ```
 

@@ -153,6 +153,7 @@ openspec/changes/*/runs/CHANGE-REVIEW.json
 1. 创建新需求
 
 ```text
+进入 OpenSpec 模式。
 你自己判断需求复杂度；如果属于复杂流程，自动启用 subagent-team 推进，不用再单独问我。
 如需 spawned subagent，请显式使用 `<指定模型>`。
 需求：<需求描述>
@@ -161,6 +162,7 @@ openspec/changes/*/runs/CHANGE-REVIEW.json
 2. 继续现有需求
 
 ```text
+进入 OpenSpec 模式。
 继续 <change> change，根据原来判断的复杂度继续；如果是复杂流程，启用 subagent-team，spawned subagent 显式使用 `<指定模型>`。
 ```
 
@@ -298,12 +300,14 @@ flowchart TD
 0. 进入 OpenSpec 模式后，优先用这三句之一启动
 
 ```text
+进入 OpenSpec 模式。
 你自己判断需求复杂度；如果属于复杂流程，自动启用 subagent-team 推进，不用再单独问我。
 如需 spawned subagent，请显式使用 `<指定模型>`。
 需求：<需求描述>
 ```
 
 ```text
+进入 OpenSpec 模式。
 继续 <change> change，根据原来判断的复杂度继续；如果是复杂流程，启用 subagent-team，spawned subagent 显式使用 `<指定模型>`。
 ```
 
