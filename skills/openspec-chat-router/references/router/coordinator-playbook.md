@@ -40,7 +40,7 @@ This is the normal flow when the runtime supports delegation and the user wants 
 14. Only issue-only execution subagents follow `openspec-execute-issue` end to end. Development seats inside an issue-team round stop at code + changed-files/pending-validation handoff + progress checkpoint; they do not close the issue and are not the final validation owner.
 15. After checker/reviewer pass for a team-dispatch issue, normalize that gate into `runs/ISSUE-REVIEW-<issue>.json`, then mark the issue `completed + review_required`.
 16. Reconcile from disk, normalize any findings into the change-level backlog, and decide whether the issue passes the round.
-17. If `auto_accept_issue_review=true` and the issue-local validation passed, accept it immediately from the coordinator session only after the issue review gate is current and passed. The shipped default uses a reusable change worktree, so each validated issue is accepted before the next issue starts, and the accumulated change worktree is merged/committed once after all issues are accepted. Shared or issue-scoped worktrees can still use the compatibility per-issue merge helper. Otherwise review it manually in the coordinator session first.
+17. If `auto_accept_issue_review=true` and the issue-local validation passed, accept it immediately from the coordinator session only after the issue review gate is current and passed. The shipped default uses a reusable change worktree, so each validated issue is accepted before the next issue starts, and the accumulated change worktree is reviewed and verified in place before the final merge/commit. Shared or issue-scoped worktrees can still use the compatibility per-issue merge helper. Otherwise review it manually in the coordinator session first.
 18. After all approved issues are completed, run a change-level `/review` against the current change diff and write `runs/CHANGE-REVIEW.json`.
 19. Once that review passes, run the required automated test/validation plus automated manual verification closeout before moving into change acceptance, `verify`, or `archive`. For frontend or other browser-visible changes, prefer chrome devtools MCP to drive the affected main path during that closeout step; only fall back to another browser tool when chrome devtools MCP is unavailable.
 20. Before moving into change acceptance, verify, or archive, reread `openspec/issue-mode.json` again so the gate mode, validation, and automation switches match the latest repo state.
@@ -77,11 +77,11 @@ This is the normal flow when the runtime supports delegation and the user wants 
 - fall back to the single-issue execution path only when the user explicitly narrows execution to one issue-only subagent or the current step is already a bounded single-issue handoff
 - keep a change-level normalized backlog and round verdict for complex changes
 - installed template default is one change-level worktree per change; shared workspace is only the compatibility fallback when repo config is missing
-- after an accepted issue from a reusable change worktree, sync that worktree to the accepted commit before the next issue starts
+- after an accepted issue from a reusable change worktree, keep the accumulated code in that worktree before the next issue starts
 - do not let issue execution subagents update `tasks.md`
 - do not let issue execution subagents self-merge or create the final git commit
 - prefer artifact-based reconcile over chat memory
 - do not dispatch new issue work while `Must fix now` items from the current planning or acceptance round are still open
 - do not move from "all issues completed" to `verify` or `archive` without a passed change-level `/review`, the required automated test/validation + automated manual verification closeout, and a change-level acceptance decision
 - after successful archive of a change that used change scope, clean up the reusable change worktree
-- even in unattended mode, coordinator-owned merge/commit boundaries remain in the coordinator session; default change-scoped worktrees merge once after all issues are accepted
+- even in unattended mode, coordinator-owned merge/commit boundaries remain in the coordinator session; default change-scoped worktrees merge once only after all issues are accepted and worktree-level verify passes

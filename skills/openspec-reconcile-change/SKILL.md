@@ -74,7 +74,7 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
    - `resolve_verify_failure` -> inspect the verify artifact and fix the failing validation or unchecked tasks
    - `commit_planning_docs` -> commit `proposal.md` / `design.md` / `tasks.md` / `issues/INDEX.md` / `ISSUE-*.md` immediately, then rerun reconcile and keep advancing without waiting for user confirmation
    - `auto_accept_issue` -> run `openspec-extensions reconcile accept-issue` immediately for change-scoped worktrees, then rerun reconcile and keep advancing without waiting for user confirmation
-   - `merge_change` -> run `openspec-extensions reconcile merge-change` immediately, then rerun reconcile and enter change-level review / verify
+   - `merge_change` -> run `openspec-extensions reconcile merge-change` immediately, then rerun reconcile and enter archive closeout
    - `complete_issue_review_gate` -> current issue is still missing the team check/review gate artifact; normalize checker/reviewer verdicts into `runs/ISSUE-REVIEW-<issue>.json`, then rerun reconcile
    - `coordinator_review` -> review the issue, then either accept it with `openspec-extensions reconcile accept-issue` for change-scoped worktrees (or `merge-issue` for shared / issue-scoped worktrees), or create `Must fix now` backlog items and send it back to repair
    - `resolve_issue_review_failure` -> current issue's team review gate failed; repair first, then refresh `runs/ISSUE-REVIEW-<issue>.json`
@@ -95,7 +95,7 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
 - Do not let issue execution subagents update `tasks.md`, self-merge, or create the final git commit for an issue.
 - Use issue docs to discover pending work that has not started yet.
 - `openspec-extensions reconcile accept-issue` is the default for change-scoped worktrees: it marks the reviewed issue accepted and defers the actual merge until all issues finish.
-- `openspec-extensions reconcile merge-change` expects all change-scoped issues to be accepted, then applies the accumulated change worktree patch and commits once.
+- `openspec-extensions reconcile merge-change` expects all change-scoped issues to be accepted and the current change-level verify artifact to have passed, then applies the accumulated change worktree patch and commits once.
 - `openspec-extensions reconcile merge-issue` is the compatibility helper for shared workspace or issue-scoped worktrees; it still merges/commits one reviewed issue immediately.
 - If artifacts are stale or suspicious, inspect the issue workspace and run artifacts directly before redispatching.
 - In subagent-first flows, prefer artifact-based reconcile and coordinator review over any process-liveness heuristics.
@@ -108,11 +108,11 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
 - The same rule applies after an external disconnect or a fresh reconnect: rerun reconcile from disk, then honor `continuation_policy` instead of treating the resumed chat as a new manual checkpoint.
 - If `commit_planning_docs` is emitted, do not skip straight to issue execution; commit the planning docs first, rerun reconcile, and only then honor `dispatch_next_issue`.
 - If `automation_profile=full_auto` and the helper emits `dispatch_next_issue`, do not stop to ask the user; render the next team dispatch or continue the subagent-team loop immediately.
-- If `auto_accept_issue_review=true` and the helper emits `auto_accept_issue`, do not stop to ask the user; accept the issue immediately and continue. For change-scoped worktrees, do not merge/commit until reconcile emits `merge_change`.
+- If `auto_accept_issue_review=true` and the helper emits `auto_accept_issue`, do not stop to ask the user; accept the issue immediately and continue. For change-scoped worktrees, do not merge/commit until worktree-level review / verify pass and reconcile emits `merge_change`.
 - If the current issue came from `ISSUE-*.team.dispatch.md`, do not accept/merge it until `runs/ISSUE-REVIEW-<issue>.json` exists, is current, and passed.
 - `dispatch_next_issue` means the first approved issue after the planning-doc commit, or the next pending issue after an accepted issue, should be dispatched immediately; it must not be reframed as a terminal control-plane checkpoint.
-- If coordinator review accepts an issue in a change-scoped worktree, mark it accepted before dispatching the next dependent issue. Merge/commit only after all issues are accepted.
-- Do not move from "all issues accepted" to change-level review or `verify` until `openspec-extensions reconcile merge-change` has merged the accumulated change worktree.
+- If coordinator review accepts an issue in a change-scoped worktree, mark it accepted before dispatching the next dependent issue. Merge/commit only after all issues are accepted and worktree-level verify has passed.
+- Do not move from "all issues accepted" to `merge-change`; run change-level `/review` and `verify` against the accumulated change worktree first.
 - Do not move from "all issues completed" to `verify` until `runs/CHANGE-REVIEW.json` exists, is current, and has `status=passed`.
 - Read `automation_profile`, `automation`, and `continuation_policy` from the helper output before deciding whether a pause is intentional or indicates a stuck flow.
 

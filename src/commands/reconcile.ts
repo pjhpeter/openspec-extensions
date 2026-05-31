@@ -15,13 +15,12 @@ import {
   phaseGateArtifactPath,
   phaseGateStatus,
   readJson,
-  reviewArtifactIsCurrent,
   reviewArtifactPath,
-  verificationArtifactIsCurrent,
   verifyArtifactPath,
   type PhaseGate,
   type JsonRecord
 } from "../domain/change-coordinator";
+import { changeArtifactIsCurrent } from "../domain/worktree-review";
 import {
   automationProfile,
   inferWorkerWorktreeScope,
@@ -300,7 +299,7 @@ function hasDeferredAcceptedChangeWorktreeIssue(
 
 function currentReviewState(repoRoot: string, change: string, issues: IssuePayload[]): JsonRecord {
   const artifact = readJson(reviewArtifactPath(repoRoot, change));
-  const current = Object.keys(artifact).length > 0 && reviewArtifactIsCurrent(repoRoot, issues, artifact);
+  const current = Object.keys(artifact).length > 0 && changeArtifactIsCurrent(repoRoot, change, issues, artifact);
   const status = String(artifact.status ?? "").trim();
   return {
     artifact,
@@ -521,24 +520,23 @@ function determineBaseNextAction(
 
   const completed = issues.filter((issue) => issue.status === "completed");
   if (completed.length > 0 && completed.length === issues.length) {
-    if (hasDeferredAcceptedChangeWorktreeIssue(repoRoot, change, issues, config)) {
-      return ["merge_change", "", "全部 issue 已接受；当前 change 级 worktree 需要一次性合并到 coordinator 分支。"];
-    }
-
     const reviewState = currentReviewState(repoRoot, change, issues);
     if (reviewState.failed === true) {
       return ["resolve_change_review_failure", "", "全部 issue 已完成，但最近一次 change-level /review 未通过。"];
     }
     if (reviewState.passed !== true) {
       if (Object.keys(reviewState.artifact as JsonRecord).length > 0) {
-        return ["review_change_code", "", "全部 issue 已完成，但 change-level /review 工件已过期，需要重新运行。"];
+        return ["review_change_code", "", "全部 issue 已完成，但 change-level /review 工件已过期，需要在当前 worktree 范围重新运行。"];
       }
-      return ["review_change_code", "", "全部 issue 已完成，需先运行 change-level /review 再决定是否 verify。"];
+      return ["review_change_code", "", "全部 issue 已完成，需先在当前 worktree 范围运行 change-level /review 再决定是否 verify。"];
     }
 
     const verifyArtifact = readJson(verifyArtifactPath(repoRoot, change));
-    if (Object.keys(verifyArtifact).length > 0 && verificationArtifactIsCurrent(repoRoot, issues, verifyArtifact)) {
+    if (Object.keys(verifyArtifact).length > 0 && changeArtifactIsCurrent(repoRoot, change, issues, verifyArtifact)) {
       if (verifyArtifact.status === "passed") {
+        if (hasDeferredAcceptedChangeWorktreeIssue(repoRoot, change, issues, config)) {
+          return ["merge_change", "", "change worktree 已通过 review / verify；现在可以把已验收代码合并到 coordinator 分支。"];
+        }
         if (autoArchiveAfterVerify) {
           return ["archive_change", "", "全部 issue 已完成且 change 已通过 verify，配置允许自动 archive。"];
         }
@@ -643,7 +641,7 @@ function continuationPolicy(nextAction: string, recommendedIssueId: string): Jso
       human_confirmation_required: false,
       must_not_stop_at_checkpoint: true,
       summary: "当前 issue 已满足自动接受条件，coordinator 必须立即收敛并继续。",
-      instruction: `\`auto_accept_issue\` 不是 terminal checkpoint；不要停在 control-plane ready。 立即运行 \`openspec-extensions reconcile accept-issue\` 接受${issueSuffix}，然后重新 reconcile 并继续主链；change 级 worktree 等全部 issue 接受后再统一 merge。`
+      instruction: `\`auto_accept_issue\` 不是 terminal checkpoint；不要停在 control-plane ready。 立即运行 \`openspec-extensions reconcile accept-issue\` 接受${issueSuffix}，然后重新 reconcile 并继续主链；change 级 worktree 等全部 issue 接受并通过 worktree 内 review / verify 后再统一 merge。`
     };
   }
   if (nextAction === "merge_change") {
@@ -652,8 +650,8 @@ function continuationPolicy(nextAction: string, recommendedIssueId: string): Jso
       pause_allowed: false,
       human_confirmation_required: false,
       must_not_stop_at_checkpoint: true,
-      summary: "全部 issue 已接受，coordinator 必须统一合并 change worktree。",
-      instruction: "`merge_change` 不是 terminal checkpoint；立即运行 `openspec-extensions reconcile merge-change`，然后重新 reconcile 进入 change-level review / verify。"
+      summary: "change worktree 已通过验收，coordinator 必须统一合并。",
+      instruction: "`merge_change` 不是 terminal checkpoint；只在 change-level review / verify 已通过后运行 `openspec-extensions reconcile merge-change`，然后重新 reconcile 进入 archive 收尾。"
     };
   }
   if (nextAction === "verify_change") {

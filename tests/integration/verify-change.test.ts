@@ -127,6 +127,76 @@ test("verifyChange passes after review and validation", () => {
   });
 });
 
+test("verifyChange runs validation inside accepted change worktree", () => {
+  withTempDir((repoRoot) => {
+    const change = "demo-change";
+    const changeDir = path.join(repoRoot, "openspec", "changes", change);
+    const issuesDir = path.join(changeDir, "issues");
+    const srcDir = path.join(repoRoot, "src");
+    fs.mkdirSync(issuesDir, { recursive: true });
+    fs.mkdirSync(srcDir, { recursive: true });
+    initGitRepo(repoRoot);
+    fs.writeFileSync(path.join(repoRoot, "openspec", "issue-mode.json"), JSON.stringify({
+      validation_commands: ["test -f src/worktree-only.ts"],
+      worker_worktree: {
+        enabled: true,
+        scope: "change",
+        mode: "branch",
+        base_ref: "HEAD",
+        branch_prefix: "opsx"
+      }
+    }, null, 2));
+    fs.writeFileSync(path.join(changeDir, "tasks.md"), "");
+    fs.writeFileSync(path.join(srcDir, "demo.ts"), "export const demo = 1;\n");
+    fs.writeFileSync(path.join(issuesDir, "ISSUE-001.md"), `---
+issue_id: ISSUE-001
+title: Worktree issue
+worker_worktree: .worktree/${change}
+allowed_scope:
+  - src/worktree-only.ts
+out_of_scope:
+  - electron/
+done_when:
+  - verify worktree
+validation:
+  - test -f src/worktree-only.ts
+---
+`);
+    fs.writeFileSync(path.join(issuesDir, "ISSUE-001.progress.json"), JSON.stringify({
+      issue_id: "ISSUE-001",
+      status: "completed",
+      boundary_status: "accepted",
+      updated_at: "2026-03-30T10:00:00+08:00"
+    }, null, 2));
+    git(repoRoot, "add", ".");
+    git(repoRoot, "commit", "-m", "init accepted worktree");
+    git(repoRoot, "worktree", "add", "-b", "opsx/demo-change", path.join(repoRoot, ".worktree", change), "HEAD");
+    fs.writeFileSync(path.join(repoRoot, ".worktree", change, "src", "worktree-only.ts"), "export const worktreeOnly = true;\n");
+
+    reviewChange({
+      change,
+      dryRun: false,
+      repoRoot,
+      reviewCommand: "printf 'VERDICT: pass\\n'"
+    });
+
+    const payload = verifyChange({
+      change,
+      dryRun: false,
+      repoRoot
+    }) as {
+      status: string;
+      validation: Array<{ status: string }>;
+      validation_root_relative: string;
+    };
+
+    assert.equal(payload.status, "passed");
+    assert.equal(payload.validation_root_relative, `.worktree/${change}`);
+    assert.equal(payload.validation[0]?.status, "passed");
+    assert.equal(fs.existsSync(path.join(repoRoot, "src", "worktree-only.ts")), false);
+  });
+});
+
 test("verifyChange rejects stale review when code changed after review", () => {
   withTempDir((repoRoot) => {
     const remoteRoot = initGitRepoWithUpstream(repoRoot);

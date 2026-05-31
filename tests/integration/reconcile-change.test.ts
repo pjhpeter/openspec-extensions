@@ -398,7 +398,7 @@ test("team dispatch issue can auto accept after review gate passes", () => {
   });
 });
 
-test("accepted change worktree issues merge once after all issues finish", () => {
+test("accepted change worktree issues require worktree review before merge", () => {
   withTempDir((repoRoot) => {
     const change = "demo-change";
     writeIssueDoc(repoRoot, change, "ISSUE-001", { workerWorktree: `.worktree/${change}` });
@@ -418,9 +418,43 @@ test("accepted change worktree issues merge once after all issues finish", () =>
 
     const payload = reconcileChange({ repoRoot, change });
 
+    assert.equal(payload.next_action, "review_change_code");
+    assert.equal(payload.recommended_issue_id, "");
+    assert.match(String(payload.reason), /worktree/);
+    assert.equal((payload.continuation_policy as Record<string, string>).mode, "resolve_or_inspect");
+  });
+});
+
+test("accepted change worktree issues merge only after verify passes", () => {
+  withTempDir((repoRoot) => {
+    const change = "demo-change";
+    const runsDir = path.join(repoRoot, "openspec", "changes", change, "runs");
+    fs.mkdirSync(runsDir, { recursive: true });
+    writeIssueDoc(repoRoot, change, "ISSUE-001", { workerWorktree: `.worktree/${change}` });
+    writeIssueDoc(repoRoot, change, "ISSUE-002", { workerWorktree: `.worktree/${change}` });
+    writeIssueProgress(repoRoot, change, {
+      issueId: "ISSUE-001",
+      status: "completed",
+      boundaryStatus: "accepted",
+      nextAction: "",
+    });
+    writeIssueProgress(repoRoot, change, {
+      issueId: "ISSUE-002",
+      status: "completed",
+      boundaryStatus: "accepted",
+      nextAction: "",
+    });
+    writeChangeReviewArtifact(repoRoot, change);
+    fs.writeFileSync(path.join(runsDir, "CHANGE-VERIFY.json"), JSON.stringify({
+      status: "passed",
+      updated_at: "2026-03-30T10:05:00+08:00"
+    }, null, 2));
+
+    const payload = reconcileChange({ repoRoot, change });
+
     assert.equal(payload.next_action, "merge_change");
     assert.equal(payload.recommended_issue_id, "");
-    assert.match(String(payload.reason), /一次性合并/);
+    assert.match(String(payload.reason), /已通过 review \/ verify/);
     assert.equal((payload.continuation_policy as Record<string, string>).mode, "continue_immediately");
     assert.match(String((payload.continuation_policy as Record<string, string>).instruction), /merge-change/);
   });
@@ -538,7 +572,7 @@ test("all_completed_requires_change_review_before_verify", () => {
     const payload = reconcileChange({ repoRoot, change: "demo-change" });
 
     assert.equal(payload.next_action, "review_change_code");
-    assert.match(String(payload.reason), /需先运行 change-level \/review/);
+    assert.match(String(payload.reason), /需先在当前 worktree 范围运行 change-level \/review/);
     assert.equal((payload.continuation_policy as Record<string, string>).mode, "resolve_or_inspect");
   });
 });

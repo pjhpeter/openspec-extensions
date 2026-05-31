@@ -122,6 +122,64 @@ test("reviewChange writes passed review artifact for unpushed code outside opens
   });
 });
 
+test("reviewChange reviews accepted change worktree before coordinator merge", () => {
+  withTempDir((repoRoot) => {
+    const change = "demo-change";
+    const changeDir = path.join(repoRoot, "openspec", "changes", change);
+    const issuesDir = path.join(changeDir, "issues");
+    const srcDir = path.join(repoRoot, "src");
+    fs.mkdirSync(issuesDir, { recursive: true });
+    fs.mkdirSync(srcDir, { recursive: true });
+    initGitRepo(repoRoot);
+    fs.writeFileSync(path.join(srcDir, "demo.ts"), "export const demo = 1;\n");
+    fs.writeFileSync(path.join(issuesDir, "ISSUE-001.md"), `---
+issue_id: ISSUE-001
+title: Worktree issue
+worker_worktree: .worktree/${change}
+allowed_scope:
+  - src/demo.ts
+out_of_scope:
+  - electron/
+done_when:
+  - review worktree
+validation:
+  - true
+---
+`);
+    fs.writeFileSync(path.join(issuesDir, "ISSUE-001.progress.json"), JSON.stringify({
+      issue_id: "ISSUE-001",
+      status: "completed",
+      boundary_status: "accepted",
+      updated_at: "2026-03-30T10:00:00+08:00"
+    }, null, 2));
+    git(repoRoot, "add", ".");
+    git(repoRoot, "commit", "-m", "init accepted worktree");
+    git(repoRoot, "worktree", "add", "-b", "opsx/demo-change", path.join(repoRoot, ".worktree", change), "HEAD");
+    fs.writeFileSync(path.join(repoRoot, ".worktree", change, "src", "demo.ts"), "export const demo = 2;\n");
+
+    const reviewCommand = [
+      "node",
+      "-e",
+      JSON.stringify(
+        "const { execFileSync } = require('node:child_process');" +
+        "const files = execFileSync('git', ['diff', '--cached', '--name-only'], { encoding: 'utf8' }).trim();" +
+        "process.stdout.write(files === 'src/demo.ts' ? 'VERDICT: pass\\n' : 'VERDICT: fail\\n' + files + '\\n');"
+      )
+    ].join(" ");
+    const payload = reviewChange({
+      change,
+      dryRun: false,
+      repoRoot,
+      reviewCommand
+    }) as { review_scope: { scope_source: string; worker_worktree_relative: string }; status: string };
+
+    assert.equal(payload.status, "passed");
+    assert.equal(payload.review_scope.scope_source, "worker_worktree");
+    assert.equal(payload.review_scope.worker_worktree_relative, `.worktree/${change}`);
+    assert.equal(fs.readFileSync(path.join(srcDir, "demo.ts"), "utf8"), "export const demo = 1;\n");
+  });
+});
+
 test("reviewChange refuses review when issues are incomplete", () => {
   withTempDir((repoRoot) => {
     writeIssueDoc(repoRoot, "demo-change");

@@ -14,15 +14,16 @@ import {
   phaseGateArtifactPath,
   phaseGateStatus,
   readJson,
-  reviewArtifactIsCurrent,
   reviewArtifactPath,
-  verificationArtifactIsCurrent,
   verifyArtifactPath,
   type PhaseGate,
   type JsonRecord
 } from "../domain/change-coordinator";
+import { changeArtifactIsCurrent } from "../domain/worktree-review";
 import {
   automationProfile,
+  inferWorkerWorktreeScope,
+  issueWorkerWorktreePath,
   loadIssueModeConfig,
   parseFrontmatter,
   readChangeControlState,
@@ -238,7 +239,7 @@ function collectIssues(repoRoot: string, change: string): IssuePayload[] {
 
 function currentVerifyState(repoRoot: string, change: string, issues: IssuePayload[]): JsonRecord {
   const artifact = readJson(verifyArtifactPath(repoRoot, change));
-  const current = Object.keys(artifact).length > 0 && verificationArtifactIsCurrent(repoRoot, issues, artifact);
+  const current = Object.keys(artifact).length > 0 && changeArtifactIsCurrent(repoRoot, change, issues, artifact);
   const status = String(artifact.status ?? "").trim();
   return {
     artifact,
@@ -251,7 +252,7 @@ function currentVerifyState(repoRoot: string, change: string, issues: IssuePaylo
 
 function currentReviewState(repoRoot: string, change: string, issues: IssuePayload[]): JsonRecord {
   const artifact = readJson(reviewArtifactPath(repoRoot, change));
-  const current = Object.keys(artifact).length > 0 && reviewArtifactIsCurrent(repoRoot, issues, artifact);
+  const current = Object.keys(artifact).length > 0 && changeArtifactIsCurrent(repoRoot, change, issues, artifact);
   const status = String(artifact.status ?? "").trim();
   return {
     artifact,
@@ -260,6 +261,26 @@ function currentReviewState(repoRoot: string, change: string, issues: IssuePaylo
     passed: current && status === "passed",
     failed: current && status === "failed"
   };
+}
+
+function hasDeferredAcceptedIssue(
+  repoRoot: string,
+  change: string,
+  issues: IssuePayload[],
+  config: IssueModeConfig
+): boolean {
+  return issues.some((issue) =>
+    String(issue.status ?? "").trim() === "completed" &&
+    String(issue.boundary_status ?? "").trim() === "accepted" &&
+    (() => {
+      const issueId = String(issue.issue_id ?? "").trim();
+      if (!issueId) {
+        return false;
+      }
+      const [workerWorktree] = issueWorkerWorktreePath(repoRoot, change, issueId, config);
+      return inferWorkerWorktreeScope(repoRoot, workerWorktree, config, change, issueId) === "change";
+    })()
+  );
 }
 
 function currentPhaseGateState(repoRoot: string, change: string, phase: PhaseGate): JsonRecord {
@@ -429,13 +450,16 @@ function determinePhase(
     if (Object.keys(reviewState.artifact as JsonRecord).length > 0) {
       return ["change_acceptance", "", "全部 issue 已完成，但 change-level /review 工件已过期，需要重新运行后再决定是否 verify。"];
     }
-    return ["change_acceptance", "", "全部 issue 已完成，需先对当前分支未 push 的代码运行 change-level /review（排除 openspec/changes/**），然后才能进入 verify。"];
+    return ["change_acceptance", "", "全部 issue 已完成，需先对当前 worktree 范围运行 change-level /review（排除 openspec/changes/**），然后才能进入 verify。"];
   }
 
   const verifyState = currentVerifyState(repoRoot, change, issues);
   const latestRound = (controlState.latest_round as JsonRecord | undefined) ?? {};
   const autoAcceptChangeAcceptance = Boolean(config.subagent_team.auto_accept_change_acceptance);
   if (verifyState.passed === true) {
+    if (hasDeferredAcceptedIssue(repoRoot, change, issues, config)) {
+      return ["change_acceptance", "", "最新 verify 已在 worktree 内通过；先运行 merge-change 合并已验收代码，再进入归档收尾。"];
+    }
     return ["ready_for_archive", "", "最新 verify 已通过，change 可以进入归档收尾。"];
   }
   if (verifyState.failed === true) {
@@ -1011,13 +1035,13 @@ function renderPhasePacket(
             "不要把 issue check/review 扩成 repo-wide 扫描；只有出现跨边界架构风险或证据争议时，coordinator 才升级更多 checker / reviewer seat。",
             "checker / reviewer 全部通过后，coordinator 必须先写当前通过的 `runs/ISSUE-REVIEW-<issue>.json`，再把 issue 收敛到 `review_required` 并决定是否接受。",
             autoAcceptIssueReview
-              ? "当 `auto_accept_issue_review=true` 时，coordinator 会在 gate-bearing check/review subagent 全部完成、`runs/ISSUE-REVIEW-<issue>.json` 已通过且 issue-local validation 全部通过后自动接受当前 issue；change 级 worktree 等全部 issue 接受后再统一 merge。"
+              ? "当 `auto_accept_issue_review=true` 时，coordinator 会在 gate-bearing check/review subagent 全部完成、`runs/ISSUE-REVIEW-<issue>.json` 已通过且 issue-local validation 全部通过后自动接受当前 issue；change 级 worktree 等全部 issue 接受并通过 worktree 内 review / verify 后再统一 merge。"
               : "审查组通过后默认停住，让 coordinator 先确认是否派发下一个 issue。",
             "审查组不通过则回到开发组下一轮。"
           ]
         : phase === "change_acceptance"
           ? [
-              "change acceptance 先要求 coordinator 对当前分支未 push 的代码运行 change-level /review（排除 `openspec/changes/**`），并落盘 `runs/CHANGE-REVIEW.json`。",
+              "change acceptance 先要求 coordinator 对当前 worktree 范围运行 change-level /review（排除 `openspec/changes/**`），并落盘 `runs/CHANGE-REVIEW.json`。",
               "开发组只补 change-level review 或 acceptance 暴露出的缺口，不再随意扩 issue scope。",
               "change acceptance 默认不是编码 phase；使用 1 个开发 seat + 1 个 checker + 1 个 reviewer 的轻量 gate，全部使用 `reasoning_effort=medium`。",
               "检查组确认已接受 issue 能覆盖请求范围。",
@@ -1028,7 +1052,7 @@ function renderPhasePacket(
             ]
           : phase === "change_verify"
             ? [
-                "进入 verify 前，change-level /review 必须已经通过；该 review 的范围是当前分支未 push 的代码，并排除 `openspec/changes/**`。",
+                "进入 verify 前，change-level /review 必须已经通过；该 review 的范围是当前 worktree，并排除 `openspec/changes/**`。",
                 "开发组只处理 verify 失败所暴露的缺口，不再随意新增 issue。",
                 "verify 默认使用 2 个开发 seat + 1 个 checker + 1 个 reviewer 的快路径；如果 verify 暴露出代码/测试缺口，开发组 subagent 使用 `reasoning_effort=high`，检查组和审查组使用 `reasoning_effort=medium`。",
                 "检查组负责运行并检查 repo validation、tasks completion、verify artifact。",

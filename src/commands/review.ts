@@ -5,7 +5,6 @@ import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { parseArgs } from "node:util";
 
 import {
-  buildReviewScope,
   nowIso,
   readJson,
   reviewArtifactPath,
@@ -14,6 +13,7 @@ import {
   type JsonRecord,
   type ReviewScope
 } from "../domain/change-coordinator";
+import { buildChangeReviewScope } from "../domain/worktree-review";
 import { runGitCommand } from "../git/command";
 
 const DEFAULT_REVIEW_COMMAND = "codex review --uncommitted -";
@@ -109,8 +109,9 @@ function collectIssueProgress(changeDir: string): IssueProgressPayload[] {
 function buildReviewPrompt(change: string, completedIssueIds: string[]): string {
   const issueContext = completedIssueIds.length > 0 ? completedIssueIds.join(", ") : "none";
   return (
-    `Review the current unpushed code changes for OpenSpec change \`${change}\` before verify.\n` +
+    `Review the current code changes for OpenSpec change \`${change}\` before verify.\n` +
     `Completed issues in scope: ${issueContext}.\n` +
+    "When a change worktree is active, this review uses that worktree before any merge to the coordinator branch.\n" +
     "Files under `openspec/changes/` are excluded from this review scope.\n" +
     "Focus on correctness, regressions, missing validation, and blockers that must be fixed before verify.\n" +
     "Respond in plain text.\n" +
@@ -226,7 +227,7 @@ export function reviewChange(args: ParsedReviewArgs): JsonRecord {
   } else {
     let scope: ReviewScope | null = null;
     try {
-      scope = buildReviewScope(args.repoRoot);
+      scope = buildChangeReviewScope(args.repoRoot, args.change, issues);
       artifact.review_scope = reviewScopeToJson(scope);
     } catch (error) {
       artifact.status = "failed";

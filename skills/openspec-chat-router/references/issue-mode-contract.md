@@ -118,9 +118,9 @@ If repo config is missing, compatibility fallback remains shared workspace mode 
 6. Default decisions:
    - unresolved `Must fix now` items in the active control backlog -> stop and resolve them before dispatch, verify, or archive
    - any `blocked` -> stop and resolve blocker
-   - any `review_required` -> if `subagent_team.auto_accept_issue_review=true`, issue-local validation passed, and the team-dispatch issue review gate (when required) also passed, accept it automatically; otherwise review it in the coordinator session first. In change-scoped worktrees, defer merge/commit until all issues are accepted.
-   - after an issue is accepted, its code should already be captured in exactly one coordinator-owned commit before the next issue dispatch or change-level verify
-   - if the accepted issue used a reusable change worktree, sync that worktree to the latest accepted commit before dispatching the next issue
+   - any `review_required` -> if `subagent_team.auto_accept_issue_review=true`, issue-local validation passed, and the team-dispatch issue review gate (when required) also passed, accept it automatically; otherwise review it in the coordinator session first. In change-scoped worktrees, defer merge/commit until all issues are accepted and worktree-level review / verify passes.
+   - after an issue is accepted in a reusable change worktree, keep its code in that worktree before the next issue dispatch or change-level verify
+   - do not sync the reusable change worktree to a coordinator commit before change-level verify; the coordinator branch must remain unmerged until acceptance passes
    - if the first issue has not started yet and planning docs are still dirty in git -> create the coordinator-owned planning-doc commit first
    - any issue doc without progress -> dispatch that next issue only after the planning-doc commit already exists
    - all issues `completed` -> run a change-level acceptance round plus a change-level `/review` before moving to `verify`
@@ -194,12 +194,12 @@ Issue progress files are the execution state.
 Control backlog and round reports are the acceptance state.
 Team dispatch artifacts are the coordinator handoff state for the default subagent-team rounds in issue mode.
 Only issue-mode artifacts under `openspec/changes/<change>/...` count as workflow state; unrelated repo-root helper files such as `task_plan.md`, `findings.md`, or `progress.md` must not be reclassified as control-plane corruption, workflow noise, or a reason to stop auto-continuation.
-In issue mode, accepted code lands through coordinator review plus coordinator-owned acceptance commit, not through worker self-management.
-When a change-level worktree is reused across serial issues, that worktree must be synced to the latest accepted commit after each accepted issue so later issues inherit the already-landed code.
+In issue mode, accepted code lands through coordinator review plus coordinator-owned merge commit after change acceptance, not through worker self-management.
+When a change-level worktree is reused across serial issues, that worktree remains the validation root until change-level review / verify passes; only then may coordinator merge it back to the main branch.
 The first issue execution also depends on a prior coordinator-owned planning-doc commit for `proposal.md` / `design.md` / `tasks.md` / `issues/INDEX.md` / `ISSUE-*.md`.
 It also depends on a current passed `runs/ISSUE-PLANNING.json`; stale or missing planning gate artifacts mean the change is still in `issue_planning`.
 When the issue is running under team dispatch, development seats do not close the issue on their own and are not the validation owner; they hand off changed files plus any validation entries reset to `pending`, then the coordinator records `runs/ISSUE-REVIEW-<issue>.json` after checker/reviewer pass and marks the issue `completed + review_required`.
-Before verify, the coordinator must first write a current `runs/CHANGE-REVIEW.json` artifact from a change-level `/review` of the current change diff.
+Before verify, the coordinator must first write a current `runs/CHANGE-REVIEW.json` artifact from a change-level `/review` of the current change diff; for reusable change worktrees, that diff comes from the worktree, not the coordinator branch.
 After that review passes, complex flow keeps the final automated test/validation and automated manual verification at change closeout rather than repeating them for every issue. For frontend or other browser-visible changes, prefer chrome devtools MCP to drive the affected main path during that final closeout step before the change is treated as verified; only fall back to another browser tool when chrome devtools MCP is unavailable.
 After successful archive of a change that used change scope, the reusable worktree should be removed as part of archive cleanup.
 When `subagent_team.auto_accept_*` is enabled, the gate is still coordinator-owned; it simply no longer waits for human chat confirmation before the coordinator accepts it.

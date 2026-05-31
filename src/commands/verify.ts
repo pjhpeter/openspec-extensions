@@ -7,7 +7,6 @@ import {
   incompleteTasks,
   nowIso,
   readJson,
-  reviewArtifactIsCurrent,
   reviewArtifactPath,
   syncTasksForIssues,
   verifyArtifactPath,
@@ -15,6 +14,11 @@ import {
   type JsonRecord
 } from "../domain/change-coordinator";
 import { loadIssueModeConfig } from "../domain/issue-mode";
+import {
+  changeArtifactIsCurrent,
+  changeValidationRoot,
+  relativeValidationRoot,
+} from "../domain/worktree-review";
 
 const VERIFY_HELP_TEXT = `Usage:
   openspec-extensions verify change --repo-root <path> --change <change> [--dry-run]
@@ -133,15 +137,16 @@ export function verifyChange(args: ParsedVerifyArgs): JsonRecord {
   const tasksPath = path.join(changeDir, "tasks.md");
   const remainingTasks = incompleteTasks(tasksPath);
   const reviewPayload = readJson(reviewArtifactPath(args.repoRoot, args.change));
-  const reviewCurrent = Object.keys(reviewPayload).length > 0 && reviewArtifactIsCurrent(args.repoRoot, issues, reviewPayload);
+  const reviewCurrent = Object.keys(reviewPayload).length > 0 && changeArtifactIsCurrent(args.repoRoot, args.change, issues, reviewPayload);
   const reviewStatus = String(reviewPayload.status ?? "").trim();
   const reviewPassed = reviewCurrent && reviewStatus === "passed";
   const config = loadIssueModeConfig(args.repoRoot);
   const validationCommands = [...config.validation_commands];
 
   let validationResults: JsonRecord[] = [];
+  const validationRoot = changeValidationRoot(args.repoRoot, args.change, issues);
   if (!args.dryRun && incompleteIssueIds.length === 0 && reviewPassed) {
-    validationResults = validationCommands.map((command) => runValidationCommand(command, args.repoRoot));
+    validationResults = validationCommands.map((command) => runValidationCommand(command, validationRoot));
   }
 
   const validationFailed = validationResults.some((item) => item.status !== "passed");
@@ -189,6 +194,8 @@ export function verifyChange(args: ParsedVerifyArgs): JsonRecord {
       reviewPayload.review_scope && typeof reviewPayload.review_scope === "object" && !Array.isArray(reviewPayload.review_scope)
         ? reviewPayload.review_scope
         : {},
+    validation_root: validationRoot,
+    validation_root_relative: relativeValidationRoot(args.repoRoot, validationRoot),
     tasks_sync: tasksSync,
     remaining_tasks: remainingTasks,
     validation: validationResults,

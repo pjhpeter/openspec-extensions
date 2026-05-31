@@ -23,8 +23,14 @@ export type ReviewScope = {
   fingerprint: string;
   has_reviewable_changes: boolean;
   head_revision: string;
+  issue_ids?: string[];
   patch: Buffer;
+  patch_fingerprint?: string;
+  scope_source?: string;
   upstream_ref: string;
+  worker_worktree?: string;
+  worker_worktree_relative?: string;
+  workspace_scope?: string;
 };
 
 function pad2(value: number): string {
@@ -230,6 +236,12 @@ export function reviewScopeToJson(scope: ReviewScope): JsonRecord {
     base_revision: scope.base_revision,
     head_revision: scope.head_revision,
     fingerprint: scope.fingerprint,
+    patch_fingerprint: scope.patch_fingerprint,
+    scope_source: scope.scope_source,
+    worker_worktree: scope.worker_worktree,
+    worker_worktree_relative: scope.worker_worktree_relative,
+    workspace_scope: scope.workspace_scope,
+    issue_ids: scope.issue_ids ?? [],
     changed_files: scope.changed_files,
     excluded_changed_files: scope.excluded_changed_files,
     has_reviewable_changes: scope.has_reviewable_changes
@@ -389,7 +401,9 @@ export function buildReviewScope(repoRoot: string): ReviewScope {
     changed_files: uniqueSortedPaths([...trackedFiles, ...includedUntrackedFiles]),
     excluded_changed_files: uniqueSortedPaths([...excludedTrackedFiles, ...excludedUntrackedFiles]),
     has_reviewable_changes: patch.length > 0,
-    fingerprint: hashReviewScope(baseRevision, upstreamRef, patch)
+    fingerprint: hashReviewScope(baseRevision, upstreamRef, patch),
+    patch_fingerprint: createHash("sha256").update(patch).digest("hex"),
+    scope_source: "coordinator_branch"
   };
 }
 

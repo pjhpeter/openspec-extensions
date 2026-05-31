@@ -10,10 +10,13 @@ import {
   isCanonicalIssueDocName,
   nowIso,
   readJson,
+  reviewArtifactPath,
   syncTasksForIssues,
+  verifyArtifactPath,
   writeJson,
   type JsonRecord,
 } from "../domain/change-coordinator";
+import { changeArtifactIsCurrent } from "../domain/worktree-review";
 import {
   inferWorkerWorktreeScope,
   isSharedWorkerWorkspace,
@@ -268,6 +271,29 @@ function ensureAllIssuesAcceptedForChangeMerge(issues: ChangeIssueState[], force
   return accepted;
 }
 
+function ensureChangeVerifyPassedBeforeMerge(
+  repoRoot: string,
+  change: string,
+  issues: ChangeIssueState[],
+  force: boolean
+): void {
+  if (force) {
+    return;
+  }
+
+  const issuePayloads = issues.map((issue) => ({
+    ...issue.progress,
+    issue_id: String(issue.progress.issue_id ?? issue.issueId),
+  }));
+  const artifact = readJson(verifyArtifactPath(repoRoot, change));
+  const status = String(artifact.status ?? "").trim();
+  if (status === "passed" && changeArtifactIsCurrent(repoRoot, change, issuePayloads, artifact)) {
+    return;
+  }
+
+  throw new Error("Change worktree cannot be merged before a current passed change-level verify artifact exists.");
+}
+
 function updateIssueArtifacts(
   repoRoot: string,
   change: string,
@@ -466,7 +492,7 @@ export function acceptIssue(args: ParsedAcceptIssueArgs): JsonRecord {
   ensureIssueTeamReviewReady(args.repoRoot, args.change, args.issueId, progress, args.force);
 
   const workerPatch = buildWorkerPatch(args.repoRoot, workerWorktree);
-  const summary = `Coordinator accepted ${args.issueId} from ${workerDisplay}; merge is deferred until all issues complete.`;
+  const summary = `Coordinator accepted ${args.issueId} from ${workerDisplay}; merge is deferred until all issues complete and change verify passes.`;
   const tasksSync = syncTasksForIssues(args.repoRoot, args.change, [args.issueId], args.dryRun);
   const result: JsonRecord = {
     change: args.change,
@@ -517,6 +543,7 @@ export function mergeChange(args: ParsedMergeChangeArgs): JsonRecord {
   const config = loadIssueModeConfig(args.repoRoot);
   const issues = collectChangeIssues(args.repoRoot, args.change);
   const acceptedIssues = ensureAllIssuesAcceptedForChangeMerge(issues, args.force);
+  ensureChangeVerifyPassedBeforeMerge(args.repoRoot, args.change, issues, args.force);
   const firstIssueId = acceptedIssues[0]?.issueId ?? issues[0]?.issueId ?? "ISSUE-001";
   const [workerWorktree, workerDisplay, workerSource] = issueWorkerWorktreePath(
     args.repoRoot,
@@ -584,6 +611,11 @@ export function mergeChange(args: ParsedMergeChangeArgs): JsonRecord {
   const tasksPath = String(tasksSync.tasks_path ?? "").trim();
   if (tasksSync.changed === true && tasksPath) {
     repoRelativePaths.push(tasksPath);
+  }
+  for (const artifactPath of [reviewArtifactPath(args.repoRoot, args.change), verifyArtifactPath(args.repoRoot, args.change)]) {
+    if (fs.existsSync(artifactPath)) {
+      repoRelativePaths.push(displayPath(args.repoRoot, artifactPath));
+    }
   }
 
   const commitSha = stageAndCommit(args.repoRoot, commitMessage, repoRelativePaths);

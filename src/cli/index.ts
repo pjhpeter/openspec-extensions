@@ -49,7 +49,7 @@ Commands:
   reconcile change        Reconcile change state and continuation policy.
   reconcile commit-planning-docs Commit planning docs for a change.
   reconcile accept-issue  Accept one reviewed issue while deferring change worktree merge.
-  reconcile merge-change  Merge all accepted change worktree issues into the coordinator branch.
+  reconcile merge-change  Merge verified change worktree issues into the coordinator branch.
   reconcile merge-issue   Compatibility helper to accept and merge one reviewed issue into the coordinator branch.
   review change           Run change-level coordinator review.
   verify change           Run change-level coordinator verify.
