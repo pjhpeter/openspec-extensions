@@ -52,6 +52,7 @@ Read `../openspec-chat-router/references/issue-mode-contract.md`, `../openspec-c
 - Prefer the smallest issue count that still keeps boundaries clean and execution stable.
 - For a normal complex change, 2-5 issues is common, but it is not a cap.
 - If the approved design naturally decomposes into 6+ bounded slices, keep them separate instead of forcing a 3-issue or 5-issue plan.
+- Write `tasks.md`, `issues/INDEX.md`, and `ISSUE-*.md` prose in the current system language. If the system language is unavailable, fall back to the repository's dominant working language; do not default to English.
 - One issue should touch one bounded slice of the codebase.
 - Avoid mixing UI, Electron, i18n, and data/model changes unless the change is tiny.
 - If a candidate issue needs a long exception list, split it again.

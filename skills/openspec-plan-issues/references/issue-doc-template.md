@@ -61,6 +61,6 @@ Notes:
 
 - Keep the frontmatter machine-readable.
 - Keep the body concise.
-- Prefer the dominant working language of the repository.
+- Write prose in the current system language. If the system language is unavailable, fall back to the repository's dominant working language; do not default to English.
 - Prefer `.worktree/<change>` for serial multi-issue work on one change.
 - Use `.worktree/<change>/<issue>` only when the repo explicitly opts into issue-level isolated worktree mode.

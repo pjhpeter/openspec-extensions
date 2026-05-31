@@ -51,6 +51,7 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - Treat slash commands as internal equivalents, not as a requirement for the user.
 - Do not stop at explaining which OpenSpec action matches. Execute the mapped workflow unless blocked.
 - Keep the user-facing response natural and brief: first state the action you are taking, then proceed.
+- When creating or refreshing OpenSpec docs such as `proposal.md`, `design.md`, `tasks.md`, `issues/INDEX.md`, or `ISSUE-*.md`, write prose in the current system language. If the system language is unavailable, fall back to the repository's dominant working language; do not default to English.
 - If the user explicitly names a stage or command, that overrides heuristic routing.
 - When the user does not explicitly choose simple vs complex flow, run a lightweight complexity triage first and make the default route explainable in one short sentence.
 - After complexity triage selects the complex flow, immediately restate a route decision before doing more work, for example: `路由决议：复杂流。当前只允许补 proposal/design 并推进 spec_readiness；禁止开始实现。`

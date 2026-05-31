@@ -85,6 +85,19 @@ test("chat-router skill metadata includes the spaced OpenSpec mode trigger", () 
   assert.match(skill, /“进入 openspec 模式”/);
 });
 
+test("OpenSpec docs use the current system language before repository fallback", () => {
+  // 文档语言策略写在 skill 内，避免生成文档时默认回英语。
+  const routerSkill = readRepoFile("skills/openspec-chat-router/SKILL.md");
+  const planIssuesSkill = readRepoFile("skills/openspec-plan-issues/SKILL.md");
+  const issueTemplate = readRepoFile("skills/openspec-plan-issues/references/issue-doc-template.md");
+
+  for (const content of [routerSkill, planIssuesSkill, issueTemplate]) {
+    assert.match(content, /current system language/);
+    assert.match(content, /fall back to the repository's dominant working language/);
+    assert.match(content, /do not default to English/);
+  }
+});
+
 test("mode cheat sheet includes unattended kickoff with explicit model and requirement placeholders", () => {
   const template = readRepoFile("skills/openspec-chat-router/references/router/mode-cheatsheet.md");
 
