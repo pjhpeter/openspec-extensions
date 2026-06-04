@@ -180,7 +180,7 @@ Read these first:
 - Do not replace coordinator-owned merge/commit/verify/archive with worker self-management.
 - Do not skip the change-level `/review` step between "all issues completed" and `verify`.
 - Keep `worker_worktree` as the issue workspace field.
-- Compatibility fallback without repo config is still shared workspace (`.`).
+- Shared workspace (`.`) is a compatibility mode only when the repo explicitly disables worker worktrees or sets `scope=shared`.
 - The installed template now defaults to one change-level worktree (`.worktree/<change>`) reused across that change's serial issues.
 - Issue-level isolated worktrees (`.worktree/<change>/<issue>`) remain opt-in for truly parallel or conflict-heavy issue execution.
 

@@ -54,7 +54,7 @@ Commands:
   review change           Run change-level coordinator review.
   verify change           Run change-level coordinator verify.
   archive change          Archive a change and clean up change worktree state.
-  worktree create         Create or reuse a worker worktree for an issue.
+  worktree create         Create or reuse a worker worktree for a change or issue.
 
 Options:
   -h, --help              Show help.

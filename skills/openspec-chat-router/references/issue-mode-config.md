@@ -219,7 +219,7 @@ Behavior:
 
 - dispatch materializes `worker_worktree: .`
 - issue execution happens directly in the repo root
-- this is still the compatibility fallback when repo config is missing
+- use this only when you explicitly want to opt out of dedicated worker worktrees
 
 ### Optional Issue-Isolated Worktree Mode
 

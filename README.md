@@ -170,21 +170,22 @@ openspec/changes/*/runs/CHANGE-REVIEW.json
 
 ### 简单任务
 
-如果任务足够小，我建议直接走 OpenSpec 的短链路：创建 change、补齐 proposal/design/tasks、完成实现、先跑 change-level review；review 通过后，必须补齐自动化测试/校验和自动化手工验证，再进入 verify 和 archive。这个仓库不会强迫你把所有事情都拆成多 issue。前端或其他浏览器可见改动不能只停在命令行测试，收尾时优先使用 chrome devtools MCP 覆盖受影响主路径；如果当前 runtime 没有该能力，再退回其他浏览器工具并如实说明。
+如果任务足够小，我建议直接走 OpenSpec 的短链路：创建 change、补齐 proposal/design/tasks、先创建或复用 change 级 worktree，再在该 worktree 内完成实现、先跑 change-level review；review 通过后，必须补齐自动化测试/校验和自动化手工验证，再进入 verify 和 archive。这个仓库不会强迫你把所有事情都拆成多 issue。前端或其他浏览器可见改动不能只停在命令行测试，收尾时优先使用 chrome devtools MCP 覆盖受影响主路径；如果当前 runtime 没有该能力，再退回其他浏览器工具并如实说明。
 
 ```mermaid
 flowchart TD
     A[进入 OpenSpec 模式] --> B[创建 change 并补齐 proposal/design/tasks]
-    B --> C[直接实现当前 change]
-    C --> D[运行 change-level /review]
-    D --> E{review 通过?}
-    E -- 否 --> C
-    E -- 是 --> F[运行自动化测试 / 校验]
-    F --> G[执行自动化手工验证<br/>前端优先 chrome devtools MCP]
-    G --> H[verify 当前 change]
-    H --> I{verify 通过?}
-    I -- 否 --> C
-    I -- 是 --> J[同步 spec 并 archive]
+    B --> C[创建或复用 change worktree]
+    C --> D[在 worktree 内实现当前 change]
+    D --> E[运行 change-level /review]
+    E --> F{review 通过?}
+    F -- 否 --> D
+    F -- 是 --> G[运行自动化测试 / 校验]
+    G --> H[执行自动化手工验证<br/>前端优先 chrome devtools MCP]
+    H --> I[verify 当前 change]
+    I --> J{verify 通过?}
+    J -- 否 --> D
+    J -- 是 --> K[同步 spec 并 archive]
 ```
 
 如果我要让 agent 按简单任务短链路推进，我常用的话术是：
@@ -204,7 +205,7 @@ flowchart TD
 3. 直接实现当前 change
 
 ```text
-开始实现当前 change；如果任务规模仍然简单，并且当前 change 还没有进入 issue-mode，就不要拆 issue。直接完成实现；收尾时先过 change-level /review，review 通过后必须补齐自动化测试/校验和自动化手工验证；如果是前端或其他浏览器可见改动，优先使用 chrome devtools MCP 覆盖受影响主路径。
+开始实现当前 change；如果任务规模仍然简单，并且当前 change 还没有进入 issue-mode，就不要拆 issue。先运行 `openspec-extensions worktree create --repo-root . --change <change>` 创建或复用 change 级 worktree，并在返回的 `worktree` 路径内完成实现；不要直接在主工作区改业务代码。收尾时先过 change-level /review，review 通过后必须补齐自动化测试/校验和自动化手工验证；如果是前端或其他浏览器可见改动，优先使用 chrome devtools MCP 覆盖受影响主路径。
 ```
 
 4. review / verify / archive 收尾

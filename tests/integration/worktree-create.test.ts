@@ -91,6 +91,64 @@ test("createWorkerWorktree defaults to one change-scope worktree when config is 
   });
 });
 
+test("createWorkerWorktree supports simple-flow change workspace without issue id", () => {
+  withTempDir((repoRoot) => {
+    const payload = createWorkerWorktree({
+      baseRef: "",
+      branchName: "",
+      change: "demo-change",
+      dryRun: true,
+      issueId: "",
+      mode: "",
+      repoRoot
+    }) as {
+      control_gate: { status: string };
+      dry_run: boolean;
+      issue_id: string;
+      shared_workspace: boolean;
+      workspace_scope: string;
+      worktree_relative: string;
+    };
+
+    assert.equal(payload.issue_id, "");
+    assert.equal(payload.control_gate.status, "not_applicable");
+    assert.equal(payload.shared_workspace, false);
+    assert.equal(payload.workspace_scope, "change");
+    assert.equal(payload.worktree_relative, ".worktree/demo-change");
+    assert.equal(payload.dry_run, true);
+  });
+});
+
+test("createWorkerWorktree maps simple-flow issue-scope config to change workspace", () => {
+  withTempDir((repoRoot) => {
+    const configPath = path.join(repoRoot, "openspec", "issue-mode.json");
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(configPath, JSON.stringify({
+      worker_worktree: {
+        enabled: true,
+        scope: "issue",
+        mode: "branch",
+        base_ref: "HEAD",
+        branch_prefix: "opsx"
+      }
+    }, null, 2));
+
+    const payload = createWorkerWorktree({
+      baseRef: "",
+      branchName: "",
+      change: "demo-change",
+      dryRun: true,
+      issueId: "",
+      mode: "",
+      repoRoot
+    }) as { branch_name: string; workspace_scope: string; worktree_relative: string };
+
+    assert.equal(payload.workspace_scope, "change");
+    assert.equal(payload.worktree_relative, ".worktree/demo-change");
+    assert.equal(payload.branch_name, "opsx/demo-change");
+  });
+});
+
 test("createWorkerWorktree reuses one change-scope worktree across issues", () => {
   withTempDir((repoRoot) => {
     const configPath = path.join(repoRoot, "openspec", "issue-mode.json");

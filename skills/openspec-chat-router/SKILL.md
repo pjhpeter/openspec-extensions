@@ -114,6 +114,7 @@ Guardrails:
 - When the triage lands on the complex path and delegation is available, `issue-mode -> subagent-team` is the default coordinator route. Do not keep going as a simple local `apply` path just because the task still looks manageable in one session.
 - In the first user-facing execution update after selecting the complex path, explicitly state the route and the immediate restriction, for example: `路由决议：复杂流。我将按 subagent-team 协调推进；当前只允许补 proposal/design 并推进 spec_readiness，禁止开始实现。`
 - A single-file or tightly bounded change should not be promoted to issue-mode without concrete evidence from the request or artifacts.
+- For simple-flow implementation, create or reuse the change workspace first with `openspec-extensions worktree create --repo-root . --change <change>` and work inside the returned `worktree`; do not edit business code in the coordinator repo root unless shared workspace is explicitly configured.
 - If a simple-flow execution uncovers cross-module scope, repeated review loops, or clear issue boundaries, explicitly upgrade to the complex flow and state why.
 - If the user already authorized "complex -> auto subagent-team", do not ask again before using `subagent-team` in the main coordinator session once the triage lands on the complex path.
 - Before final completion, audit whether the selected route was actually followed. If execution drifted from the chosen route, disclose that deviation explicitly instead of silently summarizing the work as compliant.

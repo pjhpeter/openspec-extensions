@@ -14,7 +14,7 @@ This is the normal flow when the runtime supports delegation and the user wants 
 5. After spec-readiness passes, run `plan-issues` to create or refresh `tasks.md` plus the issue breakdown, then review that task-splitting result. When the planning gate passes, normalize that result into `runs/ISSUE-PLANNING.json`. Before the first issue dispatch, commit `proposal.md`, `design.md`, `tasks.md`, `issues/INDEX.md`, and `ISSUE-*.md` as a coordinator-owned planning-doc commit. If `auto_accept_issue_planning=true`, do not pause for human sign-off once those docs are dispatch-ready; commit them first, then immediately dispatch the first approved issue.
 6. Before the first issue execution, require both a current passed `runs/ISSUE-PLANNING.json` and the coordinator-owned planning-doc commit. Do not let generic implementation wording or `subagent-team` wording skip those prerequisites.
 7. Dispatch only issues that are approved for the active round.
-8. Create or reuse the worker workspace before handoff. The installed template defaults to one change-level `.worktree/<change>` reused across that change's serial issues. Shared workspace remains the compatibility fallback when repo config is missing, and issue-level `.worktree/<change>/<issue>` stays opt-in for truly parallel work.
+8. Create or reuse the worker workspace before handoff. The installed template and missing-config defaults both use one change-level `.worktree/<change>` reused across that change's serial issues. Shared workspace is only a compatibility mode when the repo explicitly disables worker worktrees or sets `scope=shared`, and issue-level `.worktree/<change>/<issue>` stays opt-in for truly parallel work.
 9. When delegation is available, keep the main session coordinator-only during issue execution. Do not let “complex flow”, “issue_execution”, “start implementing”, or similar wording turn the coordinator into the code-writing worker.
 10. By default, render the subagent-team lifecycle packet and use it as the round control packet.
 11. Explicitly set `reasoning_effort` when spawning subagents:
@@ -76,7 +76,7 @@ This is the normal flow when the runtime supports delegation and the user wants 
 - do not let issue-round checker/reviewer read `node_modules`, `dist`, `build`, `.next`, `coverage`, or other generated/vendor trees unless the issue explicitly scopes them in
 - fall back to the single-issue execution path only when the user explicitly narrows execution to one issue-only subagent or the current step is already a bounded single-issue handoff
 - keep a change-level normalized backlog and round verdict for complex changes
-- installed template default is one change-level worktree per change; shared workspace is only the compatibility fallback when repo config is missing
+- installed template and missing-config defaults use one change-level worktree per change; shared workspace requires explicit opt-out via disabled worker worktrees or `scope=shared`
 - after an accepted issue from a reusable change worktree, keep the accumulated code in that worktree before the next issue starts
 - do not let issue execution subagents update `tasks.md`
 - do not let issue execution subagents self-merge or create the final git commit

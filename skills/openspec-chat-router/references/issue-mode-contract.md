@@ -106,7 +106,7 @@ issue scope: <repo-root>/.worktree/<change-name>/<issue-id>/
 ```
 
 The installed template defaults to change scope, so serial issues in one change normally reuse `.worktree/<change-name>/`.
-If repo config is missing, compatibility fallback remains shared workspace mode and `worker_worktree` materializes as `.`.
+If repo config is missing, helpers still default to change scope. Shared workspace mode and `worker_worktree: .` require an explicit opt-out such as `worker_worktree.enabled=false` or `worker_worktree.scope=shared`.
 
 ## Coordinator Reconcile Rules
 

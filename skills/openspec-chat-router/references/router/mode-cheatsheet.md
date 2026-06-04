@@ -63,10 +63,10 @@
 帮我为这个需求创建 change，并把 proposal、design、tasks 一次性补齐到可实现。
 ```
 
-3. 直接实现
+3. 创建 worktree 并实现
 
 ```text
-开始实现当前 change；如果任务规模仍然简单，并且当前 change 还没有进入 issue-mode，就不要拆 issue。直接完成实现；收尾时先过 change-level /review，review 通过后必须补齐自动化测试/校验和自动化手工验证。
+开始实现当前 change；如果任务规模仍然简单，并且当前 change 还没有进入 issue-mode，就不要拆 issue。先运行 `openspec-extensions worktree create --repo-root . --change <change>` 创建或复用 change 级 worktree，并在返回的 `worktree` 路径内完成实现；不要直接在主工作区改业务代码。收尾时先过 change-level /review，review 通过后必须补齐自动化测试/校验和自动化手工验证。
 ```
 
 4. review / verify / archive 收尾

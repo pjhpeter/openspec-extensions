@@ -3,6 +3,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 
 import {
+  changeWorkerWorktreePath,
   collectIssueDispatchStateSnapshots,
   ensureIssueDispatchAllowed,
   inferWorkerWorktreeScope,
@@ -15,7 +16,7 @@ import {
 import { runGitCommand } from "../git/command";
 
 const WORKTREE_HELP_TEXT = `Usage:
-  openspec-extensions worktree create --repo-root <path> --change <change> --issue-id <issue> [--mode <detach|branch>] [--base-ref <ref>] [--branch-name <name>] [--dry-run]
+  openspec-extensions worktree create --repo-root <path> --change <change> [--issue-id <issue>] [--mode <detach|branch>] [--base-ref <ref>] [--branch-name <name>] [--dry-run]
 `;
 
 type ParsedCreateArgs = {
@@ -48,8 +49,8 @@ function parseCreateArgs(argv: string[]): ParsedCreateArgs | null {
     process.stdout.write(WORKTREE_HELP_TEXT);
     return null;
   }
-  if (!values["repo-root"] || !values.change || !values["issue-id"]) {
-    throw new Error("Missing required options: --repo-root, --change, --issue-id");
+  if (!values["repo-root"] || !values.change) {
+    throw new Error("Missing required options: --repo-root, --change");
   }
 
   const mode = String(values.mode ?? "").trim();
@@ -62,7 +63,7 @@ function parseCreateArgs(argv: string[]): ParsedCreateArgs | null {
     branchName: values["branch-name"],
     change: values.change,
     dryRun: values["dry-run"],
-    issueId: values["issue-id"],
+    issueId: String(values["issue-id"] ?? "").trim(),
     mode: mode as ParsedCreateArgs["mode"],
     repoRoot: path.resolve(values["repo-root"]),
   };
@@ -83,19 +84,27 @@ function worktreeExists(targetPath: string): boolean {
 
 export function createWorkerWorktree(args: ParsedCreateArgs): Record<string, unknown> {
   const config = loadIssueModeConfig(args.repoRoot);
-  const controlState = readChangeControlState(args.repoRoot, args.change);
-  const dispatchGate = ensureIssueDispatchAllowed(
-    config,
-    controlState,
-    args.issueId,
-    collectIssueDispatchStateSnapshots(args.repoRoot, args.change)
-  );
-  const [worktreePath, worktreeRelative, worktreeSource] = issueWorkerWorktreePath(
-    args.repoRoot,
-    args.change,
-    args.issueId,
-    config
-  );
+  const dispatchGate = args.issueId
+    ? ensureIssueDispatchAllowed(
+      config,
+      readChangeControlState(args.repoRoot, args.change),
+      args.issueId,
+      collectIssueDispatchStateSnapshots(args.repoRoot, args.change)
+    )
+    : {
+      action: "simple_change_workspace",
+      active: false,
+      allowed: true,
+      blocking: false,
+      enforced: config.rra.gate_mode === "enforce",
+      issue_id: "",
+      mode: config.rra.gate_mode,
+      reason: "Simple flow change workspace does not require an issue dispatch gate.",
+      status: "not_applicable",
+    };
+  const [worktreePath, worktreeRelative, worktreeSource] = args.issueId
+    ? issueWorkerWorktreePath(args.repoRoot, args.change, args.issueId, config)
+    : changeWorkerWorktreePath(args.repoRoot, args.change, config);
   const workspaceScope = inferWorkerWorktreeScope(args.repoRoot, worktreePath, config, args.change, args.issueId);
 
   let mode: "branch" | "detach" | "shared" = args.mode || config.worker_worktree.mode;

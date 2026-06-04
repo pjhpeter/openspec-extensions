@@ -71,6 +71,8 @@ test("chat-router agent prompt does not reroute spawned seat sessions", () => {
   assert.match(prompt, /EMFILE/);
   assert.match(prompt, /Too many open files/);
   assert.match(prompt, /never self-certify or skip a missing checker\/reviewer verdict/);
+  assert.match(prompt, /For simple-flow implementation, run `openspec-extensions worktree create --repo-root \. --change <change>` first/);
+  assert.match(prompt, /work inside the returned `worktree`/);
   assert.match(prompt, /create or reuse that workspace before rendering issue\/team dispatch or starting implementation/);
   assert.match(prompt, /Only treat control-plane artifacts under `openspec\/changes\/<change>\/\.\.\.` as workflow state/);
   assert.match(prompt, /task_plan\.md/);
@@ -121,6 +123,8 @@ test("chat-router skill defines explainable complexity triage before choosing si
   assert.match(skill, /A `2-3` borderline result is not implementation authorization/);
   assert.match(skill, /keep that route sticky across later "start implementing" or "continue coding" messages/);
   assert.match(skill, /Do not keep going as a simple local `apply` path just because the task still looks manageable in one session/);
+  assert.match(skill, /For simple-flow implementation, create or reuse the change workspace first/);
+  assert.match(skill, /do not edit business code in the coordinator repo root unless shared workspace is explicitly configured/);
   assert.match(skill, /immediately restate a route decision/);
   assert.match(skill, /control\/ROUTE-DECISION\.json/);
   assert.match(skill, /complex flow is a routing decision, not implementation authorization/);
@@ -138,6 +142,8 @@ test("issue-mode contract includes persisted route decision artifact", () => {
 
   assert.match(contract, /ROUTE-DECISION\.json/);
   assert.match(contract, /Complexity triage for a concrete change should be written to `control\/ROUTE-DECISION\.json`/);
+  assert.match(contract, /If repo config is missing, helpers still default to change scope/);
+  assert.match(contract, /worker_worktree\.enabled=false/);
   assert.match(contract, /Only issue-mode artifacts under `openspec\/changes\/<change>\/\.\.\.` count as workflow state/);
   assert.match(contract, /task_plan\.md/);
   assert.match(contract, /After an external disconnect or fresh reconnect/);
@@ -162,6 +168,8 @@ test("coordinator playbook forbids implementation before complex-flow gates pass
   const playbook = readRepoFile("skills/openspec-chat-router/references/router/coordinator-playbook.md");
 
   assert.match(playbook, /immediately restate a route decision/);
+  assert.match(playbook, /missing-config defaults both use one change-level `\.worktree\/<change>`/);
+  assert.match(playbook, /shared workspace requires explicit opt-out/);
   assert.match(playbook, /Before `runs\/SPEC-READINESS\.json` is current and passed, do not start implementation/);
   assert.match(playbook, /do not run scaffolding or bootstrap commands/);
   assert.match(playbook, /Before the first issue execution, require both a current passed `runs\/ISSUE-PLANNING\.json` and the coordinator-owned planning-doc commit/);
@@ -186,6 +194,8 @@ test("router examples and cheat sheet keep issue-mode state above generic apply 
   assert.match(template, /这些磁盘工件比“开始做 \/ 开始实现 \/ 直接落地”这类聊天话术优先级更高/);
   assert.match(template, /路由决议：复杂流。我将按 subagent-team 协调推进/);
   assert.match(template, /不要因为“开始实现”这类泛化话术退回 apply/);
+  assert.match(template, /worktree create --repo-root \. --change <change>/);
+  assert.match(template, /不要直接在主工作区改业务代码/);
 });
 
 test("mode cheat sheet includes auto-subagent authorization wording for complex flow", () => {
@@ -223,10 +233,13 @@ test("closeout guardrails require post-review automation and prefer chrome devto
   assert.match(readme, /优先使用 chrome devtools MCP/);
   assert.match(readme, /你自己判断需求复杂度；如果属于复杂流程，自动启用 subagent-team 推进，不用再单独问我/);
   assert.match(readme, /继续 <change> change，根据原来判断的复杂度继续/);
+  assert.match(readme, /worktree create --repo-root \. --change <change>/);
+  assert.match(readme, /不要直接在主工作区改业务代码/);
   assert.match(readme, /验收通过后再统一 merge\/commit/);
   assert.match(routerSkill, /review current code -> automated test\/validation \+ automated manual verification -> `verify` -> `archive`/);
   assert.match(routerSkill, /After that review passes, run the required automated test\/validation plus automated manual verification/);
   assert.match(teamSkill, /change-level `\/review` has passed/);
+  assert.match(teamSkill, /Shared workspace \(`\.`\) is a compatibility mode only when the repo explicitly disables worker worktrees or sets `scope=shared`/);
   assert.match(teamSkill, /open-files limit is below `16384`/);
   assert.match(teamSkill, /EMFILE/);
   assert.match(teamSkill, /rerun the current gate from the active dispatch/);
@@ -235,6 +248,8 @@ test("closeout guardrails require post-review automation and prefer chrome devto
   assert.match(contract, /tool-resource blocker/);
   assert.match(contract, /chrome devtools MCP/);
   assert.match(issueModeConfig, /full_auto/);
+  assert.match(issueModeConfig, /repos without `openspec\/issue-mode\.json` now default to one change-scoped worktree/);
+  assert.match(issueModeConfig, /use this only when you explicitly want to opt out of dedicated worker worktrees/);
   assert.match(issueModeConfig, /automated-test closeout/);
   assert.match(issueModeConfig, /stop before verify \/ archive/);
 });

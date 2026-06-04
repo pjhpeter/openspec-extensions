@@ -599,6 +599,15 @@ function defaultWorkerWorktreeSetting(config: IssueModeConfig, change: string, i
   return path.posix.join(config.worktree_root.replace(/\\/g, "/"), change, issueId);
 }
 
+function defaultChangeWorktreeSetting(config: IssueModeConfig, change: string): string {
+  const scope = String(config.worker_worktree.scope ?? "shared").trim() || "shared";
+  if (!config.worker_worktree.enabled || scope === "shared") {
+    return ".";
+  }
+  // 简单流程没有 issue id，issue-scope 配置也只能退到 change workspace。
+  return path.posix.join(config.worktree_root.replace(/\\/g, "/"), change);
+}
+
 function validateIssueWorkerWorktree(repoRoot: string, rawPath: string, config: IssueModeConfig): string {
   const candidate = rawPath.trim();
   if (!candidate) {
@@ -644,6 +653,16 @@ export function issueWorkerWorktreePath(
   const [rawPath, source] = issueWorkerWorktreeSetting(repoRoot, change, issueId, config);
   const resolvedPath = resolveRepoPath(repoRoot, rawPath);
   return [resolvedPath, displayPath(repoRoot, resolvedPath), source];
+}
+
+export function changeWorkerWorktreePath(
+  repoRoot: string,
+  change: string,
+  config: IssueModeConfig
+): [string, string, IssueWorktreeSource] {
+  const rawPath = defaultChangeWorktreeSetting(config, change);
+  const resolvedPath = resolveRepoPath(repoRoot, rawPath);
+  return [resolvedPath, displayPath(repoRoot, resolvedPath), "config_default"];
 }
 
 export function isSharedWorkerWorkspace(repoRoot: string, targetPath: string): boolean {

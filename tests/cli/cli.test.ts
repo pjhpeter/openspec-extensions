@@ -526,3 +526,31 @@ test("cli worktree create defaults to change worktree when config is missing", a
   assert.equal(payload.workspace_scope, "change");
   assert.equal(payload.worktree_relative, ".worktree/demo-change");
 });
+
+test("cli worktree create supports simple-flow change workspace without issue id", async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opsx-cli-worktree-simple-"));
+
+  const result = await captureStdout(() =>
+    main([
+      "worktree",
+      "create",
+      "--repo-root",
+      repoRoot,
+      "--change",
+      "demo-change",
+      "--dry-run"
+    ])
+  );
+
+  const payload = JSON.parse(result.stdout.trim()) as {
+    control_gate: { status: string };
+    issue_id: string;
+    workspace_scope: string;
+    worktree_relative: string;
+  };
+  assert.equal(result.exitCode, 0);
+  assert.equal(payload.issue_id, "");
+  assert.equal(payload.control_gate.status, "not_applicable");
+  assert.equal(payload.workspace_scope, "change");
+  assert.equal(payload.worktree_relative, ".worktree/demo-change");
+});
