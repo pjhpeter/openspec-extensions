@@ -19,7 +19,7 @@
 
 - 这是 `openspec-extensions` 的源码仓库，也是发布到 npm 的包内容。
 - 它提供 TypeScript CLI、`issue-mode` 相关 render/execute/reconcile 逻辑、可安装 skills，以及默认的 `issue-mode` 模板。
-- 它会随包安装 OpenSpec `1.3.x`，并在 `init` 时优先调用这份官方 CLI；我没有在这里重造一套 OpenSpec。
+- 它会随包安装 OpenSpec `1.4.x`，并在 `init` 时优先调用这份官方 CLI；我没有在这里重造一套 OpenSpec。
 - 这里已经不再保留 detached worker、heartbeat、monitor-worker 这一套旧 fallback runtime。当前主链就是 coordinator 加 issue-mode artifacts，加上可选的 subagent team。
 
 ## 快速开始
@@ -30,7 +30,7 @@
 npm install -g openspec-extensions
 ```
 
-这一步会同时把 `@fission-ai/openspec@~1.3.0` 装进 `openspec-extensions` 自己的依赖，并暴露三个全局命令：`openspec`、`openspec-ex`、`openspec-extensions`。所以全新环境不需要再单独手工安装一遍 OpenSpec。
+这一步会同时把 `@fission-ai/openspec@~1.4.1` 装进 `openspec-extensions` 自己的依赖，并暴露三个全局命令：`openspec`、`openspec-ex`、`openspec-extensions`。所以全新环境不需要再单独手工安装一遍 OpenSpec。OpenSpec 1.4.1 要求 Node `>=20.19.0`，低于这个版本的 Node 需要先升级。
 
 在目标项目里初始化：
 
@@ -57,7 +57,7 @@ openspec-ex --version
 openspec-extensions init /path/to/your/project
 ```
 
-这条命令会先检查目标仓库有没有 `openspec/config.yaml`。如果还没有，我会先调用随包安装的官方 `openspec init`；只有 bundled OpenSpec 不可用时，才会回退到 `npx @fission-ai/openspec@~1.3.0`，然后继续安装扩展。
+这条命令会先检查目标仓库有没有 `openspec/config.yaml`。如果还没有，我会先调用随包安装的官方 `openspec init`；只有 bundled OpenSpec 不可用时，才会回退到 `npx @fission-ai/openspec@~1.4.1`，然后继续安装扩展。
 
 如果你没有显式传 `--openspec-tools`，我会把当前终端直接交给官方 `openspec init`，所以你会看到和原生命令一致的工具选择交互；只有当你明确传入 `--openspec-tools <tools>` 时，才会改成无交互透传。
 
