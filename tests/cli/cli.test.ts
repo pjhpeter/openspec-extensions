@@ -234,6 +234,24 @@ done_when:
   assert.equal(result.exitCode, 0);
   assert.equal(payload.next_action, "await_planning_docs_commit_confirmation");
   assert.equal(payload.recommended_issue_id, "ISSUE-001");
+  assert.equal("issues" in payload, false);
+
+  const verboseResult = await captureStdout(() =>
+    main([
+      "reconcile",
+      "change",
+      "--repo-root",
+      repoRoot,
+      "--change",
+      "demo-change",
+      "--verbose"
+    ])
+  );
+  const verbosePayload = JSON.parse(verboseResult.stdout.trim()) as { issues: unknown[]; summary_mode: string };
+
+  assert.equal(verboseResult.exitCode, 0);
+  assert.equal(verbosePayload.summary_mode, "verbose");
+  assert.equal(verbosePayload.issues.length, 1);
 });
 
 test("cli reconcile commit-planning-docs routes to command", async () => {

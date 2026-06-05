@@ -6,8 +6,8 @@ import { runIssueTeamDispatchRenderer } from "../renderers/issue-team-dispatch";
 
 const DISPATCH_HELP_TEXT = `Usage:
   openspec-extensions dispatch issue --repo-root <path> --change <change> --issue-id <issue> [--run-id <id>] [--dry-run]
-  openspec-extensions dispatch issue-team --repo-root <path> --change <change> --issue-id <issue> [--target-mode <mode>] [--round-goal <goal>] [--dry-run]
-  openspec-extensions dispatch lifecycle --repo-root <path> --change <change> [--phase <phase>] [--issue-id <issue>] [--dry-run]
+  openspec-extensions dispatch issue-team --repo-root <path> --change <change> --issue-id <issue> [--target-mode <mode>] [--round-goal <goal>] [--compact] [--dry-run]
+  openspec-extensions dispatch lifecycle --repo-root <path> --change <change> [--phase <phase>] [--issue-id <issue>] [--compact] [--dry-run]
 `;
 
 type IssueDispatchArgs = {

@@ -16,6 +16,7 @@ import {
 } from "../domain/issue-mode";
 import {
   ensureActiveSeatDispatch,
+  normalizeSeatKey,
   planActiveSeatDispatch,
   readSeatStatesForDispatch,
   seatBarrierModeForGateMode,
@@ -38,6 +39,7 @@ type ToolResourceGuard = {
 
 type ParsedArgs = {
   change: string;
+  compact: boolean;
   dryRun: boolean;
   issueId: string;
   repoRoot: string;
@@ -63,9 +65,12 @@ export type IssueTeamDispatchPayload = {
     review_group: string;
   };
   seat_barrier: SeatBarrierSummary;
+  seat_handoff_paths: Record<string, string>;
   seat_handoffs_path: string;
   seat_state_dir: string;
   team_dispatch_path: string;
+  team_topology: IssueTeamTopologyItem[];
+  topology_profile: "compact" | "expanded";
   tool_resource_guard: ToolResourceGuard;
   validation: string[];
   validation_source: "issue_doc" | "config_default";
@@ -92,6 +97,7 @@ function parseCommandArgs(argv: string[]): ParsedArgs {
     args: argv,
     options: {
       change: { type: "string" },
+      compact: { type: "boolean", default: false },
       "dry-run": { type: "boolean", default: false },
       "issue-id": { type: "string" },
       "repo-root": { type: "string" },
@@ -107,6 +113,7 @@ function parseCommandArgs(argv: string[]): ParsedArgs {
 
   return {
     change: values.change,
+    compact: values.compact,
     dryRun: values["dry-run"],
     issueId: values["issue-id"],
     repoRoot: path.resolve(values["repo-root"]),
@@ -289,20 +296,105 @@ function issueSeatHandoffsPath(repoRoot: string, change: string, issueId: string
   return path.join(repoRoot, "openspec", "changes", change, "issues", `${issueId}.seat-handoffs.md`);
 }
 
+function issueSeatHandoffDir(repoRoot: string, change: string, issueId: string): string {
+  return path.join(repoRoot, "openspec", "changes", change, "issues", `${issueId}.seat-handoffs`);
+}
+
 function seatLensTitle(seat: string, role: string): string {
   return `${seat} (${role})`;
 }
 
-function issueTeamSeats(): ActiveSeatDefinition[] {
-  return [
-    // issue_execution 里的 development seat 只负责实现交接，不参与 gate barrier。
+type IssueTeamTopologyItem = {
+  count: number;
+  key: string;
+  label: string;
+  reasoning_effort: string;
+  reasoning_note: string;
+  responsibility: string;
+};
+
+function moduleKey(inputPath: string): string {
+  const parts = pathParts(normalizeScopeItem(inputPath));
+  if (parts.length === 0) {
+    return "";
+  }
+  if (parts[0] === "src" || parts[0] === "tests") {
+    return parts[1] ?? parts[0];
+  }
+  return parts[0] as string;
+}
+
+function issueHasCrossModuleRisk(allowedScope: string[], changedFiles: string[]): boolean {
+  const reviewablePaths = [...allowedScope, ...changedFiles].filter((currentPath) => !pathHitsReviewExcludedDir(currentPath));
+  const keys = new Set(reviewablePaths.map(moduleKey).filter(Boolean));
+  return keys.size > 1;
+}
+
+function issueTeamSeats(profile: "compact" | "expanded"): ActiveSeatDefinition[] {
+  const seats: ActiveSeatDefinition[] = [
+    // issue_execution 的开发 seat 只负责实现交接，不参与硬 gate。
     { seat: "Developer 1", role: "core implementation owner", gate_bearing: false, required: false, reasoning_effort: "high" },
-    { seat: "Developer 2", role: "dependent module or integration owner", gate_bearing: false, required: false, reasoning_effort: "high" },
-    { seat: "Developer 3", role: "tests, fixtures, cleanup owner", gate_bearing: false, required: false, reasoning_effort: "high" },
     { seat: "Checker 1", role: "functional correctness / main path / edge cases", gate_bearing: true, required: true, reasoning_effort: "medium" },
-    { seat: "Checker 2", role: "direct dependency regression risk / tests / evidence gaps", gate_bearing: true, required: true, reasoning_effort: "medium" },
     { seat: "Reviewer 1", role: "scope-first pass / fail owner", gate_bearing: true, required: true, reasoning_effort: "medium" }
   ];
+
+  if (profile === "expanded") {
+    seats.splice(
+      1,
+      0,
+      { seat: "Developer 2", role: "dependent module or integration owner", gate_bearing: false, required: false, reasoning_effort: "high" },
+      { seat: "Developer 3", role: "tests, fixtures, cleanup owner", gate_bearing: false, required: false, reasoning_effort: "high" }
+    );
+    seats.splice(
+      4,
+      0,
+      { seat: "Checker 2", role: "direct dependency regression risk / tests / evidence gaps", gate_bearing: true, required: true, reasoning_effort: "medium" }
+    );
+  }
+
+  return seats;
+}
+
+function topologyItems(seats: ActiveSeatDefinition[], profile: "compact" | "expanded"): IssueTeamTopologyItem[] {
+  const countSeats = (prefix: string): number => seats.filter((seat) => seat.seat.startsWith(prefix)).length;
+  const riskNote = profile === "expanded"
+    ? "跨模块或证据风险已触发扩展拓扑。"
+    : "默认先用最小可用拓扑；出现跨模块风险再升级。";
+
+  return [
+    {
+      key: "development_group",
+      label: "Development group",
+      count: countSeats("Developer"),
+      responsibility: "负责当前 issue 范围内的实现、changed_files 和 progress checkpoint。",
+      reasoning_effort: "high",
+      reasoning_note: riskNote
+    },
+    {
+      key: "check_group",
+      label: "Check group",
+      count: countSeats("Checker"),
+      responsibility: "负责当前 issue 的功能正确性、直接依赖风险和证据缺口。",
+      reasoning_effort: "medium",
+      reasoning_note: riskNote
+    },
+    {
+      key: "review_group",
+      label: "Review group",
+      count: countSeats("Reviewer"),
+      responsibility: "负责基于 scope、validation 和 checker 结论做通过 / 不通过裁决。",
+      reasoning_effort: "medium",
+      reasoning_note: "reviewer 默认保留一个硬门禁 seat。"
+    }
+  ];
+}
+
+function seatsByPrefix(seats: ActiveSeatDefinition[], prefix: string): ActiveSeatDefinition[] {
+  return seats.filter((seat) => seat.seat.startsWith(prefix));
+}
+
+function seatListLines(seats: ActiveSeatDefinition[]): string {
+  return seats.map((seat) => `  - ${seat.seat}: ${seat.role}`).join("\n");
 }
 
 function renderToolResourceGuardrails(): string {
@@ -317,7 +409,20 @@ function renderToolResourceGuardrails(): string {
 `;
 }
 
-function renderSeatHandoffArtifact(input: {
+type SeatHandoffConfig = {
+  extraRules: string[];
+  ownedScope: string[];
+  requiredReturn: string[];
+  role: string;
+  seat: string;
+};
+
+type SeatHandoffArtifacts = {
+  indexText: string;
+  seatFiles: Array<{ path: string; seat: string; text: string }>;
+};
+
+function renderSeatHandoffArtifacts(input: {
   activeSeatDispatchPath: string;
   allowedScope: string[];
   change: string;
@@ -327,10 +432,11 @@ function renderSeatHandoffArtifact(input: {
   progressPath: string;
   repoRoot: string;
   seatStateDir: string;
+  seats: ActiveSeatDefinition[];
   title: string;
   validation: string[];
   workerWorktree: string;
-}): string {
+}): SeatHandoffArtifacts {
   const commonContract = [
     `你正在处理 change \`${input.change}\` 的 \`${input.issueId}\`。`,
     `你的 issue workspace 是 \`${input.workerWorktree}\`。`,
@@ -366,149 +472,164 @@ function renderSeatHandoffArtifact(input: {
     "把“runtime 不支持 delegation 时主会话串行推进”的 fallback 套到自己头上",
   ];
 
-  const renderSeat = (seat: string, role: string, ownedScope: string[], requiredReturn: string[], extraRules: string[]) => `## ${seatLensTitle(seat, role)}
+  const allSeatConfigs: Record<string, SeatHandoffConfig> = {
+    "Developer 1": {
+      seat: "Developer 1",
+      role: "core implementation owner",
+      ownedScope: input.allowedScope,
+      requiredReturn: [
+        "修改文件列表",
+        "本 seat 完成的实现摘要",
+        "需要 coordinator 继续等待 checker / reviewer 的说明",
+        "必要的 `update-progress start` 或 `checkpoint` 变更"
+      ],
+      extraRules: [
+        "优先处理核心实现路径，不要擅自扩大需求。",
+        "只允许写 `openspec-extensions execute update-progress start` 或 `checkpoint`，不要写 `stop`。",
+        "不要宣称 validation / check / review 已通过。",
+        "不要把 issue 标成 `completed + review_required`。"
+      ]
+    },
+    "Developer 2": {
+      seat: "Developer 2",
+      role: "dependent module or integration owner",
+      ownedScope: input.allowedScope,
+      requiredReturn: [
+        "修改文件列表",
+        "依赖模块 / 集成层变更摘要",
+        "需要 checker 重点复核的直接依赖风险",
+        "必要的 `update-progress checkpoint` 变更"
+      ],
+      extraRules: [
+        "只处理依赖模块、集成接缝和当前 issue 直接相关的兼容性问题。",
+        "不要决定是否需要额外 checker / reviewer；如发现风险，只把风险写回 handoff。",
+        "不要读取或修改 out-of-scope 模块，除非 coordinator 重新派单。"
+      ]
+    },
+    "Developer 3": {
+      seat: "Developer 3",
+      role: "tests, fixtures, cleanup owner",
+      ownedScope: input.allowedScope,
+      requiredReturn: [
+        "修改文件列表",
+        "测试 / fixture / cleanup 变更摘要",
+        "仍需 checker 或 reviewer 确认的证据缺口",
+        "必要的 `update-progress checkpoint` 变更"
+      ],
+      extraRules: [
+        "只补当前 issue 直接需要的测试、fixture 和 cleanup。",
+        "不要把 cleanup 扩成顺手重构。",
+        "不要做 coordinator 级别的验收判断。"
+      ]
+    },
+    "Checker 1": {
+      seat: "Checker 1",
+      role: "functional correctness / main path / edge cases",
+      ownedScope: input.allowedScope,
+      requiredReturn: [
+        "defect / gap 或 `none`",
+        "为什么它阻塞当前 issue",
+        "证据",
+        "最小修复建议"
+      ],
+      extraRules: [
+        "先看 `changed_files`；没有时看 `allowed_scope` 和 validation。",
+        "只在确认 blocker 或直接依赖风险时才扩大阅读。",
+        "不要做 repo-wide 扫描，不要输出纯风格建议。"
+      ]
+    },
+    "Checker 2": {
+      seat: "Checker 2",
+      role: "direct dependency regression risk / tests / evidence gaps",
+      ownedScope: input.allowedScope,
+      requiredReturn: [
+        "regression risk 或 `none`",
+        "证据",
+        "是否需要补跑 validation 的建议",
+        "最小修复建议"
+      ],
+      extraRules: [
+        "只检查直接依赖面和验证证据缺口。",
+        "默认排除 `node_modules`、`dist`、`build`、`.next`、`coverage`，除非 issue 明确放进 allowed scope。",
+        "不要决定 round 是否通过；只提交 verdict 和证据。"
+      ]
+    },
+    "Reviewer 1": {
+      seat: "Reviewer 1",
+      role: "scope-first pass / fail owner",
+      ownedScope: input.allowedScope,
+      requiredReturn: [
+        "verdict: `pass` / `pass with noted debt` / `fail`",
+        "evidence",
+        "blocking gap 或 `none`"
+      ],
+      extraRules: [
+        "优先看 `changed_files`、`allowed_scope`、validation 和 checker 已归并结果。",
+        "不要把审查扩成全仓 review。",
+        "你不是 accept / merge owner；不要宣布 issue 已可接受或可 merge。"
+      ]
+    }
+  };
+
+  const renderSeat = (config: SeatHandoffConfig) => `# ${seatLensTitle(config.seat, config.role)}
 
 ${commonContract}
 
 你当前拥有的写集 / 检查焦点：
-${codeBulletList(ownedScope)}
+${codeBulletList(config.ownedScope)}
 
 角色铁律：
 ${bulletList(commonIronLaws)}
 
 本 seat 必须返回：
-${bulletList(requiredReturn)}
+${bulletList(config.requiredReturn)}
 
 禁止动作：
 ${bulletList(forbiddenActions)}
 
 补充规则：
-${bulletList(extraRules)}
+${bulletList(config.extraRules)}
 `;
 
-  return `# Seat Handoffs for ${input.issueId}
+  const handoffDir = issueSeatHandoffDir(input.repoRoot, input.change, input.issueId);
+  const selectedConfigs = input.seats
+    .map((seat) => allSeatConfigs[seat.seat])
+    .filter((config): config is SeatHandoffConfig => Boolean(config));
+  const seatFiles = selectedConfigs.map((config) => ({
+    seat: config.seat,
+    path: path.join(handoffDir, `${normalizeSeatKey(config.seat)}.md`),
+    text: renderSeat(config)
+  }));
 
-这份 artifact 是 seat-local source of truth。
-把其中某一个 seat section 单独转发给对应 subagent；不要把整个 coordinator packet 或整个文件一次性发给所有 seat。
+  // 保留索引文件兼容旧路径，真正下发只用单 seat 文件。
+  const indexText = `# Seat Handoffs for ${input.issueId}
+
+这份 artifact 是 seat-local handoff 索引。
+把单个 seat 文件转发给对应 subagent；不要把整份索引或 coordinator packet 发给 seat。
 
 Issue:
 - \`${input.issueId}\` - ${input.title}
 
 ## How To Use
 
-- 只复制当前 seat 对应的小节给对应 subagent。
+- 只转发当前 seat 对应的小文件。
 - 启动编码型 development seat 时显式使用 \`reasoning_effort=high\`。
 - 启动 checker / reviewer seat 时显式使用 \`reasoning_effort=medium\`。
 - seat subagent 不得继续后续 lifecycle phase；只返回本 seat 的局部结果、证据、blocker 和 artifact 更新。
 
-${renderSeat(
-  "Development 1",
-  "core implementation owner",
-  input.allowedScope,
-  [
-    "修改文件列表",
-    "本 seat 完成的实现摘要",
-    "需要 coordinator 继续等待 checker / reviewer 的说明",
-    "必要的 `update-progress start` 或 `checkpoint` 变更"
-  ],
-  [
-    "优先处理核心实现路径，不要擅自扩大需求。",
-    "只允许写 `openspec-extensions execute update-progress start` 或 `checkpoint`，不要写 `stop`。",
-    "不要宣称 validation / check / review 已通过。",
-    "不要把 issue 标成 `completed + review_required`。"
-  ]
-)}
+## Seat Files
 
-${renderSeat(
-  "Development 2",
-  "dependent module or integration owner",
-  input.allowedScope,
-  [
-    "修改文件列表",
-    "依赖模块 / 集成层变更摘要",
-    "需要 checker 重点复核的直接依赖风险",
-    "必要的 `update-progress checkpoint` 变更"
-  ],
-  [
-    "只处理依赖模块、集成接缝和当前 issue 直接相关的兼容性问题。",
-    "不要决定是否需要额外 checker / reviewer；如发现风险，只把风险写回 handoff。",
-    "不要读取或修改 out-of-scope 模块，除非 coordinator 重新派单。"
-  ]
-)}
-
-${renderSeat(
-  "Development 3",
-  "tests, fixtures, cleanup owner",
-  input.allowedScope,
-  [
-    "修改文件列表",
-    "测试 / fixture / cleanup 变更摘要",
-    "仍需 checker 或 reviewer 确认的证据缺口",
-    "必要的 `update-progress checkpoint` 变更"
-  ],
-  [
-    "只补当前 issue 直接需要的测试、fixture 和 cleanup。",
-    "不要把 cleanup 扩成顺手重构。",
-    "不要做 coordinator 级别的验收判断。"
-  ]
-)}
-
-${renderSeat(
-  "Checker 1",
-  "functional correctness / main path / edge cases",
-  input.allowedScope,
-  [
-    "defect / gap 或 `none`",
-    "为什么它阻塞当前 issue",
-    "证据",
-    "最小修复建议"
-  ],
-  [
-    "先看 `changed_files`；没有时看 `allowed_scope` 和 validation。",
-    "只在确认 blocker 或直接依赖风险时才扩大阅读。",
-    "不要做 repo-wide 扫描，不要输出纯风格建议。"
-  ]
-)}
-
-${renderSeat(
-  "Checker 2",
-  "direct dependency regression risk / tests / evidence gaps",
-  input.allowedScope,
-  [
-    "regression risk 或 `none`",
-    "证据",
-    "是否需要补跑 validation 的建议",
-    "最小修复建议"
-  ],
-  [
-    "只检查直接依赖面和验证证据缺口。",
-    "默认排除 `node_modules`、`dist`、`build`、`.next`、`coverage`，除非 issue 明确放进 allowed scope。",
-    "不要决定 round 是否通过；只提交 verdict 和证据。"
-  ]
-)}
-
-${renderSeat(
-  "Reviewer 1",
-  "scope-first pass / fail owner",
-  input.allowedScope,
-  [
-    "verdict: `pass` / `pass with noted debt` / `fail`",
-    "evidence",
-    "blocking gap 或 `none`"
-  ],
-  [
-    "优先看 `changed_files`、`allowed_scope`、validation 和 checker 已归并结果。",
-    "不要把审查扩成全仓 review。",
-    "你不是 accept / merge owner；不要宣布 issue 已可接受或可 merge。"
-  ]
-)}
+${seatFiles.map((file) => `- ${file.seat}: \`${displayPath(input.repoRoot, file.path)}\``).join("\n")}
 `;
+
+  return { indexText, seatFiles };
 }
 
 function renderDispatch(input: {
   activeSeatDispatchPath: string;
   allowedScope: string[];
   change: string;
+  compact: boolean;
   controlState: JsonRecord;
   dispatchGate: IssueDispatchGate;
   dispatchId: string;
@@ -519,11 +640,15 @@ function renderDispatch(input: {
   progressSnapshot: JsonRecord;
   repoRoot: string;
   roundGoalOverride: string;
+  seats: ActiveSeatDefinition[];
   targetModeOverride: string;
   title: string;
+  topology: IssueTeamTopologyItem[];
+  topologyProfile: "compact" | "expanded";
   validation: string[];
   workerWorktree: string;
   seatHandoffsPath: string;
+  seatHandoffPaths: Record<string, string>;
   seatStateDir: string;
 }): string {
   const latestRound =
@@ -592,6 +717,55 @@ function renderDispatch(input: {
     excludedReviewPaths.length > 0
       ? `- Excluded incidental paths from review focus:\n${codeBulletList(excludedReviewPaths)}\n`
       : "";
+  const developmentSeats = seatsByPrefix(input.seats, "Developer");
+  const checkerSeats = seatsByPrefix(input.seats, "Checker");
+  const reviewerSeats = seatsByPrefix(input.seats, "Reviewer");
+
+  if (input.compact) {
+    return `# Issue Team Dispatch Compact: ${input.issueId}
+
+## Current Issue
+
+- change: \`${input.change}\`
+- issue: \`${input.issueId}\` - ${input.title}
+- worker_worktree: \`${input.workerWorktree}\`
+- progress: \`${displayPath(input.repoRoot, input.progressPath)}\`
+- review_gate: \`${displayPath(input.repoRoot, issueReviewArtifactPath(input.repoRoot, input.change, input.issueId))}\`
+- active_dispatch: \`${input.activeSeatDispatchPath}\`
+- dispatch_id: \`${input.dispatchId}\`
+- seat_state_dir: \`${input.seatStateDir}\`
+- seat_handoff_index: \`${input.seatHandoffsPath}\`
+
+## Seat Files
+
+${Object.entries(input.seatHandoffPaths).map(([seat, handoffPath]) => `- ${seat}: \`${handoffPath}\``).join("\n")}
+
+## Topology
+
+- profile: \`${input.topologyProfile}\`
+- development: ${developmentSeats.length} seat(s), reasoning_effort=high
+- check: ${checkerSeats.length} seat(s), reasoning_effort=medium
+- review: ${reviewerSeats.length} seat(s), reasoning_effort=medium
+- escalation: 默认最小拓扑；allowed_scope / changed_files 跨模块时升级为 expanded。
+
+## Scope
+
+- allowed_scope:
+${codeBulletList(input.allowedScope)}
+- out_of_scope:
+${codeBulletList(input.outOfScope)}
+- changed_files:
+${codeBulletList(currentChangedFiles)}
+- validation:
+${bulletList(input.validation)}
+
+## Required Coordinator Actions
+
+1. 只把对应 seat 文件发给对应 subagent，不要发送完整 coordinator packet。
+2. checker / reviewer 全部完成后，写 \`runs/ISSUE-REVIEW-${input.issueId}.json\`。
+3. issue-local validation 通过后，coordinator 只 accept 当前 issue；默认 change worktree 等全部 issue accepted 且 worktree review / verify 通过后再 \`merge-change\`。
+`;
+  }
 
   return `\u7ee7\u7eed OpenSpec change \`${input.change}\`\uff0c\u4ee5 subagent team \u4e3b\u94fe\u63a8\u8fdb\u5355\u4e2a issue\u3002
 
@@ -603,10 +777,10 @@ Do not activate this serial fallback just because the main session can code loca
 
 ## Seat Handoff Source
 
-- Spawned seat subagent \u5fc5\u987b\u4f7f\u7528\u5355\u72ec\u7684 seat handoff artifact\uff0c\u4e0d\u8981\u76f4\u63a5\u5403\u8fd9\u4efd coordinator packet\uff1a
-  - \`${input.seatHandoffsPath}\`
-- \u7ed9 seat \u65f6\uff0c\u53ea\u8f6c\u53d1\u5bf9\u5e94 seat \u7684\u5c0f\u8282\uff0c\u4e0d\u8981\u628a\u6574\u4efd seat handoff \u6253\u5305\u53d1\u7ed9\u591a\u4e2a seat\u3002
-- \u5982\u679c seat \u62ff\u5230\u4e86 lifecycle / team dispatch \u4e2d\u7684 coordinator \u8bed\u53e5\uff0c\u4ee5 seat handoff artifact \u4e3a\u51c6\uff0c\u5ffd\u7565\u8fd9\u4e9b inherited coordinator context\u3002
+- Spawned seat subagent \u5fc5\u987b\u4f7f\u7528\u5355\u72ec\u7684 seat handoff \u5c0f\u6587\u4ef6\uff0c\u4e0d\u8981\u76f4\u63a5\u5403\u8fd9\u4efd coordinator packet\uff1a
+${Object.entries(input.seatHandoffPaths).map(([seat, handoffPath]) => `  - ${seat}: \`${handoffPath}\``).join("\n")}
+- \`${input.seatHandoffsPath}\` \u53ea\u662f\u7d22\u5f15\uff1b\u7ed9 seat \u65f6\u53ea\u8f6c\u53d1\u5bf9\u5e94 seat \u5c0f\u6587\u4ef6\uff0c\u4e0d\u8981\u628a\u6574\u4efd\u7d22\u5f15\u6253\u5305\u53d1\u7ed9\u591a\u4e2a seat\u3002
+- \u5982\u679c seat \u62ff\u5230\u4e86 lifecycle / team dispatch \u4e2d\u7684 coordinator \u8bed\u53e5\uff0c\u4ee5 seat handoff \u5c0f\u6587\u4ef6\u4e3a\u51c6\uff0c\u5ffd\u7565\u8fd9\u4e9b inherited coordinator context\u3002
 
 ## Round Contract
 
@@ -654,21 +828,19 @@ ${bulletList(input.validation)}
 
 ## Team Topology
 
-- Development group: 3 subagents
-  - Developer 1: core implementation owner
-  - Developer 2: dependent module or integration owner
-  - Developer 3: tests, fixtures, cleanup owner
+- Topology profile: \`${input.topologyProfile}\`
+- Development group: ${developmentSeats.length} subagent(s)
+${seatListLines(developmentSeats)}
   - Launch with \`reasoning_effort=high\`
-  - Why: \u5f53\u524d issue round \u9884\u671f\u4f1a\u4fee\u6539 repo \u4ee3\u7801\u3001\u6d4b\u8bd5\u6216\u96c6\u6210\u5b9e\u73b0\u3002
-- Check group: 2 subagents
-  - Checker 1: changed files / allowed scope functional correctness, main path, edge cases
-  - Checker 2: direct dependency regression risk, tests, evidence gaps
+  - Why: ${input.topology[0]?.reasoning_note ?? "当前 issue round 需要实现型 seat。"}
+- Check group: ${checkerSeats.length} subagent(s)
+${seatListLines(checkerSeats)}
   - Launch with \`reasoning_effort=medium\`
-  - Why: checker \u9ed8\u8ba4\u8d70 scope-first \u5feb\u8def\u5f84\uff0c\u53ea\u68c0\u67e5\u5f53\u524d issue \u53d8\u66f4\u9762\u53ca\u5176\u76f4\u63a5\u4f9d\u8d56\u98ce\u9669\u3002
-- Review group: 1 subagent
-  - Reviewer 1: scope-first target path / direct dependency / evidence pass or fail
+  - Why: ${input.topology[1]?.reasoning_note ?? "checker 默认只查当前 issue 直接风险。"}
+- Review group: ${reviewerSeats.length} subagent(s)
+${seatListLines(reviewerSeats)}
   - Launch with \`reasoning_effort=medium\`
-  - Why: reviewer \u9ed8\u8ba4\u53ea\u4fdd\u7559\u4e00\u4e2a\u786c\u95e8\u7981 seat\uff0c\u5bf9\u5f53\u524d issue \u505a\u5feb\u901f\u88c1\u51b3\uff1b\u66f4\u91cd\u5ba1\u67e5\u53ea\u5728\u5347\u7ea7\u65f6\u542f\u52a8\u3002
+  - Why: ${input.topology[2]?.reasoning_note ?? "reviewer 默认保留一个硬门禁 seat。"}
 
 ## Gate Barrier
 
@@ -842,6 +1014,10 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
   const [validation, validationSource] = issueValidationCommands(frontmatter, config);
   const progressPath = issueProgressPath(args.repoRoot, args.change, args.issueId);
   const progressSnapshot = readProgressSnapshot(progressPath);
+  const changedFiles = normalizeStringList(progressSnapshot.changed_files);
+  const topologyProfile = issueHasCrossModuleRisk(allowedScope, changedFiles) ? "expanded" : "compact";
+  const seats = issueTeamSeats(topologyProfile);
+  const teamTopology = topologyItems(seats, topologyProfile);
   const seatHandoffsDisplayPath = displayPath(args.repoRoot, seatHandoffsPath);
   const seatManifestInput = {
     change: args.change,
@@ -850,7 +1026,7 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
     barrier_mode: seatBarrierModeForGateMode(config.rra.gate_mode),
     packet_path: displayPath(args.repoRoot, teamDispatchPath),
     seat_handoffs_path: seatHandoffsDisplayPath,
-    seats: issueTeamSeats()
+    seats
   };
   const seatManifest = args.dryRun
     ? planActiveSeatDispatch(args.repoRoot, seatManifestInput)
@@ -868,6 +1044,7 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
     activeSeatDispatchPath,
     allowedScope,
     change: args.change,
+    compact: args.compact,
     controlState,
     dispatchGate,
     dispatchId: seatManifest.dispatch_id,
@@ -878,15 +1055,24 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
     progressSnapshot,
     repoRoot: args.repoRoot,
     roundGoalOverride: args.roundGoal,
+    seats,
     targetModeOverride: args.targetMode,
     title,
+    topology: teamTopology,
+    topologyProfile,
     validation,
     workerWorktree: workerWorkspace.worktree_relative,
     seatHandoffsPath: seatHandoffsDisplayPath,
+    seatHandoffPaths: Object.fromEntries(
+      seats.map((seat) => [
+        seat.seat,
+        displayPath(args.repoRoot, path.join(issueSeatHandoffDir(args.repoRoot, args.change, args.issueId), `${normalizeSeatKey(seat.seat)}.md`))
+      ])
+    ),
     seatStateDir: seatStateDirPath,
   });
-  // seat handoff 单独落盘，避免 development / check / review 直接吞 coordinator packet 后角色越界。
-  const seatHandoffsText = renderSeatHandoffArtifact({
+  // seat handoff 单独落盘，避免子 seat 直接吞 coordinator packet 后角色越界。
+  const seatHandoffs = renderSeatHandoffArtifacts({
     activeSeatDispatchPath,
     allowedScope,
     change: args.change,
@@ -896,6 +1082,7 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
     progressPath,
     repoRoot: args.repoRoot,
     seatStateDir: seatStateDirPath,
+    seats,
     title,
     validation,
     workerWorktree: workerWorkspace.worktree_relative,
@@ -904,7 +1091,11 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
   if (!args.dryRun) {
     fs.mkdirSync(changeDir, { recursive: true });
     fs.writeFileSync(teamDispatchPath, dispatchText);
-    fs.writeFileSync(seatHandoffsPath, seatHandoffsText);
+    fs.writeFileSync(seatHandoffsPath, seatHandoffs.indexText);
+    fs.mkdirSync(issueSeatHandoffDir(args.repoRoot, args.change, args.issueId), { recursive: true });
+    for (const file of seatHandoffs.seatFiles) {
+      fs.writeFileSync(file.path, file.text);
+    }
   }
 
   return {
@@ -931,9 +1122,14 @@ export function renderIssueTeamDispatch(args: IssueTeamDispatchArgs): IssueTeamD
       check_group: "medium",
       review_group: "medium"
     },
+    seat_handoff_paths: Object.fromEntries(
+      seatHandoffs.seatFiles.map((file) => [file.seat, displayPath(args.repoRoot, file.path)])
+    ),
     config_path: config.config_path,
     dry_run: args.dryRun,
     seat_barrier: seatBarrier,
+    team_topology: teamTopology,
+    topology_profile: topologyProfile,
     tool_resource_guard: TOOL_RESOURCE_GUARD
   };
 }

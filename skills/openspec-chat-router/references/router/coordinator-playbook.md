@@ -23,7 +23,7 @@ This is the normal flow when the runtime supports delegation and the user wants 
    - design reviewers, planning authors, checkers, reviewers, and closeout-only subagents: `medium`
 11. Default to the lighter fast path before escalating more seats:
    - issue planning: `2 development + 1 check + 1 review`
-   - issue execution: `3 development + 2 check + 1 review`
+   - issue execution: start with `1 development + 1 check + 1 review`; escalate to `3 development + 2 check + 1 review` only for cross-boundary architecture risk, direct dependency disputes, or evidence gaps
    - change acceptance: `1 development + 1 check + 1 review`
    - change verify: `2 development + 1 check + 1 review`
    - only expand check/review seats when the current round surfaces cross-boundary architecture risk or unresolved evidence gaps
@@ -36,7 +36,7 @@ This is the normal flow when the runtime supports delegation and the user wants 
 10. Checker/reviewer should start from `changed_files` in the issue progress artifact when available; otherwise start from `allowed_scope`, issue validation, and the approved round target.
 11. Only expand checker/reviewer reading to direct dependencies or direct call chains when needed to prove a blocker or regression risk; do not default to repo-wide scanning or generated/vendor folders such as `node_modules`, `dist`, `build`, `.next`, or `coverage`.
 12. For bounded implementation slices that are explicitly narrowed to one issue-only execution subagent, spawn exactly one issue-only subagent for one approved issue.
-13. Pass the generated dispatch content or file to the issue execution subagent or team as the source of truth. For design-author / design-review / planning / check / review seats, do not fork the full coordinator thread/context; send only the seat-local handoff plus minimal file references.
+13. Pass the generated dispatch content or file to the issue execution coordinator or team as the source of truth. For design-author / design-review / planning / check / review seats, do not fork the full coordinator thread/context; send the exact `ISSUE-*.seat-handoffs/<seat>.md` file plus minimal file references. Treat `ISSUE-*.seat-handoffs.md` as an index, not the seat prompt.
 14. Only issue-only execution subagents follow `openspec-execute-issue` end to end. Development seats inside an issue-team round stop at code + changed-files/pending-validation handoff + progress checkpoint; they do not close the issue and are not the final validation owner.
 15. After checker/reviewer pass for a team-dispatch issue, normalize that gate into `runs/ISSUE-REVIEW-<issue>.json`, then mark the issue `completed + review_required`.
 16. Reconcile from disk, normalize any findings into the change-level backlog, and decide whether the issue passes the round.

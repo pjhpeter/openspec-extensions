@@ -71,6 +71,7 @@ const TOOL_RESOURCE_GUARD: ToolResourceGuard = {
 
 type ParsedArgs = {
   change: string;
+  compact?: boolean;
   dryRun: boolean;
   issueId: string;
   phase: string;
@@ -107,6 +108,7 @@ export type LifecycleDispatchPayload = {
   issue_count: number;
   issue_team_dispatch: IssueTeamDispatchPayload | Record<string, never>;
   issue_team_dispatch_path: string;
+  issue_team_seat_handoff_paths: Record<string, string>;
   issue_team_seat_handoffs_path: string;
   latest_round_path: string;
   lifecycle_dispatch_path: string;
@@ -132,6 +134,7 @@ function parseCommandArgs(argv: string[]): ParsedArgs {
     args: argv,
     options: {
       change: { type: "string" },
+      compact: { type: "boolean", default: false },
       "dry-run": { type: "boolean", default: false },
       "issue-id": { type: "string", default: "" },
       phase: { type: "string", default: "auto" },
@@ -149,6 +152,7 @@ function parseCommandArgs(argv: string[]): ParsedArgs {
 
   return {
     change: values.change,
+    compact: values.compact,
     dryRun: values["dry-run"],
     issueId: values["issue-id"],
     phase: values.phase,
@@ -924,6 +928,7 @@ function phaseSeatGuardrails(phase: string): string[] {
 function renderPhasePacket(
   repoRoot: string,
   change: string,
+  compact: boolean,
   phase: string,
   phaseReason: string,
   issueId: string,
@@ -934,8 +939,10 @@ function renderPhasePacket(
   controlState: JsonRecord,
   config: IssueModeConfig,
   issues: IssuePayload[],
+  teamTopology: TeamTopologyItem[],
   issueTeamDispatchPath: string,
-  issueTeamSeatHandoffsPath: string
+  issueTeamSeatHandoffsPath: string,
+  issueTeamSeatHandoffPaths: Record<string, string>
 ): string {
   const latestRound = (controlState.latest_round as JsonRecord | undefined) ?? {};
   const backlog = (controlState.backlog as JsonRecord | undefined) ?? {};
@@ -947,7 +954,6 @@ function renderPhasePacket(
   const mustFixNow = ((backlog.must_fix_now as JsonRecord | undefined)?.open_items as string[] | undefined) ?? [];
   const shouldFixIfCheap = ((backlog.should_fix_if_cheap as JsonRecord | undefined)?.open_items as string[] | undefined) ?? [];
   const deferredItems = ((backlog.defer as JsonRecord | undefined)?.open_items as string[] | undefined) ?? [];
-  const teamTopology = phaseTeamTopology(phase);
   const requiredOutput = phaseRequiredOutput(phase);
   const autoAcceptSpecReadiness = config.subagent_team.auto_accept_spec_readiness;
   const autoAcceptIssuePlanning = config.subagent_team.auto_accept_issue_planning;
@@ -990,7 +996,7 @@ function renderPhasePacket(
         : "审查组 verdict 全部收齐并通过后，先由 coordinator 提交 proposal / design / tasks / issue 文档；提交完成后，再等待人工确认是否进入 issue execution")
       : phase === "issue_execution"
         ? (autoAcceptIssueReview
-          ? "当前 round 的 gate-bearing subagent 全部完成、issue 校验通过且审查 verdict 满足条件后，coordinator 自动接受并合并该 issue，然后进入下一个 issue 或 change acceptance"
+          ? "当前 round 的 gate-bearing subagent 全部完成、issue 校验通过且审查 verdict 满足条件后，coordinator 自动接受当前 issue；默认 change 级 worktree 不在每个 issue 后合并，等全部 issue accepted 且 worktree 内 change-level review / verify 通过后再统一 merge-change"
           : "审查组 verdict 全部收齐并通过后暂停，等待人工确认是否继续派发下一个 issue")
         : phase === "change_acceptance"
           ? (autoAcceptChangeAcceptance
@@ -1028,7 +1034,7 @@ function renderPhasePacket(
       : phase === "issue_execution"
         ? [
             "开发组可以按 issue team dispatch 调起实现型 subagent。",
-            "issue round 默认使用 3 个开发 seat + 2 个 checker + 1 个 reviewer 的快路径；编码型开发 subagent 使用 `reasoning_effort=high`，检查组和审查组使用 `reasoning_effort=medium`。",
+            "issue round 默认先使用 1 个开发 seat + 1 个 checker + 1 个 reviewer；只有跨模块风险、直接依赖争议或证据缺口才升级到 3 个开发 seat + 2 个 checker + 1 个 reviewer。编码型开发 subagent 使用 `reasoning_effort=high`，检查组和审查组使用 `reasoning_effort=medium`。",
             "team dispatch 下的 development seat 只负责实现和 progress start/checkpoint；如果当前改动让既有校验失效，只把相关 validation 回写成 `pending`，不要在该 seat 内完成 validation / check / review，也不要自己把 issue 标成 `completed + review_required`。",
             "checker / reviewer 必须先看 `changed_files`（若 progress artifact 已记录），没有时先看 `allowed_scope` 和 issue validation，再按需扩到直接依赖面。",
             "默认不要读取 `node_modules`、`dist`、`build`、`.next`、`coverage` 这类生成/供应商目录；只有当前 issue 明确把这些路径写进 `allowed_scope` 时才允许查看。",
@@ -1068,6 +1074,45 @@ function renderPhasePacket(
   const issueTeamSection = issueTeamDispatchPath
     ? `## Issue Team Dispatch\n\n- Current issue packet:\n  - \`${issueTeamDispatchPath}\`\n${issueTeamSeatHandoffsPath ? `- Seat-local handoff packet for spawned seats:\n  - \`${issueTeamSeatHandoffsPath}\`\n- 当 development / check / review seat 已经缩窄到单个 seat-local 任务时，只传这个 handoff packet 里的对应小节，不要再把 coordinator packet 原样转发给它们。\n` : ""}\n`
     : "";
+
+  if (compact) {
+    return `# Subagent Team Lifecycle Compact
+
+## Current Phase
+
+- change: \`${change}\`
+- phase: \`${phase}\`
+- reason: ${phaseReason}
+- focus_issue: \`${issueId || "none"}\`
+- lifecycle_packet: \`openspec/changes/${change}/control/SUBAGENT-TEAM.dispatch.md\`
+- latest_round: \`${String(controlState.latest_round_path ?? "") || "none"}\`
+- active_dispatch: \`${activeSeatDispatchPath}\`
+- dispatch_id: \`${dispatchId}\`
+- seat_state_dir: \`${seatStateDirPath}\`
+
+## Required Paths
+
+- issue_mode_config: \`openspec/issue-mode.json\`
+- issue_team_packet: \`${issueTeamDispatchPath || "none"}\`
+- seat_handoff_index: \`${issueTeamSeatHandoffsPath || "none"}\`
+${Object.entries(issueTeamSeatHandoffPaths).map(([seat, handoffPath]) => `- ${seat}: \`${handoffPath}\``).join("\n")}
+
+## Topology
+
+${renderTeamTopology(teamTopology)}
+
+## Next Actions
+
+1. Reread \`openspec/issue-mode.json\` before starting this phase.
+2. Spawn only the rendered seats; pass one seat-local handoff file per seat and do not fork full coordinator context.
+3. Wait for required gate-bearing seats, normalize verdicts into the current run artifact, then rerun \`openspec-extensions reconcile change --repo-root . --change "${change}"\`.
+
+## Exit Condition
+
+- pass: ${phaseNextStep}
+- fail: 回到当前 phase 的开发/修订 seat，收窄 scope 后重跑 gate。
+`;
+  }
 
   return `继续 OpenSpec change \`${change}\`，以 subagent team 主链推进整个复杂变更生命周期。
 
@@ -1190,8 +1235,10 @@ export function renderLifecycleDispatch(args: ParsedArgs): LifecycleDispatchPayl
 
   const focusIssue = args.issueId.trim() || detectedIssueId;
   let issueTeamDispatchPath = "";
+  let issueTeamSeatHandoffPaths: Record<string, string> = {};
   let issueTeamSeatHandoffsPath = "";
   let issueTeamDispatch: IssueTeamDispatchPayload | Record<string, never> = {};
+  let teamTopology = phaseTeamTopology(phase);
   let dispatchId = "";
   let activeSeatDispatchPath = "";
   let seatStateDirPath = "";
@@ -1217,17 +1264,19 @@ export function renderLifecycleDispatch(args: ParsedArgs): LifecycleDispatchPayl
       issueId: focusIssue,
       targetMode: "",
       roundGoal: "",
+      compact: Boolean(args.compact),
       dryRun: args.dryRun
     });
     issueTeamDispatchPath = String(issueTeamDispatch.team_dispatch_path ?? "").trim();
+    issueTeamSeatHandoffPaths = (issueTeamDispatch.seat_handoff_paths as Record<string, string> | undefined) ?? {};
     issueTeamSeatHandoffsPath = String(issueTeamDispatch.seat_handoffs_path ?? "").trim();
+    teamTopology = (issueTeamDispatch.team_topology as TeamTopologyItem[] | undefined) ?? teamTopology;
     dispatchId = String(issueTeamDispatch.dispatch_id ?? "").trim();
     activeSeatDispatchPath = String(issueTeamDispatch.active_seat_dispatch_path ?? "").trim();
     seatStateDirPath = String(issueTeamDispatch.seat_state_dir ?? "").trim();
     seatBarrier = (issueTeamDispatch.seat_barrier as SeatBarrierSummary | undefined) ?? seatBarrier;
   } else {
     const lifecyclePacketPath = path.join(controlDir, "SUBAGENT-TEAM.dispatch.md");
-    const teamTopology = phaseTeamTopology(phase);
     const manifestInput = {
       change: args.change,
       phase: phase as
@@ -1261,6 +1310,7 @@ export function renderLifecycleDispatch(args: ParsedArgs): LifecycleDispatchPayl
   const packetText = renderPhasePacket(
     args.repoRoot,
     args.change,
+    Boolean(args.compact),
     phase,
     phaseReason,
     focusIssue,
@@ -1271,8 +1321,10 @@ export function renderLifecycleDispatch(args: ParsedArgs): LifecycleDispatchPayl
     controlState,
     config,
     issues,
+    teamTopology,
     issueTeamDispatchPath,
-    issueTeamSeatHandoffsPath
+    issueTeamSeatHandoffsPath,
+    issueTeamSeatHandoffPaths
   );
 
   if (!args.dryRun) {
@@ -1291,6 +1343,7 @@ export function renderLifecycleDispatch(args: ParsedArgs): LifecycleDispatchPayl
     focus_issue_id: focusIssue,
     lifecycle_dispatch_path: displayPath(args.repoRoot, lifecyclePacketPath),
     issue_team_dispatch_path: issueTeamDispatchPath,
+    issue_team_seat_handoff_paths: issueTeamSeatHandoffPaths,
     issue_team_seat_handoffs_path: issueTeamSeatHandoffsPath,
     issue_team_dispatch: issueTeamDispatch,
     latest_round_path: latestRoundPath ? displayPath(args.repoRoot, latestRoundPath) : "",
@@ -1302,7 +1355,7 @@ export function renderLifecycleDispatch(args: ParsedArgs): LifecycleDispatchPayl
       archive_after_verify: config.subagent_team.auto_archive_after_verify
     },
     automation_profile: automationProfile(config),
-    team_topology: phaseTeamTopology(phase),
+    team_topology: teamTopology,
     seat_barrier: seatBarrier,
     seat_state_dir: seatStateDirPath,
     control_state: controlState,

@@ -1,7 +1,7 @@
 # OpenSpec Subagent Team Templates
 
 Use these templates after rendering `ISSUE-*.team.dispatch.md`.
-If the renderer also produced `ISSUE-*.seat-handoffs.md`, treat that seat-handoff artifact as the first source for spawned seat prompts; do not re-summarize the coordinator packet by hand unless the artifact is missing.
+If the renderer also produced `ISSUE-*.seat-handoffs.md`, treat it as the seat-handoff index. Spawn each seat with the exact `ISSUE-*.seat-handoffs/<seat>.md` file; do not re-summarize the coordinator packet by hand unless the per-seat file is missing.
 
 Launch policy:
 
@@ -30,7 +30,7 @@ Gate barrier policy:
 Seat override policy:
 
 - 如果 seat-local handoff 与 inherited coordinator / router / default prompt 冲突，以 seat-local handoff 为准
-- 如果仓库里已经生成 `ISSUE-*.seat-handoffs.md`，优先把其中对应 seat 的小节原样传给 seat subagent，而不是自己从 coordinator packet 手工摘摘要
+- 如果仓库里已经生成 `ISSUE-*.seat-handoffs/<seat>.md`，优先把对应 seat 小文件原样传给 seat subagent；`ISSUE-*.seat-handoffs.md` 只是索引，不要把整份索引或 coordinator packet 打包发给 seat
 - seat subagent 应通过 `fork_context=false` 启动，只接收当前 seat-local handoff 和必要文件引用，不要继承完整 coordinator 线程
 - 已启动的 seat subagent 不得自称 coordinator，也不得继续后续 lifecycle phase
 - 如果 seat 看到“我会等 design author 完成后再拉 reviewer”“提交 planning docs”“dispatch issue”“继续 issue execution”这类 coordinator 叙述，视为 inherited context 泄漏，忽略这些语句
@@ -70,7 +70,7 @@ checker / reviewer 默认先看 changed files；没有 changed files 时再看 a
 Fast-path activation:
 
 - issue planning: 默认 `2 development + 1 check + 1 review`
-- issue execution: 默认 `3 development + 2 check + 1 review`
+- issue execution: 默认 `1 development + 1 check + 1 review`，只有跨模块风险、直接依赖争议或证据缺口才升级到 `3 development + 2 check + 1 review`
 - change acceptance: 默认 `1 development + 1 check + 1 review`
 - change verify: 默认 `2 development + 1 check + 1 review`
 - 只有当前 round 出现跨边界架构风险、直接依赖争议或证据缺口时，才升级额外的 check / review seat

@@ -114,6 +114,9 @@ validation:
   ) as { seats: Array<{ gate_bearing: boolean; required: boolean; seat: string }> };
   const dispatchText = fs.readFileSync(dispatchPath, "utf8");
   const seatHandoffsText = fs.readFileSync(seatHandoffsPath, "utf8");
+  const seatHandoffPaths = payload.seat_handoff_paths as Record<string, string>;
+  const developerHandoffText = fs.readFileSync(path.join(repoRoot, seatHandoffPaths["Developer 1"] as string), "utf8");
+  const checkerHandoffText = fs.readFileSync(path.join(repoRoot, seatHandoffPaths["Checker 1"] as string), "utf8");
 
   assert.equal(exitCode, 0);
   assert.match(String(payload.dispatch_id), /^DISPATCH-\d{8}T\d{6}$/);
@@ -130,16 +133,21 @@ validation:
     rerun_scope: "active_dispatch",
     resource_errors: ["EMFILE", "ENFILE", "Too many open files"]
   });
+  assert.equal(payload.topology_profile, "compact");
+  assert.equal((payload.team_topology as Array<{ count: number }>)[0]?.count, 1);
+  assert.equal((payload.team_topology as Array<{ count: number }>)[1]?.count, 1);
+  assert.equal((payload.team_topology as Array<{ count: number }>)[2]?.count, 1);
   assert.match(String(payload.seat_handoffs_path), /ISSUE-001\.seat-handoffs\.md$/);
   assert.match(dispatchText, /subagent team \u4e3b\u94fe/);
   assert.match(dispatchText, /Seat Handoff Source/);
-  assert.match(dispatchText, /Spawned seat subagent \u5fc5\u987b\u4f7f\u7528\u5355\u72ec\u7684 seat handoff artifact/);
-  assert.match(dispatchText, /Development group: 3 subagents/);
-  assert.match(dispatchText, /Check group: 2 subagents/);
-  assert.match(dispatchText, /Review group: 1 subagent/);
+  assert.match(dispatchText, /Spawned seat subagent \u5fc5\u987b\u4f7f\u7528\u5355\u72ec\u7684 seat handoff \u5c0f\u6587\u4ef6/);
+  assert.match(dispatchText, /Topology profile: `compact`/);
+  assert.match(dispatchText, /Development group: 1 subagent\(s\)/);
+  assert.match(dispatchText, /Check group: 1 subagent\(s\)/);
+  assert.match(dispatchText, /Review group: 1 subagent\(s\)/);
   assert.match(dispatchText, /Developer 1: core implementation owner/);
-  assert.match(dispatchText, /Checker 2: direct dependency regression risk, tests, evidence gaps/);
-  assert.match(dispatchText, /Reviewer 1: scope-first target path \/ direct dependency \/ evidence pass or fail/);
+  assert.doesNotMatch(dispatchText, /Checker 2: direct dependency regression risk, tests, evidence gaps/);
+  assert.match(dispatchText, /Reviewer 1: scope-first pass \/ fail owner/);
   assert.match(dispatchText, /## Gate Barrier/);
   assert.match(dispatchText, /## Tool Resource Guardrails/);
   assert.match(dispatchText, /ulimit -n/);
@@ -192,26 +200,22 @@ validation:
   assert.doesNotMatch(dispatchText, /\u5c40\u90e8 validation|\u5c40\u90e8\u6821\u9a8c/);
   assert.doesNotMatch(dispatchText, /python3 \.codex\/skills/);
   assert.match(seatHandoffsText, /# Seat Handoffs for ISSUE-001/);
-  assert.match(seatHandoffsText, /seat-local source of truth/);
-  assert.match(seatHandoffsText, /active seat dispatch:/);
-  assert.match(seatHandoffsText, /dispatch_id:/);
-  assert.match(seatHandoffsText, /seat_state_dir:/);
-  assert.match(seatHandoffsText, /## Development 2 \(dependent module or integration owner\)/);
-  assert.match(seatHandoffsText, /\u4f60\u4e0d\u662f coordinator/);
-  assert.match(seatHandoffsText, /\u4e0d\u8981\u81ea\u884c\u62c9\u8d77\u3001\u66ff\u6362\u6216\u534f\u8c03\u5176\u4ed6 development \/ check \/ review seat/);
-  assert.match(seatHandoffsText, /`openspec-extensions dispatch lifecycle`/);
-  assert.match(seatHandoffsText, /\u4f9d\u8d56\u6a21\u5757 \/ \u96c6\u6210\u5c42\u53d8\u66f4\u6458\u8981/);
-  assert.match(seatHandoffsText, /\u4e0d\u8981\u51b3\u5b9a\u662f\u5426\u9700\u8981\u989d\u5916 checker \/ reviewer/);
-  assert.match(seatHandoffsText, /## Checker 1 \(functional correctness \/ main path \/ edge cases\)/);
-  assert.match(seatHandoffsText, /## Reviewer 1 \(scope-first pass \/ fail owner\)/);
+  assert.match(seatHandoffsText, /seat-local handoff 索引/);
+  assert.match(seatHandoffsText, /Developer 1: `openspec\/changes\/demo-change\/issues\/ISSUE-001\.seat-handoffs\/developer-1\.md`/);
+  assert.doesNotMatch(seatHandoffsText, /\u4f60\u4e0d\u662f coordinator/);
+  assert.match(developerHandoffText, /# Developer 1 \(core implementation owner\)/);
+  assert.match(developerHandoffText, /active seat dispatch:/);
+  assert.match(developerHandoffText, /dispatch_id:/);
+  assert.match(developerHandoffText, /seat_state_dir:/);
+  assert.match(developerHandoffText, /\u4f60\u4e0d\u662f coordinator/);
+  assert.match(developerHandoffText, /`openspec-extensions dispatch lifecycle`/);
+  assert.match(checkerHandoffText, /# Checker 1 \(functional correctness \/ main path \/ edge cases\)/);
   assert.deepEqual(
     activeSeatDispatch.seats.filter((seat) => seat.seat.startsWith("Developer")).map((seat) => ({
       gate_bearing: seat.gate_bearing,
       required: seat.required
     })),
     [
-      { gate_bearing: false, required: false },
-      { gate_bearing: false, required: false },
       { gate_bearing: false, required: false }
     ]
   );
@@ -222,10 +226,71 @@ validation:
     })),
     [
       { gate_bearing: true, required: true },
-      { gate_bearing: true, required: true },
       { gate_bearing: true, required: true }
     ]
   );
+
+  const compactResult = captureStdout(() =>
+    runIssueTeamDispatchRenderer([
+      "--repo-root",
+      repoRoot,
+      "--change",
+      "demo-change",
+      "--issue-id",
+      "ISSUE-001",
+      "--compact",
+    ])
+  );
+  const compactPayload = JSON.parse(compactResult.stdout.trim()) as Record<string, unknown>;
+  const compactText = fs.readFileSync(path.join(repoRoot, String(compactPayload.team_dispatch_path)), "utf8");
+
+  assert.match(compactText, /# Issue Team Dispatch Compact: ISSUE-001/);
+  assert.match(compactText, /Seat Files/);
+  assert.match(compactText, /默认最小拓扑/);
+  assert.doesNotMatch(compactText, /## Coordinator Responsibilities/);
+});
+
+test("expands issue topology when scope crosses modules", () => {
+  const repoRoot = makeTempRepo();
+  const changeDir = path.join(repoRoot, "openspec", "changes", "demo-change");
+  const issuesDir = path.join(changeDir, "issues");
+  fs.mkdirSync(issuesDir, { recursive: true });
+
+  fs.writeFileSync(path.join(issuesDir, "ISSUE-001.md"), `---
+issue_id: ISSUE-001
+title: 跨模块 issue
+worker_worktree: .worktree/demo-change/ISSUE-001
+allowed_scope:
+  - src/renderers/issue-team-dispatch.ts
+  - src/commands/reconcile.ts
+out_of_scope:
+  - electron/
+done_when:
+  - 拓扑升级
+validation:
+  - pnpm lint
+---
+`);
+  createStubWorktree(repoRoot, ".worktree/demo-change/ISSUE-001");
+
+  const { stdout } = captureStdout(() =>
+    runIssueTeamDispatchRenderer([
+      "--repo-root",
+      repoRoot,
+      "--change",
+      "demo-change",
+      "--issue-id",
+      "ISSUE-001",
+    ])
+  );
+  const payload = JSON.parse(stdout.trim()) as Record<string, unknown>;
+  const seatHandoffPaths = payload.seat_handoff_paths as Record<string, string>;
+
+  assert.equal(payload.topology_profile, "expanded");
+  assert.equal((payload.team_topology as Array<{ count: number }>)[0]?.count, 3);
+  assert.equal((payload.team_topology as Array<{ count: number }>)[1]?.count, 2);
+  assert.match(String(seatHandoffPaths["Developer 2"]), /developer-2\.md$/);
+  assert.match(String(seatHandoffPaths["Checker 2"]), /checker-2\.md$/);
 });
 
 test("falls back to issue-local round contract when latest round is still planning", () => {
@@ -283,7 +348,8 @@ validation:
   );
   const payload = JSON.parse(stdout.trim()) as Record<string, unknown>;
   const dispatchText = fs.readFileSync(path.join(repoRoot, String(payload.team_dispatch_path)), "utf8");
-  const seatHandoffsText = fs.readFileSync(path.join(repoRoot, String(payload.seat_handoffs_path)), "utf8");
+  const seatHandoffPaths = payload.seat_handoff_paths as Record<string, string>;
+  const developerHandoffText = fs.readFileSync(path.join(repoRoot, seatHandoffPaths["Developer 1"] as string), "utf8");
 
   assert.match(dispatchText, /\u63a8\u8fdb ISSUE-001 \u5b8c\u6210\u5f00\u53d1\u3001\u68c0\u67e5\u3001\u4fee\u590d\u3001\u5ba1\u67e5\u56de\u5408\u3002/);
   assert.match(dispatchText, /`ISSUE-001`/);
@@ -292,9 +358,9 @@ validation:
   assert.doesNotMatch(dispatchText, /proposal \/ design \/ tasks \/ issue \u6587\u6863\u4ee5 coordinator commit \u56fa\u5316/);
   assert.doesNotMatch(dispatchText, /`proposal.md`/);
   assert.doesNotMatch(dispatchText, /commit planning docs/);
-  assert.match(seatHandoffsText, /## Development 1 \(core implementation owner\)/);
-  assert.doesNotMatch(seatHandoffsText, /dispatch_next_issue/);
-  assert.doesNotMatch(seatHandoffsText, /control-plane ready/);
+  assert.match(developerHandoffText, /# Developer 1 \(core implementation owner\)/);
+  assert.doesNotMatch(developerHandoffText, /dispatch_next_issue/);
+  assert.doesNotMatch(developerHandoffText, /control-plane ready/);
 });
 
 test("stale completed round does not block the next pending issue in enforce mode", () => {

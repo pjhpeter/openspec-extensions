@@ -19,8 +19,8 @@ test("subagent-team agent prompt scopes coordinator defaults to the main session
   assert.match(prompt, /openspec-ex install --target-repo \/path\/to\/your\/project --force --force-config/);
   assert.match(prompt, /explicit seat-local handoff or role instruction/);
   assert.match(prompt, /do not apply serial fallback/);
-  assert.match(prompt, /rendered seat-handoff artifact exists/);
-  assert.match(prompt, /seat-handoff artifact or the exact seat section from it/);
+  assert.match(prompt, /rendered per-seat handoff file exists/);
+  assert.match(prompt, /exact `ISSUE-\*\.seat-handoffs\/<seat>\.md` file/);
   assert.match(prompt, /do not fork the full coordinator thread or full chat history/);
   assert.match(prompt, /do not repeat the version reminder there/);
   assert.match(prompt, /Only treat control-plane artifacts under `openspec\/changes\/<change>\/\.\.\.` as workflow state/);

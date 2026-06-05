@@ -317,7 +317,7 @@ validation:
     assert.match(payload.active_seat_dispatch_path, /ACTIVE-SEAT-DISPATCH\.json$/);
     assert.match(payload.seat_state_dir, /control\/seat-state\/DISPATCH-\d{8}T\d{6}$/);
     assert.equal(payload.seat_barrier.mode, "observe");
-    assert.equal(payload.seat_barrier.required_missing.length, 3);
+    assert.equal(payload.seat_barrier.required_missing.length, 2);
     assert.match(payload.issue_team_dispatch_path, /ISSUE-001\.team\.dispatch\.md$/);
     assert.match(payload.issue_team_seat_handoffs_path, /ISSUE-001\.seat-handoffs\.md$/);
     assert.match(lifecycleText, /Current issue packet/);
@@ -331,33 +331,51 @@ validation:
     assert.match(lifecycleText, /ACTIVE-SEAT-DISPATCH\.json/);
     assert.match(lifecycleText, /Current barrier summary/);
     assert.doesNotMatch(lifecycleText, /Development group: 3 required completions/);
-    assert.match(lifecycleText, /Check group: 2 required completions/);
+    assert.match(lifecycleText, /Check group: 1 required completion/);
     assert.match(lifecycleText, /Review group: 1 required completion/);
     assert.match(lifecycleText, /issue_execution` 仍然一次只处理一个 approved issue/);
     assert.match(lifecycleText, /只负责实现和 progress start\/checkpoint/);
     assert.match(lifecycleText, /只把相关 validation 回写成 `pending`/);
+    assert.match(lifecycleText, /默认 change 级 worktree 不在每个 issue 后合并/);
+    assert.match(lifecycleText, /worktree 内 change-level review \/ verify 通过后再统一 merge-change/);
+    assert.doesNotMatch(lifecycleText, /自动接受并合并该 issue/);
     assert.match(lifecycleText, /当前 phase 的 seat 结果一旦已经归并进 round 输出 \/ gate artifact/);
     assert.doesNotMatch(lifecycleText, /局部验证/);
     assert.match(lifecycleText, /不要读取 `node_modules`、`dist`、`build`、`\.next`、`coverage`/);
-    assert.match(issueTeamText, /Development group: 3 subagents/);
+    assert.match(issueTeamText, /Topology profile: `compact`/);
+    assert.match(issueTeamText, /Development group: 1 subagent\(s\)/);
     assert.match(issueTeamText, /## Tool Resource Guardrails/);
     assert.match(issueTeamText, /rerun the current checker\/reviewer gate from the active dispatch/);
-    assert.match(issueTeamText, /Check group: 2 subagents/);
-    assert.match(issueTeamText, /Review group: 1 subagent/);
-    assert.match(issueTeamText, /Developer 2: dependent module or integration owner/);
-    assert.match(issueTeamText, /Checker 2: direct dependency regression risk, tests, evidence gaps/);
-    assert.match(issueTeamText, /Reviewer 1: scope-first target path \/ direct dependency \/ evidence pass or fail/);
+    assert.match(issueTeamText, /Check group: 1 subagent\(s\)/);
+    assert.match(issueTeamText, /Review group: 1 subagent\(s\)/);
+    assert.doesNotMatch(issueTeamText, /Developer 2: dependent module or integration owner/);
+    assert.doesNotMatch(issueTeamText, /Checker 2: direct dependency regression risk, tests, evidence gaps/);
+    assert.match(issueTeamText, /Reviewer 1: scope-first pass \/ fail owner/);
     assert.match(issueTeamText, /Excluded incidental paths from review focus:/);
     assert.match(issueTeamText, /`node_modules\/vue\/index\.js`/);
     assert.match(issueTeamText, /默认排除 `node_modules`、`dist`、`build`、`\.next`、`coverage`/);
-    assert.match(issueSeatHandoffsText, /## Development 2 \(dependent module or integration owner\)/);
-    assert.match(issueSeatHandoffsText, /只处理依赖模块、集成接缝和当前 issue 直接相关的兼容性问题/);
+    assert.match(issueSeatHandoffsText, /seat-local handoff 索引/);
     assert.equal(payload.team_topology[0]?.label, "Development group");
-    assert.equal(payload.team_topology[0]?.count, 3);
+    assert.equal(payload.team_topology[0]?.count, 1);
     assert.equal(payload.team_topology[0]?.reasoning_effort, "high");
     assert.equal(payload.team_topology[1]?.reasoning_effort, "medium");
-    assert.equal(payload.team_topology[1]?.count, 2);
+    assert.equal(payload.team_topology[1]?.count, 1);
     assert.equal(payload.team_topology[2]?.count, 1);
+
+    const compactPayload = renderLifecycleDispatch({
+      repoRoot,
+      change: "demo-change",
+      phase: "auto",
+      issueId: "",
+      compact: true,
+      dryRun: false
+    });
+    const compactLifecycleText = fs.readFileSync(path.join(repoRoot, compactPayload.lifecycle_dispatch_path), "utf8");
+
+    assert.match(compactLifecycleText, /# Subagent Team Lifecycle Compact/);
+    assert.match(compactLifecycleText, /Required Paths/);
+    assert.match(compactLifecycleText, /developer-1\.md/);
+    assert.doesNotMatch(compactLifecycleText, /## Coordinator Rules/);
   });
 });
 

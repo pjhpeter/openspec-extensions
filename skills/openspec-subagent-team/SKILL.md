@@ -79,7 +79,7 @@ Read these first:
 8. Use a phase-specific topology:
    - `spec_readiness`: 1 design author (`reasoning_effort=high`) + 2 design reviewers (`reasoning_effort=medium`)
    - `issue_planning`: fast path is `2 development + 1 check + 1 review`, all `reasoning_effort=medium`
-   - `issue_execution`: fast path is `3 development + 2 check + 1 review`; code-writing development seats use `reasoning_effort=high`, check/review use `reasoning_effort=medium`
+   - `issue_execution`: fast path starts with `1 development + 1 check + 1 review`; escalate to `3 development + 2 check + 1 review` only for cross-module risk, direct dependency disputes, or evidence gaps. Code-writing development seats use `reasoning_effort=high`, check/review use `reasoning_effort=medium`
    - `change_acceptance` / `ready_for_archive`: fast path is `1 development + 1 check + 1 review`, all `reasoning_effort=medium`
    - `change_verify`: fast path is `2 development + 1 check + 1 review`; code-fix development seats use `reasoning_effort=high`, check/review use `reasoning_effort=medium`
 9. If the current runtime does not support delegation at all:
@@ -158,7 +158,7 @@ Read these first:
 - Before unattended checker/reviewer gates, check `ulimit -n` when shell access is available; if the limit is below `16384`, pause and restart the tool session with a higher limit before spawning seats.
 - `EMFILE`, `ENFILE`, or `Too many open files` is a tool-resource blocker, not a valid checker/reviewer verdict. Recover or restart the tool session, clear stale running seats, and rerun the current gate from the active dispatch; never self-certify or skip that gate.
 - Gate-bearing review/check subagents must not be launched as `explorer`; treat them as gate owners whose completion status must be collected explicitly.
-- 在 `issue_execution` 里，开发组 / 检查组 / 审查组仍沿用 `rra` 的 lens 家族，但默认快路径只激活最小必要 seat：
+- 在 `issue_execution` 里，开发组 / 检查组 / 审查组仍沿用 `rra` 的 lens 家族，但默认快路径只激活最小必要 seat；只有跨模块风险、直接依赖争议或证据缺口才升级更多 seat：
   - Development 1/2/3 = core implementation / dependent integration / tests-cleanup
   - Check 1/2/3 = functional correctness / architecture-dataflow escalation / regression-evidence
   - Review 1/2/3 = target path / regression-operational escalation / evidence completeness escalation

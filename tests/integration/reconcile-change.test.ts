@@ -162,7 +162,7 @@ test("semi_auto requires manual confirmation before first dispatch", () => {
     initGitRepo(repoRoot);
     commitAll(repoRoot, "commit planning docs");
 
-    const payload = reconcileChange({ repoRoot, change: "demo-change" });
+    const payload = reconcileChange({ repoRoot, change: "demo-change", verbose: true });
 
     assert.equal(payload.automation_profile, "semi_auto");
     assert.equal((payload.automation as Record<string, boolean>).accept_issue_review, true);
@@ -184,7 +184,7 @@ test("default issue review auto_accepts validated issue", () => {
       validation: { "pnpm lint": "passed", "pnpm type-check": "passed" }
     });
 
-    const payload = reconcileChange({ repoRoot, change: "demo-change" });
+    const payload = reconcileChange({ repoRoot, change: "demo-change", verbose: true });
 
     assert.equal(payload.automation_profile, "semi_auto");
     assert.equal((payload.automation as Record<string, boolean>).accept_issue_review, true);
@@ -201,7 +201,7 @@ test("auto_issue_planning dispatches first issue", () => {
     initGitRepo(repoRoot);
     commitAll(repoRoot, "commit planning docs");
 
-    const payload = reconcileChange({ repoRoot, change: "demo-change" });
+    const payload = reconcileChange({ repoRoot, change: "demo-change", verbose: true });
 
     assert.equal(payload.next_action, "prepare_issue_workspace");
     assert.equal(payload.recommended_issue_id, "ISSUE-001");
@@ -221,7 +221,7 @@ test("auto_issue_planning dispatches after worker workspace is ready", () => {
     initGitRepo(repoRoot);
     commitAll(repoRoot, "commit planning docs");
 
-    const payload = reconcileChange({ repoRoot, change: "demo-change" });
+    const payload = reconcileChange({ repoRoot, change: "demo-change", verbose: true });
 
     assert.equal(payload.next_action, "dispatch_next_issue");
     assert.equal((payload.recommended_issue_workspace as Record<string, unknown>).ready, true);
@@ -234,7 +234,7 @@ test("first issue requires planning_doc_commit before dispatch", () => {
     writeIssueDoc(repoRoot, "demo-change");
     initGitRepo(repoRoot);
 
-    const payload = reconcileChange({ repoRoot, change: "demo-change" });
+    const payload = reconcileChange({ repoRoot, change: "demo-change", verbose: true });
 
     assert.equal(payload.next_action, "await_planning_docs_commit_confirmation");
     assert.equal(payload.recommended_issue_id, "ISSUE-001");
@@ -256,7 +256,7 @@ test("reconcile surfaces recorded route decision", () => {
       updated_at: "2026-04-07T12:00:00+08:00"
     });
 
-    const payload = reconcileChange({ repoRoot, change: "demo-change" });
+    const payload = reconcileChange({ repoRoot, change: "demo-change", verbose: true });
     const routeDecision = payload.route_decision as Record<string, unknown>;
     const control = payload.control as Record<string, unknown>;
     const controlRouteDecision = control.route_decision as Record<string, unknown>;
@@ -281,7 +281,7 @@ test("reconcile tolerates malformed route decision artifact", () => {
     fs.mkdirSync(path.dirname(routeDecisionPath), { recursive: true });
     fs.writeFileSync(routeDecisionPath, "{bad json\n");
 
-    const payload = reconcileChange({ repoRoot, change: "demo-change" });
+    const payload = reconcileChange({ repoRoot, change: "demo-change", verbose: true });
     const routeDecision = payload.route_decision as Record<string, unknown>;
 
     assert.equal(routeDecision.exists, true);
@@ -360,7 +360,7 @@ test("team dispatch issue requires review gate before auto accept", () => {
     progress.run_id = `RUN-${issueId}`;
     fs.writeFileSync(progressPath, JSON.stringify(progress, null, 2));
 
-    const payload = reconcileChange({ repoRoot, change });
+    const payload = reconcileChange({ repoRoot, change, verbose: true });
 
     assert.equal(payload.next_action, "complete_issue_review_gate");
     assert.equal(payload.recommended_issue_id, issueId);
@@ -391,7 +391,7 @@ test("team dispatch issue can auto accept after review gate passes", () => {
     fs.writeFileSync(progressPath, JSON.stringify(progress, null, 2));
     writeIssueReviewArtifact(repoRoot, change, issueId);
 
-    const payload = reconcileChange({ repoRoot, change });
+    const payload = reconcileChange({ repoRoot, change, verbose: true });
 
     assert.equal(payload.next_action, "auto_accept_issue");
     assert.equal(payload.recommended_issue_id, issueId);
@@ -416,7 +416,7 @@ test("accepted change worktree issues require worktree review before merge", () 
       nextAction: "",
     });
 
-    const payload = reconcileChange({ repoRoot, change });
+    const payload = reconcileChange({ repoRoot, change, verbose: true });
 
     assert.equal(payload.next_action, "review_change_code");
     assert.equal(payload.recommended_issue_id, "");
@@ -511,7 +511,7 @@ test("seat handoff artifacts do not create fake pending issues", () => {
       "# seat handoffs\n"
     );
 
-    const payload = reconcileChange({ repoRoot, change });
+    const payload = reconcileChange({ repoRoot, change, verbose: true });
 
     assert.equal(payload.issue_count, 1);
     assert.equal(payload.next_action, "review_change_code");
@@ -519,6 +519,20 @@ test("seat handoff artifacts do not create fake pending issues", () => {
       (payload.issues as Array<{ issue_id: string }>).map((issue) => issue.issue_id),
       [issueId]
     );
+  });
+});
+
+test("reconcile change defaults to summary output without full issues", () => {
+  withTempDir((repoRoot) => {
+    const change = "demo-change";
+    writeIssueDoc(repoRoot, change, "ISSUE-001");
+    const payload = reconcileChange({ repoRoot, change });
+
+    assert.equal(payload.summary_mode, "summary");
+    assert.equal(payload.next_action, "await_issue_dispatch_confirmation");
+    assert.equal((payload.current_issue as Record<string, string>).issue_id, "ISSUE-001");
+    assert.equal("issues" in payload, false);
+    assert.equal("control" in payload, false);
   });
 });
 

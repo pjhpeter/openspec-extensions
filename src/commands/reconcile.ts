@@ -53,6 +53,7 @@ const PASSING_VALIDATION_STATUSES = new Set([
 type ParsedChangeArgs = {
   change: string;
   repoRoot: string;
+  verbose?: boolean;
 };
 
 type CommitPlanningDocsArgs = ParsedChangeArgs & {
@@ -78,7 +79,7 @@ type IssuePayload = JsonRecord & {
 };
 
 const RECONCILE_HELP_TEXT = `Usage:
-  openspec-extensions reconcile change --repo-root <path> --change <change>
+  openspec-extensions reconcile change --repo-root <path> --change <change> [--verbose]
   openspec-extensions reconcile commit-planning-docs --repo-root <path> --change <change> [--commit-message <message>] [--dry-run]
   openspec-extensions reconcile accept-issue --repo-root <path> --change <change> --issue-id <issue> [--dry-run] [--force]
   openspec-extensions reconcile merge-change --repo-root <path> --change <change> [--commit-message <message>] [--dry-run] [--force]
@@ -91,7 +92,8 @@ function parseChangeArgs(argv: string[]): ParsedChangeArgs | null {
     options: {
       change: { type: "string" },
       help: { short: "h", type: "boolean", default: false },
-      "repo-root": { type: "string" }
+      "repo-root": { type: "string" },
+      verbose: { type: "boolean", default: false }
     },
     strict: true
   });
@@ -106,7 +108,8 @@ function parseChangeArgs(argv: string[]): ParsedChangeArgs | null {
 
   return {
     change: values.change,
-    repoRoot: path.resolve(values["repo-root"])
+    repoRoot: path.resolve(values["repo-root"]),
+    verbose: values.verbose
   };
 }
 
@@ -762,6 +765,21 @@ function recommendedIssueWorkspaceState(
   }
 }
 
+function issueSummary(issue: IssuePayload | undefined): JsonRecord {
+  if (!issue) {
+    return {};
+  }
+  return {
+    issue_id: String(issue.issue_id ?? ""),
+    title: String(issue.title ?? ""),
+    status: String(issue.status ?? ""),
+    boundary_status: String(issue.boundary_status ?? ""),
+    next_action: String(issue.next_action ?? ""),
+    progress_path: String(issue.progress_path ?? ""),
+    issue_path: String(issue.issue_path ?? "")
+  };
+}
+
 export function reconcileChange(args: ParsedChangeArgs): JsonRecord {
   const config = loadIssueModeConfig(args.repoRoot);
   const issues = collectIssues(args.repoRoot, args.change);
@@ -819,24 +837,16 @@ export function reconcileChange(args: ParsedChangeArgs): JsonRecord {
     reason: controlGate?.[2] ?? ""
   };
 
-  return {
+  const currentIssue = issues.find((issue) => String(issue.issue_id ?? "").trim() === recommendedIssueId);
+  const payload = {
     change: args.change,
     issue_count: issues.length,
     counts,
     next_action: nextAction,
     recommended_issue_id: recommendedIssueId,
+    current_issue: issueSummary(currentIssue),
     reason,
-    route_decision: (controlState.route_decision as JsonRecord | undefined) ?? {},
     continuation_policy: continuationPolicy(nextAction, recommendedIssueId),
-    base_next_action: {
-      action: baseAction,
-      recommended_issue_id: baseRecommendedIssueId,
-      reason: baseReason
-    },
-    control: {
-      ...controlState,
-      gate: controlGatePayload
-    },
     automation_profile: automationProfile(config),
     automation: {
       accept_spec_readiness: config.subagent_team.auto_accept_spec_readiness,
@@ -855,6 +865,27 @@ export function reconcileChange(args: ParsedChangeArgs): JsonRecord {
     },
     planning_docs: planningDocs,
     recommended_issue_workspace: recommendedIssueWorkspace,
+    summary_mode: "summary",
+    verbose_hint: "Run with --verbose to include full issues, control, and base_next_action details."
+  };
+
+  if (!args.verbose) {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    summary_mode: "verbose",
+    route_decision: (controlState.route_decision as JsonRecord | undefined) ?? {},
+    base_next_action: {
+      action: baseAction,
+      recommended_issue_id: baseRecommendedIssueId,
+      reason: baseReason
+    },
+    control: {
+      ...controlState,
+      gate: controlGatePayload
+    },
     issues
   };
 }
