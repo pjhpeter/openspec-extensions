@@ -232,11 +232,11 @@ test("closeout guardrails require post-review automation and prefer chrome devto
   assert.match(readme, /从 active dispatch 重跑当前 gate/);
   assert.match(readme, /优先使用 chrome devtools MCP/);
   assert.match(readme, /你自己判断需求复杂度；如果属于复杂流程，自动启用 subagent-team 推进，不用再单独问我/);
-  assert.match(readme, /继续 <change> change，根据原来判断的复杂度继续/);
+  assert.match(readme, /继续 <change> change，根据原来的复杂度判断继续/);
   assert.match(readme, /worktree create --repo-root \. --change <change>/);
   assert.match(readme, /不要直接在主工作区改业务代码/);
-  assert.match(readme, /验收通过后再统一 merge\/commit/);
-  assert.match(routerSkill, /review current code -> automated test\/validation \+ automated manual verification -> `verify` -> `archive`/);
+  assert.match(readme, /归档前收尾阶段统一 merge\/commit 到主工作区/);
+  assert.match(routerSkill, /review the change worktree \/ current change diff -> automated test\/validation \+ automated manual verification -> `verify` -> pre-archive merge -> `archive`/);
   assert.match(routerSkill, /After that review passes, run the required automated test\/validation plus automated manual verification/);
   assert.match(teamSkill, /change-level `\/review` has passed/);
   assert.match(teamSkill, /Shared workspace \(`\.`\) is a compatibility mode only when the repo explicitly disables worker worktrees or sets `scope=shared`/);

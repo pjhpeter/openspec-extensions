@@ -66,13 +66,13 @@
 3. 创建 worktree 并实现
 
 ```text
-开始实现当前 change；如果任务规模仍然简单，并且当前 change 还没有进入 issue-mode，就不要拆 issue。先运行 `openspec-extensions worktree create --repo-root . --change <change>` 创建或复用 change 级 worktree，并在返回的 `worktree` 路径内完成实现；不要直接在主工作区改业务代码。收尾时先过 change-level /review，review 通过后必须补齐自动化测试/校验和自动化手工验证。
+开始实现当前 change；如果任务规模仍然简单，并且当前 change 还没有进入 issue-mode，就不要拆 issue。先运行 `openspec-extensions worktree create --repo-root . --change <change>` 创建或复用 change 级 worktree，并在返回的 `worktree` 路径内完成实现；不要直接在主工作区改业务代码，也不要在归档前收尾以外的任何阶段把 worktree 代码合并回主工作区。收尾时先过 change-level /review，review 通过后必须补齐自动化测试/校验和自动化手工验证。
 ```
 
 4. review / verify / archive 收尾
 
 ```text
-先对当前 change 修改的代码执行 /review；review 通过后，必须补齐自动化测试/校验和自动化手工验证；如果是前端或其他浏览器可见改动，优先使用 chrome devtools MCP 跑通受影响主路径。然后再检查当前 change 是否可以归档；如果 verify 通过，就同步 spec 并归档。
+先对当前 change worktree 的代码执行 /review；review 通过后，必须补齐自动化测试/校验和自动化手工验证；如果是前端或其他浏览器可见改动，优先使用 chrome devtools MCP 跑通受影响主路径。然后再检查当前 change 是否可以归档；如果 verify 通过，就先把已验收代码合并回主工作区，再在主工作区同步 spec 并归档。
 ```
 
 ### 复杂任务全生命周期链路

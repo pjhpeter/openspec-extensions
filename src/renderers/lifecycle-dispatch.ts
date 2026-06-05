@@ -462,7 +462,7 @@ function determinePhase(
   const autoAcceptChangeAcceptance = Boolean(config.subagent_team.auto_accept_change_acceptance);
   if (verifyState.passed === true) {
     if (hasDeferredAcceptedIssue(repoRoot, change, issues, config)) {
-      return ["change_acceptance", "", "最新 verify 已在 worktree 内通过；先运行 merge-change 合并已验收代码，再进入归档收尾。"];
+      return ["change_acceptance", "", "最新 verify 已在 worktree 内通过；进入归档前收尾，先运行 merge-change 合并已验收代码到主工作区，再从主工作区 archive。"];
     }
     return ["ready_for_archive", "", "最新 verify 已通过，change 可以进入归档收尾。"];
   }
@@ -509,7 +509,7 @@ function phaseGoal(phase: string, change: string, issueId: string, controlState:
     return `推进 ${issueId || "当前 issue"} 完成开发、检查、修复、审查回合。`;
   }
   if (phase === "change_acceptance") {
-    return `先对 ${change} 当前分支未 push 的代码运行 change-level /review（排除 openspec/changes/**），再确认它已达到 verify / archive 前的 change 级通过条件。`;
+    return `先对 ${change} 当前 change diff 运行 change-level /review（change worktree 优先，排除 openspec/changes/**），再确认它已达到 verify / archive 前的 change 级通过条件。`;
   }
   if (phase === "change_verify") {
     return `在已通过 change-level /review 后，对 ${change} 运行 change 级 verify，并处理验证失败或遗漏项。`;
@@ -996,14 +996,14 @@ function renderPhasePacket(
         : "审查组 verdict 全部收齐并通过后，先由 coordinator 提交 proposal / design / tasks / issue 文档；提交完成后，再等待人工确认是否进入 issue execution")
       : phase === "issue_execution"
         ? (autoAcceptIssueReview
-          ? "当前 round 的 gate-bearing subagent 全部完成、issue 校验通过且审查 verdict 满足条件后，coordinator 自动接受当前 issue；默认 change 级 worktree 不在每个 issue 后合并，等全部 issue accepted 且 worktree 内 change-level review / verify 通过后再统一 merge-change"
+          ? "当前 round 的 gate-bearing subagent 全部完成、issue 校验通过且审查 verdict 满足条件后，coordinator 自动接受当前 issue；默认 change 级 worktree 不在每个 issue 后合并，等全部 issue accepted、worktree 内 change-level review / verify 通过且进入归档前收尾后再统一 merge-change"
           : "审查组 verdict 全部收齐并通过后暂停，等待人工确认是否继续派发下一个 issue")
         : phase === "change_acceptance"
           ? (autoAcceptChangeAcceptance
             ? "当前 phase 的 gate-bearing subagent 全部完成、change-level /review 已通过后，coordinator 自动通过 change acceptance 并运行 verify"
             : "审查组 verdict 全部收齐并通过后暂停，等待人工确认后再运行 verify")
           : phase === "change_verify"
-            ? (autoArchiveAfterVerify ? "verify 通过后自动进入 archive" : "verify 通过后暂停，等待人工确认后再 archive")
+            ? (autoArchiveAfterVerify ? "verify 通过后自动执行归档前合并，并从主工作区 archive" : "verify 通过后暂停，等待人工确认归档前合并和 archive")
             : (autoArchiveAfterVerify ? "直接进入 archive / closeout" : "等待人工确认后再 archive / closeout");
 
   const phaseSpecificRules = phase === "spec_readiness"
@@ -1041,7 +1041,7 @@ function renderPhasePacket(
             "不要把 issue check/review 扩成 repo-wide 扫描；只有出现跨边界架构风险或证据争议时，coordinator 才升级更多 checker / reviewer seat。",
             "checker / reviewer 全部通过后，coordinator 必须先写当前通过的 `runs/ISSUE-REVIEW-<issue>.json`，再把 issue 收敛到 `review_required` 并决定是否接受。",
             autoAcceptIssueReview
-              ? "当 `auto_accept_issue_review=true` 时，coordinator 会在 gate-bearing check/review subagent 全部完成、`runs/ISSUE-REVIEW-<issue>.json` 已通过且 issue-local validation 全部通过后自动接受当前 issue；change 级 worktree 等全部 issue 接受并通过 worktree 内 review / verify 后再统一 merge。"
+              ? "当 `auto_accept_issue_review=true` 时，coordinator 会在 gate-bearing check/review subagent 全部完成、`runs/ISSUE-REVIEW-<issue>.json` 已通过且 issue-local validation 全部通过后自动接受当前 issue；change 级 worktree 等全部 issue 接受、worktree 内 review / verify 通过且进入归档前收尾后再统一 merge。"
               : "审查组通过后默认停住，让 coordinator 先确认是否派发下一个 issue。",
             "审查组不通过则回到开发组下一轮。"
           ]
@@ -1062,7 +1062,7 @@ function renderPhasePacket(
                 "开发组只处理 verify 失败所暴露的缺口，不再随意新增 issue。",
                 "verify 默认使用 2 个开发 seat + 1 个 checker + 1 个 reviewer 的快路径；如果 verify 暴露出代码/测试缺口，开发组 subagent 使用 `reasoning_effort=high`，检查组和审查组使用 `reasoning_effort=medium`。",
                 "检查组负责运行并检查 repo validation、tasks completion、verify artifact。",
-                autoArchiveAfterVerify ? "verify 通过后自动进入 archive 阶段。" : "verify 通过后默认停住，让 coordinator 先确认是否 archive。"
+                autoArchiveAfterVerify ? "verify 通过后自动执行归档前合并，再从主工作区 archive。" : "verify 通过后默认停住，让 coordinator 先确认是否执行归档前合并和 archive。"
               ]
             : [
                 "不再新增 issue。",

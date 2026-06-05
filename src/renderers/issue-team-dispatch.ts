@@ -763,7 +763,7 @@ ${bulletList(input.validation)}
 
 1. 只把对应 seat 文件发给对应 subagent，不要发送完整 coordinator packet。
 2. checker / reviewer 全部完成后，写 \`runs/ISSUE-REVIEW-${input.issueId}.json\`。
-3. issue-local validation 通过后，coordinator 只 accept 当前 issue；默认 change worktree 等全部 issue accepted 且 worktree review / verify 通过后再 \`merge-change\`。
+3. issue-local validation 通过后，coordinator 只 accept 当前 issue；默认 change worktree 等全部 issue accepted、worktree review / verify 通过且进入归档前收尾后再 \`merge-change\`，随后从主工作区 archive。
 `;
   }
 

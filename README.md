@@ -174,6 +174,8 @@ openspec/changes/*/runs/CHANGE-REVIEW.json
 
 如果任务足够小，我建议直接走 OpenSpec 的短链路：创建 change、补齐 proposal/design/tasks、先创建或复用 change 级 worktree，再在该 worktree 内完成实现、先跑 change-level review；review 通过后，必须补齐自动化测试/校验和自动化手工验证，再进入 verify 和 archive。这个仓库不会强迫你把所有事情都拆成多 issue。前端或其他浏览器可见改动不能只停在命令行测试，收尾时优先使用 chrome devtools MCP 覆盖受影响主路径；如果当前 runtime 没有该能力，再退回其他浏览器工具并如实说明。
 
+worktree 的合并边界是硬规则：代码只允许在归档前的收尾阶段合并回主工作区，并且 archive 必须在主工作区执行；其他开发、review、verify 或 issue 接受阶段都不得把 worktree 代码提前合并到主工作区。
+
 ```mermaid
 flowchart TD
     A[进入 OpenSpec 模式] --> B[创建 change 并补齐 proposal/design/tasks]
@@ -187,7 +189,8 @@ flowchart TD
     H --> I[verify 当前 change]
     I --> J{verify 通过?}
     J -- 否 --> D
-    J -- 是 --> K[同步 spec 并 archive]
+    J -- 是 --> K[合并代码到主工作区]
+    K --> L[在主工作区同步 spec 并 archive]
 ```
 
 如果我要让 agent 按简单任务短链路推进，我常用的话术是：
@@ -207,13 +210,13 @@ flowchart TD
 3. 直接实现当前 change
 
 ```text
-开始实现当前 change；如果任务规模仍然简单，并且当前 change 还没有进入 issue-mode，就不要拆 issue。先运行 `openspec-extensions worktree create --repo-root . --change <change>` 创建或复用 change 级 worktree，并在返回的 `worktree` 路径内完成实现；不要直接在主工作区改业务代码。收尾时先过 change-level /review，review 通过后必须补齐自动化测试/校验和自动化手工验证；如果是前端或其他浏览器可见改动，优先使用 chrome devtools MCP 覆盖受影响主路径。
+开始实现当前 change；如果任务规模仍然简单，并且当前 change 还没有进入 issue-mode，就不要拆 issue。先运行 `openspec-extensions worktree create --repo-root . --change <change>` 创建或复用 change 级 worktree，并在返回的 `worktree` 路径内完成实现；不要直接在主工作区改业务代码，也不要在归档前收尾以外的任何阶段把 worktree 代码合并回主工作区。收尾时先过 change-level /review，review 通过后必须补齐自动化测试/校验和自动化手工验证；如果是前端或其他浏览器可见改动，优先使用 chrome devtools MCP 覆盖受影响主路径。
 ```
 
 4. review / verify / archive 收尾
 
 ```text
-先对当前分支未 push 的代码执行 change-level /review（排除 `openspec/changes/**`）。review 通过后，必须补齐自动化测试/校验和自动化手工验证证据；如果是前端或其他浏览器可见改动，优先使用 chrome devtools MCP 跑通受影响主路径。然后再检查当前 change 是否可以归档；如果 verify 通过，就同步 spec 并归档。
+先对当前 change worktree 的代码执行 change-level /review（排除 `openspec/changes/**`）。review 通过后，必须补齐自动化测试/校验和自动化手工验证证据；如果是前端或其他浏览器可见改动，优先使用 chrome devtools MCP 跑通受影响主路径。然后再检查当前 change 是否可以归档；如果 verify 通过，就先把已验收代码合并回主工作区，再在主工作区同步 spec 并归档。
 ```
 
 5. 如果中途会话返回过早
@@ -249,7 +252,7 @@ openspec-extensions execute seat-state set \
   --agent-id "<agent-id>"
 ```
 
-8. development seat 只写代码和 checkpoint；如果改动让既有校验失效，只把相关 validation 标回 `pending`，不直接把 issue 标成完成，也不在该 seat 内自称校验通过。`issue_execution` 默认先用 `1 dev + 1 checker + 1 reviewer`；当 `allowed_scope` 或 `changed_files` 暴露跨模块风险时，再升级到扩展拓扑。checker / reviewer 通过后，由 coordinator 先写 `runs/ISSUE-REVIEW-<issue>.json`，再做 reconcile；默认 change 级 worktree 只 accept 当前 issue，等全部 issue accepted 后先在 worktree 内完成 review / verify，验收通过后再统一 merge/commit 并进入 archive。
+8. development seat 只写代码和 checkpoint；如果改动让既有校验失效，只把相关 validation 标回 `pending`，不直接把 issue 标成完成，也不在该 seat 内自称校验通过。`issue_execution` 默认先用 `1 dev + 1 checker + 1 reviewer`；当 `allowed_scope` 或 `changed_files` 暴露跨模块风险时，再升级到扩展拓扑。checker / reviewer 通过后，由 coordinator 先写 `runs/ISSUE-REVIEW-<issue>.json`，再做 reconcile；默认 change 级 worktree 只 accept 当前 issue，等全部 issue accepted 后先在 worktree 内完成 review / verify，只有进入归档前收尾时才统一 merge/commit 到主工作区，并在主工作区 archive。
 9. unattended gate-bearing batch 启动前，如果能创建 shell，coordinator 先检查 `ulimit -n`；低于 `16384` 时先重启/恢复工具会话并提高 open-files 限制，再拉 checker / reviewer。并发 seat 数不能超过当前 packet 渲染的 topology，final-state seat 结果归并落盘后要尽快关闭。若出现 `EMFILE`、`ENFILE` 或 `Too many open files`，当前 gate verdict 视为缺失；恢复/重启工具会话、清理 stale running seat 后，必须从 active dispatch 重跑当前 gate，不能自证通过或跳过 checker / reviewer。
 
 复杂流程把自动化测试/校验和自动化手工验证放在最后统一收口一次即可，不要求在每个 issue round 重复执行；但所有 issue 完成后，必须先通过 change-level `/review`，再补齐这些验证证据，然后才允许进入 verify。前端或其他浏览器可见改动也放在这个最终收口节点优先使用 chrome devtools MCP 覆盖受影响主路径；如果当前 runtime 没有该能力，再退回其他浏览器工具并如实说明。
@@ -281,7 +284,8 @@ flowchart TD
     P -- 是 --> Q[verify]
     Q --> R{verify 通过?}
     R -- 否 --> O
-    R -- 是 --> S[archive]
+    R -- 是 --> S[合并代码到主工作区]
+    S --> T[在主工作区 archive]
 ```
 
 > [!IMPORTANT]
@@ -353,7 +357,7 @@ flowchart TD
 - coordinator 通过 `reconcile` 从这些磁盘工件收敛状态，而不是只依赖聊天上下文。
 - `reconcile change` 默认输出 summary payload：当前 `next_action`、当前 issue、counts、原因和 continuation policy；需要完整 `issues` 数组和 control 细节时加 `--verbose`。
 - `subagent_team.*` 负责控制哪些 gate 可以自动接受，`rra.gate_mode` 负责决定 gate 只是给建议，还是直接阻断流程。
-- 默认安装模板会让每个 issue 在通过 issue-local validation 后自动 accept；change 级 worktree 会累计所有 issue 改动，并在全部 accepted 后先在 worktree 内完成 review / verify，验收通过后再统一 merge/commit。
+- 默认安装模板会让每个 issue 在通过 issue-local validation 后自动 accept；change 级 worktree 会累计所有 issue 改动，并在全部 accepted 后先在 worktree 内完成 review / verify，验收通过后只允许在归档前收尾阶段统一 merge/commit 到主工作区，然后在主工作区 archive。
 - 对应 CLI 是 `openspec-extensions reconcile accept-issue` 和 `openspec-extensions reconcile merge-change`；`merge-issue` 仍保留给 shared workspace 或 issue 级隔离 worktree 的兼容路径。
 
 如果你关心的是“昨天跑到哪里了”“这个 issue 上一轮 review 为什么没过”“现在是不是已经可以 verify”，这些答案应该优先从工件里拿，而不是从聊天记录里猜。
@@ -438,7 +442,7 @@ flowchart TD
 - verify 和 archive 仍由我手动放行。
 - RRA 继续提供 round contract 建议，但不会硬拦流程。
 
-如果我只想让每个 issue 在通过 issue-local validation 后自动接受并继续，可以只把 `auto_accept_issue_review` 单独打开；但对 team dispatch issue，仍然要先收齐 checker / reviewer 结论并写出 `runs/ISSUE-REVIEW-<issue>.json`。默认 change 级 worktree 不会每个 issue 自动提交一次代码，而是所有 issue accepted 后先在 worktree 内 review / verify，通过验收后再统一 merge/commit。
+如果我只想让每个 issue 在通过 issue-local validation 后自动接受并继续，可以只把 `auto_accept_issue_review` 单独打开；但对 team dispatch issue，仍然要先收齐 checker / reviewer 结论并写出 `runs/ISSUE-REVIEW-<issue>.json`。默认 change 级 worktree 不会每个 issue 自动提交一次代码，而是所有 issue accepted 后先在 worktree 内 review / verify，通过验收后也只能在归档前收尾阶段统一 merge/commit 到主工作区。
 
 ### 全自动配置
 

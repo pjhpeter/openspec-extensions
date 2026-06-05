@@ -337,7 +337,7 @@ validation:
     assert.match(lifecycleText, /只负责实现和 progress start\/checkpoint/);
     assert.match(lifecycleText, /只把相关 validation 回写成 `pending`/);
     assert.match(lifecycleText, /默认 change 级 worktree 不在每个 issue 后合并/);
-    assert.match(lifecycleText, /worktree 内 change-level review \/ verify 通过后再统一 merge-change/);
+    assert.match(lifecycleText, /worktree 内 change-level review \/ verify 通过且进入归档前收尾后再统一 merge-change/);
     assert.doesNotMatch(lifecycleText, /自动接受并合并该 issue/);
     assert.match(lifecycleText, /当前 phase 的 seat 结果一旦已经归并进 round 输出 \/ gate artifact/);
     assert.doesNotMatch(lifecycleText, /局部验证/);

@@ -72,6 +72,7 @@ Prefer the project-local companion skill first when the route becomes concrete:
 - Selecting the complex flow is a routing decision, not implementation authorization. Until `runs/SPEC-READINESS.json` is current and passed, do not start implementation, do not run scaffolding or app-bootstrap commands, and do not launch code-writing execution seats.
 - Even after spec-readiness passes, the first issue execution still waits for a current passed `runs/ISSUE-PLANNING.json` plus the coordinator-owned planning-doc commit. Do not dispatch implementation work before those artifacts exist.
 - In multi-session work on the same change, the coordinator session owns `tasks.md`, change-level backlog, merge, commit, `verify`, and `archive`.
+- Code from a change worktree may be merged back to the coordinator repo root only during the pre-archive closeout after the change has passed review and verify; archive must run from the coordinator repo root after that merge. Do not merge worktree code into the coordinator repo root during implementation, issue acceptance, review, or verify.
 - Issue execution subagents must write issue-local progress and run artifacts. They must not directly update `tasks.md`, self-merge, or create the final git commit.
 - Before a coordinator continues a change that already has issue artifacts, reconcile issue state from disk first and read change-level control artifacts if present instead of trusting chat memory.
 - Use `openspec/issue-mode.json` only for active repo defaults: worktree location, validation commands, worktree creation mode, RRA gate mode, and subagent-team auto-accept switches.
@@ -115,6 +116,7 @@ Guardrails:
 - In the first user-facing execution update after selecting the complex path, explicitly state the route and the immediate restriction, for example: `路由决议：复杂流。我将按 subagent-team 协调推进；当前只允许补 proposal/design 并推进 spec_readiness，禁止开始实现。`
 - A single-file or tightly bounded change should not be promoted to issue-mode without concrete evidence from the request or artifacts.
 - For simple-flow implementation, create or reuse the change workspace first with `openspec-extensions worktree create --repo-root . --change <change>` and work inside the returned `worktree`; do not edit business code in the coordinator repo root unless shared workspace is explicitly configured.
+- In simple flow, keep code in the returned change worktree through implementation, review, automated validation, automated manual verification, and verify. Merge it back to the coordinator repo root only immediately before archive, then run archive from the coordinator repo root.
 - If a simple-flow execution uncovers cross-module scope, repeated review loops, or clear issue boundaries, explicitly upgrade to the complex flow and state why.
 - If the user already authorized "complex -> auto subagent-team", do not ask again before using `subagent-team` in the main coordinator session once the triage lands on the complex path.
 - Before final completion, audit whether the selected route was actually followed. If execution drifted from the chosen route, disclose that deviation explicitly instead of silently summarizing the work as compliant.
@@ -147,8 +149,8 @@ Guardrails:
 
 - “没想清楚 / 先聊聊 / 先梳理一下” -> `explore`
 - Default to `complexity triage` before choosing the simple or complex path when the user only describes the requirement.
-- Small task after triage -> `propose` -> `apply` -> review current code -> automated test/validation + automated manual verification -> `verify` -> `archive`
-- Large task after triage -> `new` -> `ff` -> `plan-issues` / `subagent-team` -> reconcile -> review current code -> automated test/validation + automated manual verification evidence -> `verify` -> `archive`
+- Small task after triage -> `propose` -> `apply` -> review the change worktree / current change diff -> automated test/validation + automated manual verification -> `verify` -> pre-archive merge -> `archive`
+- Large task after triage -> `new` -> `ff` -> `plan-issues` / `subagent-team` -> reconcile -> review the change worktree / current change diff -> automated test/validation + automated manual verification evidence -> `verify` -> pre-archive merge -> `archive`
 - “继续刚才那个 / 继续这个 change / 下一个文档” -> `continue`
 - “开始做 / 开始实现 / 直接落地” -> `apply`, but only when the target change does not already have active issue-mode state on disk
 - “拆成 issue / 给出 issue 边界 / 生成 issue 文档” -> `plan-issues`
@@ -177,7 +179,7 @@ Preferred flow:
 9. If delegation is available, the main session remains coordinator-only during issue execution. Do not treat “complex flow”, “issue_execution”, or “continue coding” as permission for the coordinator to implement business code directly.
 10. By default, render the subagent-team lifecycle packet and use it as the coordinator control packet for the current phase.
 11. Use one issue-only execution subagent for one approved issue only when the user explicitly narrows execution to that one issue, or the current step is already a bounded single-issue handoff. Do not reuse that full worker contract for development/check/review seats inside an issue-team round.
-11. In subagent-team `issue_execution`, development seats stop at implementation and progress checkpoint. If code changes invalidate prior validation, they only mark those validation entries back to `pending`; checker/reviewer and the coordinator own the later validation/review gate. Only after checker/reviewer finish and the coordinator records `runs/ISSUE-REVIEW-<issue>.json` should the issue move to `review_required`, after which manual review or `auto_accept_issue_review=true` may accept it. In the default change-scoped worktree, merge/commit waits until all issues are accepted and the accumulated worktree has passed change-level review / verify.
+11. In subagent-team `issue_execution`, development seats stop at implementation and progress checkpoint. If code changes invalidate prior validation, they only mark those validation entries back to `pending`; checker/reviewer and the coordinator own the later validation/review gate. Only after checker/reviewer finish and the coordinator records `runs/ISSUE-REVIEW-<issue>.json` should the issue move to `review_required`, after which manual review or `auto_accept_issue_review=true` may accept it. In the default change-scoped worktree, merge/commit waits until all issues are accepted, the accumulated worktree has passed change-level review / verify, and the workflow is entering pre-archive closeout.
 12. In every gate-bearing phase, record launched seat ids, wait for completion, normalize the verdicts, and do not advance while any required gate subagent is still running.
 13. Before each unattended gate-bearing batch, keep active seats within the rendered topology, close final-state seats before spawning more, and treat `EMFILE` / `Too many open files` as a tool-resource blocker that requires recovery plus rerunning the current gate from disk.
 14. Repeat for the next approved issue, then run a change-level `/review`.

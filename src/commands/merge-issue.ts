@@ -492,7 +492,7 @@ export function acceptIssue(args: ParsedAcceptIssueArgs): JsonRecord {
   ensureIssueTeamReviewReady(args.repoRoot, args.change, args.issueId, progress, args.force);
 
   const workerPatch = buildWorkerPatch(args.repoRoot, workerWorktree);
-  const summary = `Coordinator accepted ${args.issueId} from ${workerDisplay}; merge is deferred until all issues complete and change verify passes.`;
+  const summary = `Coordinator accepted ${args.issueId} from ${workerDisplay}; merge is deferred until all issues complete, change verify passes, and pre-archive closeout starts.`;
   const tasksSync = syncTasksForIssues(args.repoRoot, args.change, [args.issueId], args.dryRun);
   const result: JsonRecord = {
     change: args.change,

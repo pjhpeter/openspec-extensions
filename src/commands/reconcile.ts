@@ -644,7 +644,7 @@ function continuationPolicy(nextAction: string, recommendedIssueId: string): Jso
       human_confirmation_required: false,
       must_not_stop_at_checkpoint: true,
       summary: "当前 issue 已满足自动接受条件，coordinator 必须立即收敛并继续。",
-      instruction: `\`auto_accept_issue\` 不是 terminal checkpoint；不要停在 control-plane ready。 立即运行 \`openspec-extensions reconcile accept-issue\` 接受${issueSuffix}，然后重新 reconcile 并继续主链；change 级 worktree 等全部 issue 接受并通过 worktree 内 review / verify 后再统一 merge。`
+      instruction: `\`auto_accept_issue\` 不是 terminal checkpoint；不要停在 control-plane ready。 立即运行 \`openspec-extensions reconcile accept-issue\` 接受${issueSuffix}，然后重新 reconcile 并继续主链；change 级 worktree 等全部 issue 接受、worktree 内 review / verify 通过且进入归档前收尾后再统一 merge。`
     };
   }
   if (nextAction === "merge_change") {
@@ -653,8 +653,8 @@ function continuationPolicy(nextAction: string, recommendedIssueId: string): Jso
       pause_allowed: false,
       human_confirmation_required: false,
       must_not_stop_at_checkpoint: true,
-      summary: "change worktree 已通过验收，coordinator 必须统一合并。",
-      instruction: "`merge_change` 不是 terminal checkpoint；只在 change-level review / verify 已通过后运行 `openspec-extensions reconcile merge-change`，然后重新 reconcile 进入 archive 收尾。"
+      summary: "change worktree 已通过验收，coordinator 必须在归档前统一合并。",
+      instruction: "`merge_change` 不是 terminal checkpoint；只在 change-level review / verify 已通过且进入归档前收尾时运行 `openspec-extensions reconcile merge-change`，然后重新 reconcile 并从主工作区 archive。"
     };
   }
   if (nextAction === "verify_change") {

@@ -44,9 +44,9 @@ If this file is missing, the helpers fall back to these defaults:
 - `rra.gate_mode`: `advisory` or `enforce`.
 - `subagent_team.auto_accept_spec_readiness`: automatically accept the spec-readiness gate once proposal/design have passed the dedicated `1` author + `2` reviewers design review, then continue into task splitting / issue planning without waiting for human sign-off.
 - `subagent_team.auto_accept_issue_planning`: automatically accept the issue-planning gate once `tasks.md` plus INDEX/ISSUE docs are dispatch-ready, then commit the planning docs and dispatch the approved issue set without waiting for human sign-off.
-- `subagent_team.auto_accept_issue_review`: automatically accept an eligible `review_required` issue after its issue-local validation passes and, for team-dispatch issues, the current `runs/ISSUE-REVIEW-<issue>.json` gate also passed. In the shipped default change-scoped worktree, accepted issues continue accumulating in the change worktree and merge/commit happens once after all issues are accepted and worktree-level verify passes.
+- `subagent_team.auto_accept_issue_review`: automatically accept an eligible `review_required` issue after its issue-local validation passes and, for team-dispatch issues, the current `runs/ISSUE-REVIEW-<issue>.json` gate also passed. In the shipped default change-scoped worktree, accepted issues continue accumulating in the change worktree and merge/commit happens once after all issues are accepted, worktree-level verify passes, and the workflow is entering pre-archive closeout.
 - `subagent_team.auto_accept_change_acceptance`: automatically accept the change-acceptance gate and continue into change-level verify.
-- `subagent_team.auto_archive_after_verify`: continue from a passed verify result into archive automatically.
+- `subagent_team.auto_archive_after_verify`: continue from a passed verify result into pre-archive merge and archive automatically.
 
 ## Current Contract
 
@@ -60,7 +60,7 @@ The repo config is a reusable default layer, not a replacement for clear issue d
 `worker_worktree` stays in the contract, and it now supports three steady-state modes:
 
 - shared workspace: `worker_worktree.scope=shared`, `worker_worktree.enabled=false`, or `worker_worktree: .` in the issue doc. Issue execution happens in the coordinator repo root. This remains the compatibility fallback only when a repo explicitly disables worktrees.
-- change worktree: `worker_worktree.enabled=true` with `worker_worktree.scope=change`, or an explicit `.worktree/<change>` path in the issue doc. This is the installed template default. All serial issues in the same change reuse one worktree; review and validation stay in that worktree until change-level verify passes, then the coordinator merges once.
+- change worktree: `worker_worktree.enabled=true` with `worker_worktree.scope=change`, or an explicit `.worktree/<change>` path in the issue doc. This is the installed template default. All serial issues in the same change reuse one worktree; review and validation stay in that worktree through change-level verify, then the coordinator merges once during pre-archive closeout.
 - issue worktree: `worker_worktree.enabled=true` with `worker_worktree.scope=issue`, or an explicit `.worktree/<change>/<issue>` path in the issue doc. Use this only when you truly need per-issue isolation or parallel issue execution.
 
 Backward compatibility note:
@@ -79,7 +79,8 @@ Important:
 - when reconcile emits `commit_planning_docs`, that result means "commit the planning docs now, then rerun reconcile"
 - when reconcile emits `dispatch_next_issue`, that result means "continue now", not "stop at control-plane ready and wait for another instruction"
 - even when `auto_accept_change_acceptance=true`, a passed change-level `/review` is still required before verify
-- when a change-level worktree is in use, archive should normally run through `openspec-extensions archive change --repo-root . --change "<change>"` so the successful archive also cleans up the reusable worktree
+- when a change-level worktree is in use, code must not merge into the coordinator repo root during implementation, issue acceptance, review, or verify; merge only after verify passes and immediately before archive
+- archive must run from the coordinator repo root after that pre-archive merge, normally through `openspec-extensions archive change --repo-root . --change "<change>"` so the successful archive also cleans up the reusable worktree
 - gate-bearing design-review / check / review seats should not be launched as `explorer`, and should use up to 1 hour blocking waits when unattended progression matters
 - before unattended gate-bearing batches, coordinators should check `ulimit -n` when shell access is available and restart with a larger open-files limit if it is below `16384`
 - `EMFILE`, `ENFILE`, or `Too many open files` means the current gate verdict is missing; recover the tool session and rerun the active dispatch gate instead of treating it as passed
@@ -93,7 +94,7 @@ Important:
 
 The runtime derives a profile from `rra.gate_mode` plus the `subagent_team.*` switches:
 
-- `semi_auto`: `rra.gate_mode=advisory`, while `spec_readiness`, `issue_planning`, `change_acceptance`, and `archive` still wait for manual confirmation. Before the first issue dispatch, the coordinator also pauses for the planning-doc commit. `auto_accept_issue_review` may be `false` or `true`; when it is `true`, issue execution auto-accepts each validated issue, then the change-scoped worktree merges once after all issues are accepted and worktree-level verify passes.
+- `semi_auto`: `rra.gate_mode=advisory`, while `spec_readiness`, `issue_planning`, `change_acceptance`, and `archive` still wait for manual confirmation. Before the first issue dispatch, the coordinator also pauses for the planning-doc commit. `auto_accept_issue_review` may be `false` or `true`; when it is `true`, issue execution auto-accepts each validated issue, then the change-scoped worktree merges once after all issues are accepted, worktree-level verify passes, and the workflow is entering pre-archive closeout.
 - `full_auto`: `rra.gate_mode=enforce`, `auto_accept_spec_readiness=true`, `auto_accept_issue_planning=true`, `auto_accept_issue_review=true`, and both `auto_accept_change_acceptance` / `auto_archive_after_verify` remain `false`
 - `custom`: any mixed combination
 
@@ -144,7 +145,7 @@ Behavior:
 - RRA keeps emitting guidance, but does not hard-block progression
 - issues reuse one change-level worktree by default (`.worktree/<change>`)
 - after each accepted issue, that change worktree remains the validation root before the next issue starts
-- if you also want every validated issue to be accepted without changing the rest of the gate behavior, keep this profile and set `auto_accept_issue_review=true`; default change-scoped worktrees still merge once after all issues are accepted and worktree-level verify passes
+- if you also want every validated issue to be accepted without changing the rest of the gate behavior, keep this profile and set `auto_accept_issue_review=true`; default change-scoped worktrees still merge once after all issues are accepted, worktree-level verify passes, and the workflow is entering pre-archive closeout
 
 ### Full-Automatic
 
@@ -180,12 +181,12 @@ Behavior:
 - issue planning is auto-accepted, then the coordinator immediately commits the planning docs before dispatching approved issues
 - a `commit_planning_docs` result must be executed immediately; it must not be skipped or reframed as a terminal checkpoint
 - a `dispatch_next_issue` result must be executed immediately; it must not be reframed as a terminal checkpoint or chat-only summary
-- eligible issue review is auto-accepted and continues; default change-scoped worktrees merge once after all issues are accepted and worktree-level verify passes
+- eligible issue review is auto-accepted and continues; default change-scoped worktrees merge once after all issues are accepted, worktree-level verify passes, and the workflow is entering pre-archive closeout
 - simple or complex flow continues automatically through change-level `/review` and the required automated test/validation plus automated manual verification closeout
 - after that test closeout, the flow pauses; verify and archive remain manual unless you explicitly build a custom profile
 - each auto-advance still waits for the phase's gate-bearing subagents to finish and for their verdicts to be collected
 - issues reuse one change-level worktree by default; if you need per-issue isolation, opt into `worker_worktree.scope=issue`
-- accepted issue code remains in the change worktree until change-level verify passes; successful archive should then clean it up
+- accepted issue code remains in the change worktree through change-level verify; after verify passes, pre-archive closeout merges it into the coordinator repo root, and successful archive should then clean up the reusable worktree
 
 ### Optional Shared Workspace Mode
 
@@ -261,4 +262,4 @@ Behavior:
 - `issue_planning -> issue_execution`: `subagent_team.auto_accept_issue_planning`
 - `issue_execution -> next_issue_or_change_acceptance`: `subagent_team.auto_accept_issue_review`
 - `change_acceptance -> verify`: `subagent_team.auto_accept_change_acceptance`
-- `verify -> archive`: `subagent_team.auto_archive_after_verify`
+- `verify -> pre-archive merge -> archive`: `subagent_team.auto_archive_after_verify`

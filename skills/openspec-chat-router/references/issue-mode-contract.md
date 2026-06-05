@@ -32,8 +32,8 @@ Helper scripts may fall back to the repo config when those fields are missing.
   - change-level backlog and round reports
   - change-level progress summaries
   - review of completed issues
-  - accepting completed issue changes back into the coordinator branch
-  - the git commit created during acceptance
+  - accepting completed issue changes while preserving the configured worktree boundary
+  - the git commit created during pre-archive merge
   - `verify`
   - `archive`
 - Worker owns:
@@ -118,9 +118,9 @@ If repo config is missing, helpers still default to change scope. Shared workspa
 6. Default decisions:
    - unresolved `Must fix now` items in the active control backlog -> stop and resolve them before dispatch, verify, or archive
    - any `blocked` -> stop and resolve blocker
-   - any `review_required` -> if `subagent_team.auto_accept_issue_review=true`, issue-local validation passed, and the team-dispatch issue review gate (when required) also passed, accept it automatically; otherwise review it in the coordinator session first. In change-scoped worktrees, defer merge/commit until all issues are accepted and worktree-level review / verify passes.
+   - any `review_required` -> if `subagent_team.auto_accept_issue_review=true`, issue-local validation passed, and the team-dispatch issue review gate (when required) also passed, accept it automatically; otherwise review it in the coordinator session first. In change-scoped worktrees, defer merge/commit until all issues are accepted, worktree-level review / verify pass, and the workflow is entering pre-archive closeout.
    - after an issue is accepted in a reusable change worktree, keep its code in that worktree before the next issue dispatch or change-level verify
-   - do not sync the reusable change worktree to a coordinator commit before change-level verify; the coordinator branch must remain unmerged until acceptance passes
+   - do not sync the reusable change worktree to a coordinator commit before pre-archive closeout; the coordinator branch must remain unmerged during implementation, issue acceptance, change-level review, and verify
    - if the first issue has not started yet and planning docs are still dirty in git -> create the coordinator-owned planning-doc commit first
    - any issue doc without progress -> dispatch that next issue only after the planning-doc commit already exists
    - all issues `completed` -> run a change-level acceptance round plus a change-level `/review` before moving to `verify`
@@ -194,14 +194,14 @@ Issue progress files are the execution state.
 Control backlog and round reports are the acceptance state.
 Team dispatch artifacts are the coordinator handoff state for the default subagent-team rounds in issue mode.
 Only issue-mode artifacts under `openspec/changes/<change>/...` count as workflow state; unrelated repo-root helper files such as `task_plan.md`, `findings.md`, or `progress.md` must not be reclassified as control-plane corruption, workflow noise, or a reason to stop auto-continuation.
-In issue mode, accepted code lands through coordinator review plus coordinator-owned merge commit after change acceptance, not through worker self-management.
-When a change-level worktree is reused across serial issues, that worktree remains the validation root until change-level review / verify passes; only then may coordinator merge it back to the main branch.
+In issue mode, accepted code lands through coordinator review plus coordinator-owned pre-archive merge commit, not through worker self-management.
+When a change-level worktree is reused across serial issues, that worktree remains the validation root through change-level review / verify. Only after review and verify have passed, and only as the pre-archive closeout step, may the coordinator merge it back to the main branch.
 The first issue execution also depends on a prior coordinator-owned planning-doc commit for `proposal.md` / `design.md` / `tasks.md` / `issues/INDEX.md` / `ISSUE-*.md`.
 It also depends on a current passed `runs/ISSUE-PLANNING.json`; stale or missing planning gate artifacts mean the change is still in `issue_planning`.
 When the issue is running under team dispatch, development seats do not close the issue on their own and are not the validation owner; they hand off changed files plus any validation entries reset to `pending`, then the coordinator records `runs/ISSUE-REVIEW-<issue>.json` after checker/reviewer pass and marks the issue `completed + review_required`.
 Before verify, the coordinator must first write a current `runs/CHANGE-REVIEW.json` artifact from a change-level `/review` of the current change diff; for reusable change worktrees, that diff comes from the worktree, not the coordinator branch.
 After that review passes, complex flow keeps the final automated test/validation and automated manual verification at change closeout rather than repeating them for every issue. For frontend or other browser-visible changes, prefer chrome devtools MCP to drive the affected main path during that final closeout step before the change is treated as verified; only fall back to another browser tool when chrome devtools MCP is unavailable.
-After successful archive of a change that used change scope, the reusable worktree should be removed as part of archive cleanup.
+Archive must run from the coordinator repo root after the accepted worktree code has been merged there. After successful archive of a change that used change scope, the reusable worktree should be removed as part of archive cleanup.
 When `subagent_team.auto_accept_*` is enabled, the gate is still coordinator-owned; it simply no longer waits for human chat confirmation before the coordinator accepts it.
 It still requires the gate-bearing subagents for that phase to finish, and it does not authorize early phase completion or early subagent closure.
 After an external disconnect or fresh reconnect, the coordinator should resume from those disk artifacts, rerun reconcile, and keep following `continuation_policy` instead of inventing a new soft checkpoint from chat history alone.
