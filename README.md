@@ -24,31 +24,19 @@
 
 ## 快速开始
 
-先全局安装 CLI：
+### 1. 安装 CLI
 
 ```bash
 npm install -g openspec-extensions
 ```
 
-这一步会同时把 `@fission-ai/openspec@~1.4.1` 装进 `openspec-extensions` 自己的依赖，并暴露三个全局命令：`openspec`、`openspec-ex`、`openspec-extensions`。所以全新环境不需要再单独手工安装一遍 OpenSpec。OpenSpec 1.4.1 要求 Node `>=20.19.0`，低于这个版本的 Node 需要先升级。
+这一步会同时安装 bundled OpenSpec，并暴露 `openspec`、`openspec-ex`、`openspec-extensions` 三个命令。OpenSpec 1.4.x 要求 Node `>=20.19.0`。
 
-在目标项目里初始化：
+### 2. 初始化项目
 
 ```bash
 cd /path/to/your/project
 openspec-ex init
-```
-
-查看 bundled OpenSpec 版本：
-
-```bash
-openspec --version
-```
-
-查看扩展 CLI 版本：
-
-```bash
-openspec-ex --version
 ```
 
 等价写法：
@@ -56,6 +44,38 @@ openspec-ex --version
 ```bash
 openspec-extensions init /path/to/your/project
 ```
+
+多数情况下，先记住 `openspec-ex init` 就够了。它会在目标项目里完成 OpenSpec 初始化，并安装本扩展的 skills 和默认 `issue-mode` 配置。
+
+### 3. 开始提需求
+
+初始化完成后，直接把下面的话发给支持已安装 skills 的 agent。
+
+创建新需求：
+
+```text
+进入 OpenSpec 模式。
+你自己判断需求复杂度；如果属于复杂流程，自动启用 subagent-team 推进，不用再单独问我。
+如需 spawned subagent，请显式使用 `<指定模型>`。
+需求：<需求描述>
+```
+
+继续现有需求：
+
+```text
+进入 OpenSpec 模式。
+继续 <change> change，根据原来的复杂度判断继续；如果是复杂流程，启用 subagent-team，spawned subagent 显式使用 `<指定模型>`。
+```
+
+### 4. 常用命令
+
+- `openspec-ex --version`：查看扩展 CLI 版本。
+- `openspec --version`：查看 bundled OpenSpec 版本。
+- `openspec-ex init --force`：升级目标仓库里已安装的扩展 skills。
+- `openspec-ex init --force --force-config`：升级 skills，并覆盖新的默认配置模板。
+- `openspec-extensions install --target-repo /path/to/your/project --dry-run`：只预览安装结果。
+
+## 初始化和安装细节
 
 这条命令会先检查目标仓库有没有 `openspec/config.yaml`。如果还没有，我会先调用随包安装的官方 `openspec init`；只有 bundled OpenSpec 不可用时，才会回退到 `npx @fission-ai/openspec@~1.4.1`，然后继续安装扩展。
 
@@ -81,7 +101,7 @@ openspec-extensions install --target-repo /path/to/your/project --force
 
 如果你在交互终端里执行 `openspec-extensions install --target-repo /path/to/your/project --force-config`，并且目标仓库已经存在 `openspec/issue-mode.json`，命令也会像 `init` 一样继续用英文询问你这次要覆盖成 `Semi-automatic and controllable` 还是 `Fully automatic through automated-test closeout`。如果这次是首次写入配置文件，则不会额外弹这个问题，直接按默认模板安装。
 
-常用选项：
+完整选项：
 
 - 预览安装结果：`openspec-extensions install --target-repo /path/to/your/project --dry-run`
 - 覆盖同名 skills：`openspec-extensions install --target-repo /path/to/your/project --force`
@@ -148,25 +168,7 @@ openspec/changes/*/runs/CHANGE-REVIEW.json
 - `先按简单流程走，因为范围集中且不需要 issue 拆分。`
 - `改走复杂流程，因为已经跨模块，并且需要 design review 和 issue 拆分。`
 
-如果你已经触发“进入 OpenSpec 模式”，我建议把后续话术收敛成三句：
-
-1. 创建新需求
-
-```text
-进入 OpenSpec 模式。
-你自己判断需求复杂度；如果属于复杂流程，自动启用 subagent-team 推进，不用再单独问我。
-如需 spawned subagent，请显式使用 `<指定模型>`。
-需求：<需求描述>
-```
-
-2. 继续现有需求
-
-```text
-进入 OpenSpec 模式。
-继续 <change> change，根据原来判断的复杂度继续；如果是复杂流程，启用 subagent-team，spawned subagent 显式使用 `<指定模型>`。
-```
-
-3. 也可以直接问我：`常用的话术模版`
+如果你刚开始用，优先照着快速开始里的“创建新需求 / 继续现有需求”两段话术启动。下面这些内容主要解释 agent 应该如何判断简单流程和复杂流程，以及进入不同流程后要守住哪些边界。
 
 ### 简单任务
 
@@ -298,23 +300,7 @@ flowchart TD
 > - 主会话自己串行执行 `development -> check -> repair -> review`。
 > - 一次只处理一个 approved issue，并继续写 issue-local progress / run artifact。
 
-如果我要让 agent 按复杂任务全生命周期推进，我常用的话术是：
-
-0. 进入 OpenSpec 模式后，优先用这三句之一启动
-
-```text
-进入 OpenSpec 模式。
-你自己判断需求复杂度；如果属于复杂流程，自动启用 subagent-team 推进，不用再单独问我。
-如需 spawned subagent，请显式使用 `<指定模型>`。
-需求：<需求描述>
-```
-
-```text
-进入 OpenSpec 模式。
-继续 <change> change，根据原来判断的复杂度继续；如果是复杂流程，启用 subagent-team，spawned subagent 显式使用 `<指定模型>`。
-```
-
-`常用的话术模版`
+如果我要让 agent 按复杂任务全生命周期推进，我会先沿用快速开始里的入口话术；当我已经知道要精确控制阶段时，再补充下面这些指令。
 
 1. 进入 OpenSpec 模式
 
