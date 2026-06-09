@@ -160,8 +160,9 @@ test("reconcile skill resume rules ignore repo-root helper noise and honor conti
   assert.match(skill, /continuation_policy\.mode=continue_immediately/);
   assert.match(skill, /external disconnect or a fresh reconnect/);
   assert.match(skill, /reconcile accept-issue/);
+  assert.match(skill, /reconcile accept-change/);
   assert.match(skill, /reconcile merge-change/);
-  assert.match(skill, /do not merge\/commit until worktree-level review \/ verify pass and reconcile emits `merge_change`/);
+  assert.match(skill, /do not merge\/commit until worktree-level review \/ verify pass, the user explicitly accepts the verified change, and reconcile emits `merge_change`/);
 });
 
 test("coordinator playbook forbids implementation before complex-flow gates pass", () => {
@@ -264,12 +265,13 @@ test("change-scoped worktrees defer merge until all issues are accepted", () => 
 
   assert.match(readme, /change 级 worktree 会累计所有 issue 改动/);
   assert.match(reconcileSkill, /accept-issue/);
+  assert.match(reconcileSkill, /accept-change/);
   assert.match(reconcileSkill, /merge-change/);
-  assert.match(reconcileSkill, /Merge\/commit only after all issues are accepted and worktree-level verify has passed/);
-  assert.match(routerSkill, /merge\/commit waits until all issues are accepted/);
+  assert.match(reconcileSkill, /CHANGE-ACCEPTANCE\.json/);
+  assert.match(routerSkill, /CHANGE-ACCEPTANCE\.json/);
   assert.match(teamSkill, /merge\/commit is deferred until all issues are accepted/);
   assert.match(contract, /defer merge\/commit until all issues are accepted/);
-  assert.match(playbook, /worktree-level verify passes/);
+  assert.match(playbook, /CHANGE-ACCEPTANCE\.json/);
 });
 
 test("tool resource guardrails prevent EMFILE gates from being self-certified", () => {

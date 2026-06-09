@@ -3,8 +3,9 @@ import path from "node:path";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { parseArgs } from "node:util";
 
-import { runAcceptIssueCommand, runMergeChangeCommand, runMergeIssueCommand } from "./merge-issue";
+import { runAcceptChangeCommand, runAcceptIssueCommand, runMergeChangeCommand, runMergeIssueCommand } from "./merge-issue";
 import {
+  acceptanceArtifactPath,
   issueReviewArtifactIsCurrent,
   issueReviewArtifactPath,
   isCanonicalIssueDocName,
@@ -14,6 +15,7 @@ import {
   phaseGateArtifactIsCurrent,
   phaseGateArtifactPath,
   phaseGateStatus,
+  parseIso8601,
   readJson,
   reviewArtifactPath,
   verifyArtifactPath,
@@ -82,6 +84,7 @@ const RECONCILE_HELP_TEXT = `Usage:
   openspec-extensions reconcile change --repo-root <path> --change <change> [--verbose]
   openspec-extensions reconcile commit-planning-docs --repo-root <path> --change <change> [--commit-message <message>] [--dry-run]
   openspec-extensions reconcile accept-issue --repo-root <path> --change <change> --issue-id <issue> [--dry-run] [--force]
+  openspec-extensions reconcile accept-change --repo-root <path> --change <change> [--dry-run]
   openspec-extensions reconcile merge-change --repo-root <path> --change <change> [--commit-message <message>] [--dry-run] [--force]
   openspec-extensions reconcile merge-issue --repo-root <path> --change <change> --issue-id <issue> [--commit-message <message>] [--dry-run] [--force]
 `;
@@ -313,6 +316,30 @@ function currentReviewState(repoRoot: string, change: string, issues: IssuePaylo
   };
 }
 
+function currentAcceptanceState(repoRoot: string, change: string, issues: IssuePayload[], verifyArtifact: JsonRecord): JsonRecord {
+  const artifact = readJson(acceptanceArtifactPath(repoRoot, change));
+  const acceptanceVerify = artifact.verify;
+  const acceptedAt = parseIso8601(String(artifact.updated_at ?? ""));
+  const verifiedAt = parseIso8601(String(verifyArtifact.updated_at ?? ""));
+  const status = String(artifact.status ?? "").trim().toLowerCase();
+  const passed = new Set(["accepted", "approved", "ok", "pass", "passed", "success", "succeeded"]).has(status);
+  const verifyMatched = Boolean(
+    acceptanceVerify &&
+    typeof acceptanceVerify === "object" &&
+    !Array.isArray(acceptanceVerify) &&
+    String((acceptanceVerify as JsonRecord).updated_at ?? "").trim() === String(verifyArtifact.updated_at ?? "").trim()
+  );
+  const current = Object.keys(artifact).length > 0 && changeArtifactIsCurrent(repoRoot, change, issues, artifact);
+  return {
+    artifact,
+    current,
+    path: path.relative(repoRoot, acceptanceArtifactPath(repoRoot, change)).split(path.sep).join("/"),
+    status,
+    passed: current && passed && verifyMatched && Boolean(acceptedAt && verifiedAt && acceptedAt >= verifiedAt),
+    failed: current && ["blocked", "fail", "failed", "rejected"].includes(status)
+  };
+}
+
 function currentPhaseGateState(repoRoot: string, change: string, phase: PhaseGate): JsonRecord {
   const artifact = readJson(phaseGateArtifactPath(repoRoot, change, phase));
   const status = phaseGateStatus(artifact);
@@ -538,6 +565,14 @@ function determineBaseNextAction(
     if (Object.keys(verifyArtifact).length > 0 && changeArtifactIsCurrent(repoRoot, change, issues, verifyArtifact)) {
       if (verifyArtifact.status === "passed") {
         if (hasDeferredAcceptedChangeWorktreeIssue(repoRoot, change, issues, config)) {
+          const acceptanceState = currentAcceptanceState(repoRoot, change, issues, verifyArtifact);
+          if (acceptanceState.passed !== true) {
+            return [
+              "await_user_acceptance",
+              "",
+              `change worktree 已通过 review / verify；等待用户验收通过并写入 ${acceptanceState.path} 后，才允许 merge-change。`
+            ];
+          }
           return ["merge_change", "", "change worktree 已通过 review / verify；现在可以把已验收代码合并到 coordinator 分支。"];
         }
         if (autoArchiveAfterVerify) {
@@ -644,7 +679,7 @@ function continuationPolicy(nextAction: string, recommendedIssueId: string): Jso
       human_confirmation_required: false,
       must_not_stop_at_checkpoint: true,
       summary: "当前 issue 已满足自动接受条件，coordinator 必须立即收敛并继续。",
-      instruction: `\`auto_accept_issue\` 不是 terminal checkpoint；不要停在 control-plane ready。 立即运行 \`openspec-extensions reconcile accept-issue\` 接受${issueSuffix}，然后重新 reconcile 并继续主链；change 级 worktree 等全部 issue 接受、worktree 内 review / verify 通过且进入归档前收尾后再统一 merge。`
+      instruction: `\`auto_accept_issue\` 不是 terminal checkpoint；不要停在 control-plane ready。 立即运行 \`openspec-extensions reconcile accept-issue\` 接受${issueSuffix}，然后重新 reconcile 并继续主链；change 级 worktree 等全部 issue 接受、worktree 内 review / verify 通过且用户验收写入 CHANGE-ACCEPTANCE 后再统一 merge。`
     };
   }
   if (nextAction === "merge_change") {
@@ -653,8 +688,8 @@ function continuationPolicy(nextAction: string, recommendedIssueId: string): Jso
       pause_allowed: false,
       human_confirmation_required: false,
       must_not_stop_at_checkpoint: true,
-      summary: "change worktree 已通过验收，coordinator 必须在归档前统一合并。",
-      instruction: "`merge_change` 不是 terminal checkpoint；只在 change-level review / verify 已通过且进入归档前收尾时运行 `openspec-extensions reconcile merge-change`，然后重新 reconcile 并从主工作区 archive。"
+      summary: "change worktree 已通过用户验收，coordinator 必须在归档前统一合并。",
+      instruction: "`merge_change` 不是 terminal checkpoint；只有 `CHANGE-ACCEPTANCE.json` 已记录当前 verify 的用户验收后，才运行 `openspec-extensions reconcile merge-change`，然后重新 reconcile 并从主工作区 archive。"
     };
   }
   if (nextAction === "verify_change") {
@@ -681,6 +716,7 @@ function continuationPolicy(nextAction: string, recommendedIssueId: string): Jso
     "await_issue_dispatch_confirmation",
     "await_planning_docs_commit_confirmation",
     "await_next_issue_confirmation",
+    "await_user_acceptance",
     "await_verify_confirmation",
     "ready_for_archive"
   ].includes(nextAction)) {
@@ -947,6 +983,9 @@ export function runReconcileCommand(argv: string[]): number {
     }
     if (subcommand === "accept-issue") {
       return runAcceptIssueCommand(rest);
+    }
+    if (subcommand === "accept-change") {
+      return runAcceptChangeCommand(rest);
     }
     if (subcommand === "merge-change") {
       return runMergeChangeCommand(rest);

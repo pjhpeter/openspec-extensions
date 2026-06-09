@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { acceptIssue, mergeChange, mergeIssue } from "../../src/commands/merge-issue";
+import { acceptChange, acceptIssue, mergeChange, mergeIssue } from "../../src/commands/merge-issue";
 import { issueReviewArtifactPath, verifyArtifactPath } from "../../src/domain/change-coordinator";
 
 function withTempDir(run: (repoRoot: string) => void): void {
@@ -40,13 +40,13 @@ function writeIssueReviewArtifact(repoRoot: string, change: string, issueId: str
   }, null, 2));
 }
 
-function writeChangeVerifyArtifact(repoRoot: string, change: string): void {
+function writeChangeVerifyArtifact(repoRoot: string, change: string, updatedAt = "2099-01-01T00:00:00+00:00"): void {
   const artifactPath = verifyArtifactPath(repoRoot, change);
   fs.mkdirSync(path.dirname(artifactPath), { recursive: true });
   fs.writeFileSync(artifactPath, JSON.stringify({
     change,
     status: "passed",
-    updated_at: "2099-01-01T00:00:00+00:00"
+    updated_at: updatedAt
   }, null, 2));
 }
 
@@ -478,7 +478,12 @@ done_when:
       run_id: "RUN-20260405T000000-ISSUE-001",
       updated_at: "2026-04-05T00:01:00+08:00"
     }, null, 2));
-    writeChangeVerifyArtifact(repoRoot, change);
+    writeChangeVerifyArtifact(repoRoot, change, "2026-04-05T00:02:00+08:00");
+    acceptChange({
+      change,
+      dryRun: false,
+      repoRoot
+    });
 
     const payload = mergeChange({
       change,
@@ -509,6 +514,68 @@ done_when:
     assert.equal(git(repoRoot, "log", "-1", "--pretty=%s"), `opsx(${change}): merge accepted issues`);
     assert.ok(headFiles.includes("src/demo.ts"));
     assert.ok(headFiles.includes(`openspec/changes/${change}/issues/ISSUE-001.progress.json`));
+    assert.ok(headFiles.includes(`openspec/changes/${change}/runs/CHANGE-ACCEPTANCE.json`));
+  });
+});
+
+test("mergeChange rejects accepted worktree before explicit user acceptance", () => {
+  withTempDir((repoRoot) => {
+    const change = "demo-change";
+    const changeDir = path.join(repoRoot, "openspec", "changes", change);
+    const issuesDir = path.join(changeDir, "issues");
+    const srcDir = path.join(repoRoot, "src");
+    fs.mkdirSync(issuesDir, { recursive: true });
+    fs.mkdirSync(srcDir, { recursive: true });
+
+    initGitRepo(repoRoot);
+    fs.mkdirSync(path.join(repoRoot, "openspec"), { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "openspec", "issue-mode.json"), JSON.stringify({
+      worker_worktree: {
+        enabled: true,
+        scope: "change",
+        mode: "branch",
+        base_ref: "HEAD",
+        branch_prefix: "opsx"
+      }
+    }, null, 2));
+    fs.writeFileSync(path.join(srcDir, "demo.ts"), "export const demo = 1;\n");
+    fs.writeFileSync(path.join(issuesDir, "ISSUE-001.md"), `---
+issue_id: ISSUE-001
+title: ISSUE-001
+worker_worktree: .worktree/${change}
+allowed_scope:
+  - src/demo.ts
+out_of_scope:
+  - electron/
+done_when:
+  - require user acceptance
+---
+`);
+    fs.writeFileSync(path.join(issuesDir, "ISSUE-001.progress.json"), JSON.stringify({
+      change,
+      issue_id: "ISSUE-001",
+      status: "completed",
+      boundary_status: "accepted",
+      next_action: "",
+      updated_at: "2026-04-05T00:00:00+08:00"
+    }, null, 2));
+    git(repoRoot, "add", ".");
+    git(repoRoot, "commit", "-m", "init accepted artifacts");
+    git(repoRoot, "worktree", "add", "-b", "opsx/demo-change", path.join(repoRoot, ".worktree", change), "HEAD");
+    fs.writeFileSync(path.join(repoRoot, ".worktree", change, "src", "demo.ts"), "export const demo = 2;\n");
+    writeChangeVerifyArtifact(repoRoot, change, "2026-04-05T00:02:00+08:00");
+
+    assert.throws(
+      () => mergeChange({
+        change,
+        commitMessage: "",
+        dryRun: false,
+        force: true,
+        repoRoot
+      }),
+      /explicit user acceptance/
+    );
+    assert.equal(fs.readFileSync(path.join(repoRoot, "src", "demo.ts"), "utf8"), "export const demo = 1;\n");
   });
 });
 

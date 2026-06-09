@@ -344,11 +344,18 @@ done_when:
   assert.deepEqual(payload.changed_files, ["src.ts"]);
 });
 
-test("cli reconcile accept-issue and merge-change expose help", async () => {
+test("cli reconcile accept-issue, accept-change, and merge-change expose help", async () => {
   const acceptResult = await captureStdout(() =>
     main([
       "reconcile",
       "accept-issue",
+      "--help"
+    ])
+  );
+  const acceptChangeResult = await captureStdout(() =>
+    main([
+      "reconcile",
+      "accept-change",
       "--help"
     ])
   );
@@ -362,6 +369,8 @@ test("cli reconcile accept-issue and merge-change expose help", async () => {
 
   assert.equal(acceptResult.exitCode, 0);
   assert.match(acceptResult.stdout, /reconcile accept-issue/);
+  assert.equal(acceptChangeResult.exitCode, 0);
+  assert.match(acceptChangeResult.stdout, /reconcile accept-change/);
   assert.equal(mergeResult.exitCode, 0);
   assert.match(mergeResult.stdout, /reconcile merge-change/);
 });

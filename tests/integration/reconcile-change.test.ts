@@ -7,6 +7,7 @@ import { execFileSync } from "node:child_process";
 
 import { reconcileChange } from "../../src/commands/reconcile";
 import {
+  acceptanceArtifactPath,
   issueReviewArtifactPath,
   phaseGateArtifactPath,
   phaseGateScopeToJson,
@@ -153,6 +154,21 @@ function writeChangeReviewArtifact(repoRoot: string, change: string, status = "p
     change,
     status,
     updated_at: updatedAt
+  }, null, 2));
+}
+
+function writeChangeAcceptanceArtifact(repoRoot: string, change: string, verifyUpdatedAt = "2026-03-30T10:05:00+08:00"): void {
+  const artifactPath = acceptanceArtifactPath(repoRoot, change);
+  fs.mkdirSync(path.dirname(artifactPath), { recursive: true });
+  fs.writeFileSync(artifactPath, JSON.stringify({
+    change,
+    status: "accepted",
+    updated_at: "2026-03-30T10:06:00+08:00",
+    verify: {
+      path: `openspec/changes/${change}/runs/CHANGE-VERIFY.json`,
+      status: "passed",
+      updated_at: verifyUpdatedAt
+    }
   }, null, 2));
 }
 
@@ -425,7 +441,7 @@ test("accepted change worktree issues require worktree review before merge", () 
   });
 });
 
-test("accepted change worktree issues merge only after verify passes", () => {
+test("accepted change worktree issues wait for user acceptance after verify passes", () => {
   withTempDir((repoRoot) => {
     const change = "demo-change";
     const runsDir = path.join(repoRoot, "openspec", "changes", change, "runs");
@@ -452,11 +468,47 @@ test("accepted change worktree issues merge only after verify passes", () => {
 
     const payload = reconcileChange({ repoRoot, change });
 
+    assert.equal(payload.next_action, "await_user_acceptance");
+    assert.equal(payload.recommended_issue_id, "");
+    assert.match(String(payload.reason), /等待用户验收/);
+    assert.equal((payload.continuation_policy as Record<string, string>).mode, "await_human_confirmation");
+    assert.match(String((payload.continuation_policy as Record<string, string>).instruction), /人工确认/);
+  });
+});
+
+test("accepted change worktree issues merge after user acceptance artifact is current", () => {
+  withTempDir((repoRoot) => {
+    const change = "demo-change";
+    const runsDir = path.join(repoRoot, "openspec", "changes", change, "runs");
+    fs.mkdirSync(runsDir, { recursive: true });
+    writeIssueDoc(repoRoot, change, "ISSUE-001", { workerWorktree: `.worktree/${change}` });
+    writeIssueDoc(repoRoot, change, "ISSUE-002", { workerWorktree: `.worktree/${change}` });
+    writeIssueProgress(repoRoot, change, {
+      issueId: "ISSUE-001",
+      status: "completed",
+      boundaryStatus: "accepted",
+      nextAction: "",
+    });
+    writeIssueProgress(repoRoot, change, {
+      issueId: "ISSUE-002",
+      status: "completed",
+      boundaryStatus: "accepted",
+      nextAction: "",
+    });
+    writeChangeReviewArtifact(repoRoot, change);
+    fs.writeFileSync(path.join(runsDir, "CHANGE-VERIFY.json"), JSON.stringify({
+      status: "passed",
+      updated_at: "2026-03-30T10:05:00+08:00"
+    }, null, 2));
+    writeChangeAcceptanceArtifact(repoRoot, change);
+
+    const payload = reconcileChange({ repoRoot, change });
+
     assert.equal(payload.next_action, "merge_change");
     assert.equal(payload.recommended_issue_id, "");
     assert.match(String(payload.reason), /已通过 review \/ verify/);
     assert.equal((payload.continuation_policy as Record<string, string>).mode, "continue_immediately");
-    assert.match(String((payload.continuation_policy as Record<string, string>).instruction), /merge-change/);
+    assert.match(String((payload.continuation_policy as Record<string, string>).instruction), /CHANGE-ACCEPTANCE/);
   });
 });
 

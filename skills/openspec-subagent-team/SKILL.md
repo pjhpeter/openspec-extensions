@@ -170,7 +170,7 @@ Read these first:
 - `auto_accept_spec_readiness=true` means spec-readiness does not wait for human sign-off once proposal/design have passed the `1` author + `2` reviewers design review.
 - `auto_accept_issue_planning=true` means issue planning does not wait for human sign-off once tasks.md plus INDEX/ISSUE docs are dispatch-ready; the coordinator still commits the planning docs before the first issue dispatch.
 - `dispatch_next_issue` means "continue now"; it is not a pause point, not a terminal checkpoint, and not a prompt to wait for another user instruction.
-- `auto_accept_issue_review=true` means eligible `review_required` issues are coordinator-accepted automatically only after issue-local validation passed and the current team review gate artifact also passed. In the default change-scoped worktree, merge/commit is deferred until all issues are accepted, the accumulated worktree has passed change-level review / verify, and the workflow is entering pre-archive closeout.
+- `auto_accept_issue_review=true` means eligible `review_required` issues are coordinator-accepted automatically only after issue-local validation passed and the current team review gate artifact also passed. In the default change-scoped worktree, merge/commit is deferred until all issues are accepted, the accumulated worktree has passed change-level review / verify, and explicit user acceptance has been recorded in `runs/CHANGE-ACCEPTANCE.json`.
 - `auto_accept_change_acceptance=true` means change acceptance does not wait for human sign-off once a passed change-level `/review` has already made verify allowed.
 - unattended progression should use long blocking waits for gate-bearing subagents, typically up to 1 hour
 - One issue stays one bounded execution unit even when multiple subagents participate in the round.
@@ -179,7 +179,7 @@ Read these first:
 - If the loop stalls after two or three rounds, shrink scope or tighten the review target instead of expanding the backlog.
 - Do not replace coordinator-owned merge/commit/verify/archive with worker self-management.
 - Do not skip the change-level `/review` step between "all issues completed" and `verify`.
-- Do not merge change-worktree code into the coordinator repo root during implementation, issue acceptance, change-level review, or verify. Merge only after verify passes and immediately before archive; archive must then run from the coordinator repo root.
+- Do not merge change-worktree code into the coordinator repo root during implementation, issue acceptance, change-level review, verify, or before user acceptance. Merge only after verify passes, `runs/CHANGE-ACCEPTANCE.json` records explicit user acceptance, and archive is the next closeout step; archive must then run from the coordinator repo root.
 - Keep `worker_worktree` as the issue workspace field.
 - Shared workspace (`.`) is a compatibility mode only when the repo explicitly disables worker worktrees or sets `scope=shared`.
 - The installed template now defaults to one change-level worktree (`.worktree/<change>`) reused across that change's serial issues.

@@ -31,6 +31,7 @@ Usage:
   openspec-extensions reconcile change [options]
   openspec-extensions reconcile commit-planning-docs [options]
   openspec-extensions reconcile accept-issue [options]
+  openspec-extensions reconcile accept-change [options]
   openspec-extensions reconcile merge-change [options]
   openspec-extensions reconcile merge-issue [options]
   openspec-extensions review change [options]
@@ -49,6 +50,7 @@ Commands:
   reconcile change        Reconcile change state and continuation policy.
   reconcile commit-planning-docs Commit planning docs for a change.
   reconcile accept-issue  Accept one reviewed issue while deferring change worktree merge.
+  reconcile accept-change Accept a verified change after user validation before merge.
   reconcile merge-change  Merge verified change worktree issues into the coordinator branch.
   reconcile merge-issue   Compatibility helper to accept and merge one reviewed issue into the coordinator branch.
   review change           Run change-level coordinator review.

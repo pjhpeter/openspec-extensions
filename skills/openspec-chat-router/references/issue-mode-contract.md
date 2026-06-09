@@ -93,6 +93,8 @@ openspec/changes/<change-name>/
     ├── SPEC-READINESS.json
     ├── ISSUE-PLANNING.json
     ├── CHANGE-REVIEW.json
+    ├── CHANGE-VERIFY.json
+    ├── CHANGE-ACCEPTANCE.json
     ├── RUN-20260325T103000-ISSUE-001.json
     └── RUN-20260325T111500-ISSUE-002.json
 ```
@@ -118,7 +120,7 @@ If repo config is missing, helpers still default to change scope. Shared workspa
 6. Default decisions:
    - unresolved `Must fix now` items in the active control backlog -> stop and resolve them before dispatch, verify, or archive
    - any `blocked` -> stop and resolve blocker
-   - any `review_required` -> if `subagent_team.auto_accept_issue_review=true`, issue-local validation passed, and the team-dispatch issue review gate (when required) also passed, accept it automatically; otherwise review it in the coordinator session first. In change-scoped worktrees, defer merge/commit until all issues are accepted, worktree-level review / verify pass, and the workflow is entering pre-archive closeout.
+   - any `review_required` -> if `subagent_team.auto_accept_issue_review=true`, issue-local validation passed, and the team-dispatch issue review gate (when required) also passed, accept it automatically; otherwise review it in the coordinator session first. In change-scoped worktrees, defer merge/commit until all issues are accepted, worktree-level review / verify pass, and `runs/CHANGE-ACCEPTANCE.json` records explicit user acceptance.
    - after an issue is accepted in a reusable change worktree, keep its code in that worktree before the next issue dispatch or change-level verify
    - do not sync the reusable change worktree to a coordinator commit before pre-archive closeout; the coordinator branch must remain unmerged during implementation, issue acceptance, change-level review, and verify
    - if the first issue has not started yet and planning docs are still dirty in git -> create the coordinator-owned planning-doc commit first
@@ -195,7 +197,7 @@ Control backlog and round reports are the acceptance state.
 Team dispatch artifacts are the coordinator handoff state for the default subagent-team rounds in issue mode.
 Only issue-mode artifacts under `openspec/changes/<change>/...` count as workflow state; unrelated repo-root helper files such as `task_plan.md`, `findings.md`, or `progress.md` must not be reclassified as control-plane corruption, workflow noise, or a reason to stop auto-continuation.
 In issue mode, accepted code lands through coordinator review plus coordinator-owned pre-archive merge commit, not through worker self-management.
-When a change-level worktree is reused across serial issues, that worktree remains the validation root through change-level review / verify. Only after review and verify have passed, and only as the pre-archive closeout step, may the coordinator merge it back to the main branch.
+When a change-level worktree is reused across serial issues, that worktree remains the validation root through change-level review / verify. Only after review and verify have passed and explicit user acceptance is recorded in `runs/CHANGE-ACCEPTANCE.json`, and only as the pre-archive closeout step, may the coordinator merge it back to the main branch.
 The first issue execution also depends on a prior coordinator-owned planning-doc commit for `proposal.md` / `design.md` / `tasks.md` / `issues/INDEX.md` / `ISSUE-*.md`.
 It also depends on a current passed `runs/ISSUE-PLANNING.json`; stale or missing planning gate artifacts mean the change is still in `issue_planning`.
 When the issue is running under team dispatch, development seats do not close the issue on their own and are not the validation owner; they hand off changed files plus any validation entries reset to `pending`, then the coordinator records `runs/ISSUE-REVIEW-<issue>.json` after checker/reviewer pass and marks the issue `completed + review_required`.

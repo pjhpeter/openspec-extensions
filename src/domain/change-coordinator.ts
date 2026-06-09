@@ -5,6 +5,7 @@ import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 
 export const REVIEW_ARTIFACT_FILE_NAME = "CHANGE-REVIEW.json";
 export const VERIFY_ARTIFACT_FILE_NAME = "CHANGE-VERIFY.json";
+export const ACCEPTANCE_ARTIFACT_FILE_NAME = "CHANGE-ACCEPTANCE.json";
 export const SPEC_READINESS_ARTIFACT_FILE_NAME = "SPEC-READINESS.json";
 export const ISSUE_PLANNING_ARTIFACT_FILE_NAME = "ISSUE-PLANNING.json";
 export const ISSUE_REVIEW_ARTIFACT_PREFIX = "ISSUE-REVIEW-";
@@ -471,6 +472,10 @@ export function planningDocStatus(repoRoot: string, change: string): JsonRecord 
 
 export function verifyArtifactPath(repoRoot: string, change: string): string {
   return path.join(changeDirPath(repoRoot, change), "runs", VERIFY_ARTIFACT_FILE_NAME);
+}
+
+export function acceptanceArtifactPath(repoRoot: string, change: string): string {
+  return path.join(changeDirPath(repoRoot, change), "runs", ACCEPTANCE_ARTIFACT_FILE_NAME);
 }
 
 export function reviewArtifactPath(repoRoot: string, change: string): string {

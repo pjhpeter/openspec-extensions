@@ -3,12 +3,14 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 
 import {
+  acceptanceArtifactPath,
   issueReviewArtifactIsCurrent,
   issueReviewArtifactPath,
   issueReviewStatus,
   issueTeamDispatchPath,
   isCanonicalIssueDocName,
   nowIso,
+  parseIso8601,
   readJson,
   reviewArtifactPath,
   syncTasksForIssues,
@@ -39,6 +41,7 @@ import { displayPath } from "../utils/path";
 const MERGE_ISSUE_HELP_TEXT = `Usage:
   openspec-extensions reconcile merge-issue --repo-root <path> --change <change> --issue-id <issue> [--commit-message <message>] [--dry-run] [--force]
   openspec-extensions reconcile accept-issue --repo-root <path> --change <change> --issue-id <issue> [--dry-run] [--force]
+  openspec-extensions reconcile accept-change --repo-root <path> --change <change> [--dry-run]
   openspec-extensions reconcile merge-change --repo-root <path> --change <change> [--commit-message <message>] [--dry-run] [--force]
 `;
 
@@ -52,6 +55,12 @@ export type ParsedMergeIssueArgs = {
 };
 
 export type ParsedAcceptIssueArgs = Omit<ParsedMergeIssueArgs, "commitMessage">;
+
+export type ParsedAcceptChangeArgs = {
+  change: string;
+  dryRun: boolean;
+  repoRoot: string;
+};
 
 export type ParsedMergeChangeArgs = {
   change: string;
@@ -121,6 +130,33 @@ function parseAcceptIssueArgs(argv: string[]): ParsedAcceptIssueArgs | null {
     dryRun: values["dry-run"],
     force: values.force,
     issueId: values["issue-id"],
+    repoRoot: path.resolve(values["repo-root"]),
+  };
+}
+
+function parseAcceptChangeArgs(argv: string[]): ParsedAcceptChangeArgs | null {
+  const { values } = parseArgs({
+    args: argv,
+    options: {
+      change: { type: "string" },
+      "dry-run": { type: "boolean", default: false },
+      help: { short: "h", type: "boolean", default: false },
+      "repo-root": { type: "string" },
+    },
+    strict: true,
+  });
+
+  if (values.help) {
+    process.stdout.write(MERGE_ISSUE_HELP_TEXT);
+    return null;
+  }
+  if (!values["repo-root"] || !values.change) {
+    throw new Error("Missing required options: --repo-root, --change");
+  }
+
+  return {
+    change: values.change,
+    dryRun: values["dry-run"],
     repoRoot: path.resolve(values["repo-root"]),
   };
 }
@@ -276,9 +312,9 @@ function ensureChangeVerifyPassedBeforeMerge(
   change: string,
   issues: ChangeIssueState[],
   force: boolean
-): void {
+): JsonRecord {
   if (force) {
-    return;
+    return {};
   }
 
   const issuePayloads = issues.map((issue) => ({
@@ -288,10 +324,58 @@ function ensureChangeVerifyPassedBeforeMerge(
   const artifact = readJson(verifyArtifactPath(repoRoot, change));
   const status = String(artifact.status ?? "").trim();
   if (status === "passed" && changeArtifactIsCurrent(repoRoot, change, issuePayloads, artifact)) {
-    return;
+    return artifact;
   }
 
   throw new Error("Change worktree cannot be merged before a current passed change-level verify artifact exists.");
+}
+
+function verifyArtifactIsAccepted(acceptanceArtifact: JsonRecord, verifyArtifact: JsonRecord): boolean {
+  const acceptanceVerify = acceptanceArtifact.verify;
+  if (!acceptanceVerify || typeof acceptanceVerify !== "object" || Array.isArray(acceptanceVerify)) {
+    return false;
+  }
+  return String((acceptanceVerify as JsonRecord).updated_at ?? "").trim() === String(verifyArtifact.updated_at ?? "").trim();
+}
+
+function acceptanceStatusPassed(artifact: JsonRecord): boolean {
+  return new Set(["accepted", "approved", "ok", "pass", "passed", "success", "succeeded"])
+    .has(String(artifact.status ?? "").trim().toLowerCase());
+}
+
+function acceptanceIsAfterVerify(acceptanceArtifact: JsonRecord, verifyArtifact: JsonRecord): boolean {
+  const acceptedAt = parseIso8601(String(acceptanceArtifact.updated_at ?? ""));
+  const verifiedAt = parseIso8601(String(verifyArtifact.updated_at ?? ""));
+  return Boolean(acceptedAt && verifiedAt && acceptedAt >= verifiedAt);
+}
+
+function ensureChangeAcceptedBeforeMerge(
+  repoRoot: string,
+  change: string,
+  issues: ChangeIssueState[],
+  verifyArtifact: JsonRecord
+): JsonRecord {
+  const artifact = readJson(acceptanceArtifactPath(repoRoot, change));
+  const issuePayloads = issues.map((issue) => ({
+    ...issue.progress,
+    issue_id: String(issue.progress.issue_id ?? issue.issueId),
+  }));
+
+  if (
+    Object.keys(artifact).length > 0 &&
+    acceptanceStatusPassed(artifact) &&
+    verifyArtifactIsAccepted(artifact, verifyArtifact) &&
+    acceptanceIsAfterVerify(artifact, verifyArtifact) &&
+    changeArtifactIsCurrent(repoRoot, change, issuePayloads, artifact)
+  ) {
+    return artifact;
+  }
+
+  // 用户验收是合入主工作区的授权边界，不能被 --force 绕过。
+  throw new Error(
+    `Change ${change} cannot be merged before explicit user acceptance. ` +
+    `Run openspec-extensions reconcile accept-change --repo-root . --change ${JSON.stringify(change)} after user acceptance.`
+  );
 }
 
 function updateIssueArtifacts(
@@ -539,11 +623,57 @@ export function acceptIssue(args: ParsedAcceptIssueArgs): JsonRecord {
   return result;
 }
 
+export function acceptChange(args: ParsedAcceptChangeArgs): JsonRecord {
+  const issues = collectChangeIssues(args.repoRoot, args.change);
+  const issuePayloads: JsonRecord[] = issues.map((issue) => ({
+    ...issue.progress,
+    issue_id: String(issue.progress.issue_id ?? issue.issueId),
+  }));
+  const verifyArtifact = ensureChangeVerifyPassedBeforeMerge(args.repoRoot, args.change, issues, false);
+  const artifactPath = acceptanceArtifactPath(args.repoRoot, args.change);
+  const artifact: JsonRecord = {
+    change: args.change,
+    status: "accepted",
+    summary: `Change ${args.change} was explicitly accepted for merge into the coordinator workspace.`,
+    updated_at: nowIso(),
+    dry_run: args.dryRun,
+    completed_issue_ids: issuePayloads
+      .filter((issue) => String(issue.status ?? "").trim() === "completed")
+      .map((issue) => String(issue.issue_id ?? "").trim())
+      .filter(Boolean)
+      .sort(),
+    verify: {
+      path: path.relative(args.repoRoot, verifyArtifactPath(args.repoRoot, args.change)).split(path.sep).join("/"),
+      status: String(verifyArtifact.status ?? "").trim(),
+      updated_at: String(verifyArtifact.updated_at ?? "").trim(),
+      summary: String(verifyArtifact.summary ?? "").trim()
+    },
+    review_scope:
+      verifyArtifact.review_scope && typeof verifyArtifact.review_scope === "object" && !Array.isArray(verifyArtifact.review_scope)
+        ? verifyArtifact.review_scope
+        : {}
+  };
+
+  const result: JsonRecord = {
+    change: args.change,
+    accepted: true,
+    dry_run: args.dryRun,
+    acceptance_path: path.relative(args.repoRoot, artifactPath).split(path.sep).join("/"),
+    artifact
+  };
+
+  if (!args.dryRun) {
+    writeJson(artifactPath, artifact);
+  }
+  return result;
+}
+
 export function mergeChange(args: ParsedMergeChangeArgs): JsonRecord {
   const config = loadIssueModeConfig(args.repoRoot);
   const issues = collectChangeIssues(args.repoRoot, args.change);
   const acceptedIssues = ensureAllIssuesAcceptedForChangeMerge(issues, args.force);
-  ensureChangeVerifyPassedBeforeMerge(args.repoRoot, args.change, issues, args.force);
+  const verifyArtifact = ensureChangeVerifyPassedBeforeMerge(args.repoRoot, args.change, issues, false);
+  const acceptanceArtifact = ensureChangeAcceptedBeforeMerge(args.repoRoot, args.change, issues, verifyArtifact);
   const firstIssueId = acceptedIssues[0]?.issueId ?? issues[0]?.issueId ?? "ISSUE-001";
   const [workerWorktree, workerDisplay, workerSource] = issueWorkerWorktreePath(
     args.repoRoot,
@@ -578,6 +708,8 @@ export function mergeChange(args: ParsedMergeChangeArgs): JsonRecord {
     changed_files: workerPatch.changedFiles,
     commit_message: commitMessage,
     dry_run: args.dryRun,
+    acceptance_path: path.relative(args.repoRoot, acceptanceArtifactPath(args.repoRoot, args.change)).split(path.sep).join("/"),
+    accepted_at: String(acceptanceArtifact.updated_at ?? "").trim(),
     worker_status_lines: workerPatch.workerStatusLines,
   };
 
@@ -612,7 +744,11 @@ export function mergeChange(args: ParsedMergeChangeArgs): JsonRecord {
   if (tasksSync.changed === true && tasksPath) {
     repoRelativePaths.push(tasksPath);
   }
-  for (const artifactPath of [reviewArtifactPath(args.repoRoot, args.change), verifyArtifactPath(args.repoRoot, args.change)]) {
+  for (const artifactPath of [
+    reviewArtifactPath(args.repoRoot, args.change),
+    verifyArtifactPath(args.repoRoot, args.change),
+    acceptanceArtifactPath(args.repoRoot, args.change)
+  ]) {
     if (fs.existsSync(artifactPath)) {
       repoRelativePaths.push(displayPath(args.repoRoot, artifactPath));
     }
@@ -752,6 +888,15 @@ export function runAcceptIssueCommand(argv: string[]): number {
     return 0;
   }
   process.stdout.write(`${JSON.stringify(acceptIssue(parsed), null, 2)}\n`);
+  return 0;
+}
+
+export function runAcceptChangeCommand(argv: string[]): number {
+  const parsed = parseAcceptChangeArgs(argv);
+  if (!parsed) {
+    return 0;
+  }
+  process.stdout.write(`${JSON.stringify(acceptChange(parsed), null, 2)}\n`);
   return 0;
 }
 
