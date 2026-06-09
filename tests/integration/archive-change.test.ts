@@ -93,6 +93,69 @@ test("archiveChange cleans change worktree wrapper state", () => {
   });
 });
 
+test("archiveChange rejects deferred accepted issue work before merge-change", () => {
+  withTempDir((repoRoot) => {
+    const change = "demo-change";
+    const configPath = path.join(repoRoot, "openspec", "issue-mode.json");
+    const issuesDir = path.join(repoRoot, "openspec", "changes", change, "issues");
+    fs.mkdirSync(issuesDir, { recursive: true });
+    fs.writeFileSync(configPath, JSON.stringify({
+      worker_worktree: {
+        enabled: true,
+        scope: "change",
+        mode: "branch",
+        base_ref: "HEAD",
+        branch_prefix: "opsx"
+      }
+    }, null, 2));
+    fs.writeFileSync(path.join(issuesDir, "ISSUE-001.progress.json"), JSON.stringify({
+      change,
+      issue_id: "ISSUE-001",
+      status: "completed",
+      boundary_status: "accepted",
+      next_action: "",
+      updated_at: "2026-04-05T00:00:00+08:00"
+    }, null, 2));
+
+    initGitRepo(repoRoot);
+    fs.writeFileSync(path.join(repoRoot, "README.md"), "demo\n");
+    git(repoRoot, "add", ".");
+    git(repoRoot, "commit", "-m", "init");
+
+    const worktreePath = path.join(repoRoot, ".worktree", change);
+    git(repoRoot, "worktree", "add", "-b", "opsx/demo-change", worktreePath, "HEAD");
+
+    const dryRunPayload = archiveChange({
+      archiveCommand: `${JSON.stringify(process.execPath)} -e "require('node:fs').writeFileSync('archived.flag', 'ok')"`,
+      change,
+      dryRun: true,
+      repoRoot,
+      skipCleanup: false
+    }) as {
+      pending_merge: {
+        issueIds: string[];
+        required: boolean;
+      };
+    };
+
+    assert.equal(dryRunPayload.pending_merge.required, true);
+    assert.deepEqual(dryRunPayload.pending_merge.issueIds, ["ISSUE-001"]);
+    assert.throws(
+      () => archiveChange({
+        archiveCommand: `${JSON.stringify(process.execPath)} -e "require('node:fs').writeFileSync('archived.flag', 'ok')"`,
+        change,
+        dryRun: false,
+        repoRoot,
+        skipCleanup: false
+      }),
+      /reconcile merge-change/
+    );
+    assert.equal(fs.existsSync(path.join(repoRoot, "archived.flag")), false);
+    assert.equal(fs.existsSync(worktreePath), true);
+    assert.match(git(repoRoot, "worktree", "list"), /\.worktree\/demo-change/);
+  });
+});
+
 test("archiveChange cleans issue-scoped worktrees for all issue docs", () => {
   withTempDir((repoRoot) => {
     const change = "demo-change";

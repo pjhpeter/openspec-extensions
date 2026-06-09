@@ -10,6 +10,7 @@ import {
   type IssueModeConfig,
   workerBranchName,
 } from "../domain/issue-mode";
+import { readJson, type JsonRecord } from "../domain/change-coordinator";
 import { displayPath, resolveRepoPath } from "../utils/path";
 
 const ARCHIVE_HELP_TEXT = `Usage:
@@ -128,6 +129,11 @@ type CleanupTarget = {
   worktreeRelative: string;
 };
 
+type DeferredArchiveMerge = {
+  issueIds: string[];
+  required: boolean;
+};
+
 function issueDocIds(repoRoot: string, change: string): string[] {
   const issuesDir = path.join(repoRoot, "openspec", "changes", change, "issues");
   if (!fs.existsSync(issuesDir)) {
@@ -139,6 +145,50 @@ function issueDocIds(repoRoot: string, change: string): string[] {
     .filter((name) => !name.endsWith(".dispatch.md") && !name.endsWith(".team.dispatch.md"))
     .sort()
     .map((name) => path.basename(name, ".md"));
+}
+
+function issueProgressId(fileName: string, progress: JsonRecord): string {
+  return String(progress.issue_id ?? path.basename(fileName, ".progress.json")).trim();
+}
+
+function deferredArchiveMerge(repoRoot: string, change: string): DeferredArchiveMerge {
+  const issuesDir = path.join(repoRoot, "openspec", "changes", change, "issues");
+  if (!fs.existsSync(issuesDir)) {
+    return {
+      issueIds: [],
+      required: false,
+    };
+  }
+
+  const issueIds = fs.readdirSync(issuesDir)
+    .filter((name) => name.endsWith(".progress.json"))
+    .flatMap((name) => {
+      const progress = readJson(path.join(issuesDir, name));
+      if (progress.status !== "completed" || String(progress.boundary_status ?? "").trim() !== "accepted") {
+        return [];
+      }
+      return [issueProgressId(name, progress)];
+    })
+    .filter(Boolean)
+    .sort();
+
+  return {
+    issueIds,
+    required: issueIds.length > 0,
+  };
+}
+
+function ensureNoDeferredArchiveMerge(repoRoot: string, change: string): DeferredArchiveMerge {
+  const pendingMerge = deferredArchiveMerge(repoRoot, change);
+  if (!pendingMerge.required) {
+    return pendingMerge;
+  }
+
+  // 归档会清理 worktree，必须先把已验收代码落回主工作区。
+  throw new Error(
+    `Change ${change} has accepted issue work that is not merged yet: ${pendingMerge.issueIds.join(", ")}. ` +
+    `Run openspec-extensions reconcile merge-change --repo-root . --change ${JSON.stringify(change)} before archive.`
+  );
 }
 
 function addCleanupTarget(
@@ -316,6 +366,7 @@ export function archiveChange(args: ParsedArchiveArgs) {
     change: args.change,
     archive_command: archiveCommand,
     dry_run: args.dryRun,
+    pending_merge: deferredArchiveMerge(args.repoRoot, args.change),
     cleanup_skipped: args.skipCleanup
   };
 
@@ -325,6 +376,7 @@ export function archiveChange(args: ParsedArchiveArgs) {
     return result;
   }
 
+  ensureNoDeferredArchiveMerge(args.repoRoot, args.change);
   const archiveProcess = runShell(archiveCommand, args.repoRoot);
   result.archived = true;
   result.archive_stdout = archiveProcess.stdout.trim();
