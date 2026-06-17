@@ -132,14 +132,24 @@ test("archiveChange rejects deferred accepted issue work before merge-change", (
       repoRoot,
       skipCleanup: false
     }) as {
+      archive_allowed: boolean;
       pending_merge: {
+        changedFiles: string[];
         issueIds: string[];
+        requiredAction: string;
+        requiredCommand: string;
         required: boolean;
+        statusCommand: string;
       };
     };
 
+    assert.equal(dryRunPayload.archive_allowed, false);
     assert.equal(dryRunPayload.pending_merge.required, true);
     assert.deepEqual(dryRunPayload.pending_merge.issueIds, ["ISSUE-001"]);
+    assert.deepEqual(dryRunPayload.pending_merge.changedFiles, []);
+    assert.match(dryRunPayload.pending_merge.requiredCommand, /reconcile merge-change/);
+    assert.match(dryRunPayload.pending_merge.requiredAction, /rerun openspec-extensions reconcile change/);
+    assert.match(dryRunPayload.pending_merge.statusCommand, /reconcile change/);
     assert.throws(
       () => archiveChange({
         archiveCommand: `${JSON.stringify(process.execPath)} -e "require('node:fs').writeFileSync('archived.flag', 'ok')"`,
@@ -148,11 +158,75 @@ test("archiveChange rejects deferred accepted issue work before merge-change", (
         repoRoot,
         skipCleanup: false
       }),
-      /reconcile merge-change/
+      /Do not run raw openspec archive directly/
     );
     assert.equal(fs.existsSync(path.join(repoRoot, "archived.flag")), false);
     assert.equal(fs.existsSync(worktreePath), true);
     assert.match(git(repoRoot, "worktree", "list"), /\.worktree\/demo-change/);
+  });
+});
+
+test("archiveChange rejects unmerged change worktree diff before cleanup", () => {
+  withTempDir((repoRoot) => {
+    const change = "demo-change";
+    const configPath = path.join(repoRoot, "openspec", "issue-mode.json");
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(configPath, JSON.stringify({
+      worker_worktree: {
+        enabled: true,
+        scope: "change",
+        mode: "branch",
+        base_ref: "HEAD",
+        branch_prefix: "opsx"
+      }
+    }, null, 2));
+
+    initGitRepo(repoRoot);
+    fs.writeFileSync(path.join(repoRoot, "README.md"), "demo\n");
+    git(repoRoot, "add", ".");
+    git(repoRoot, "commit", "-m", "init");
+
+    const worktreePath = path.join(repoRoot, ".worktree", change);
+    git(repoRoot, "worktree", "add", "-b", "opsx/demo-change", worktreePath, "HEAD");
+    fs.writeFileSync(path.join(worktreePath, "README.md"), "worker change\n");
+
+    const dryRunPayload = archiveChange({
+      archiveCommand: `${JSON.stringify(process.execPath)} -e "require('node:fs').writeFileSync('archived.flag', 'ok')"`,
+      change,
+      dryRun: true,
+      repoRoot,
+      skipCleanup: false
+    }) as {
+      archive_allowed: boolean;
+      pending_merge: {
+        changedFiles: string[];
+        issueIds: string[];
+        required: boolean;
+        requiredAction: string;
+        requiredCommand: string;
+        worktreeRelative: string;
+      };
+    };
+
+    assert.equal(dryRunPayload.archive_allowed, false);
+    assert.equal(dryRunPayload.pending_merge.required, true);
+    assert.deepEqual(dryRunPayload.pending_merge.issueIds, []);
+    assert.deepEqual(dryRunPayload.pending_merge.changedFiles, ["README.md"]);
+    assert.equal(dryRunPayload.pending_merge.requiredCommand, "");
+    assert.match(dryRunPayload.pending_merge.requiredAction, /Merge the change worktree into the coordinator repo root/);
+    assert.equal(dryRunPayload.pending_merge.worktreeRelative, ".worktree/demo-change");
+    assert.throws(
+      () => archiveChange({
+        archiveCommand: `${JSON.stringify(process.execPath)} -e "require('node:fs').writeFileSync('archived.flag', 'ok')"`,
+        change,
+        dryRun: false,
+        repoRoot,
+        skipCleanup: false
+      }),
+      /change worktree still differs/
+    );
+    assert.equal(fs.existsSync(path.join(repoRoot, "archived.flag")), false);
+    assert.equal(fs.existsSync(worktreePath), true);
   });
 });
 

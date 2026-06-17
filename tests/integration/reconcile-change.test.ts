@@ -627,6 +627,30 @@ test("verify pass can auto_archive when enabled", () => {
     assert.equal(payload.next_action, "archive_change");
     assert.equal((payload.automation as Record<string, boolean>).archive_after_verify, true);
     assert.equal((payload.continuation_policy as Record<string, string>).mode, "continue_immediately");
+    assert.match(String((payload.continuation_policy as Record<string, string>).instruction), /openspec-extensions archive change/);
+    assert.match(String((payload.continuation_policy as Record<string, string>).instruction), /不要直接运行原生 `openspec archive`/);
+  });
+});
+
+test("ready_for_archive requires wrapper archive after fresh reconcile", () => {
+  withTempDir((repoRoot) => {
+    const changeDir = path.join(repoRoot, "openspec", "changes", "demo-change");
+    const runsDir = path.join(changeDir, "runs");
+    writeIssueDoc(repoRoot, "demo-change");
+    writeIssueProgress(repoRoot, "demo-change", { status: "completed", updatedAt: "2026-03-30T10:00:00+08:00" });
+    writeChangeReviewArtifact(repoRoot, "demo-change", "passed", "2026-03-30T10:03:00+08:00");
+    fs.mkdirSync(runsDir, { recursive: true });
+    fs.writeFileSync(path.join(runsDir, "CHANGE-VERIFY.json"), JSON.stringify({
+      status: "passed",
+      updated_at: "2026-03-30T10:05:00+08:00"
+    }, null, 2));
+
+    const payload = reconcileChange({ repoRoot, change: "demo-change" });
+
+    assert.equal(payload.next_action, "ready_for_archive");
+    assert.equal((payload.continuation_policy as Record<string, string>).mode, "await_human_confirmation");
+    assert.match(String((payload.continuation_policy as Record<string, string>).instruction), /重新运行 `openspec-extensions reconcile change`/);
+    assert.match(String((payload.continuation_policy as Record<string, string>).instruction), /不要直接运行原生 `openspec archive`/);
   });
 });
 

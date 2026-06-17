@@ -640,7 +640,9 @@ validation:
     assert.equal(payload.phase, "ready_for_archive");
     assert.equal(payload.automation.archive_after_verify, true);
     assert.match(dispatchText, /cat ".*openspec\/issue-mode\.json"/);
+    assert.match(dispatchText, /openspec-extensions reconcile change --repo-root/);
     assert.match(dispatchText, /openspec-extensions archive change --repo-root/);
+    assert.match(dispatchText, /不按原生 OpenSpec archive 语义口头判断/);
     assert.match(dispatchText, /subagent_team\.auto_archive_after_verify=true/);
   });
 });

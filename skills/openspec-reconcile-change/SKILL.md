@@ -58,7 +58,7 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
      --change "<change-name>"
    ```
    Then rerun reconcile. Do not run `merge-change` before `runs/CHANGE-ACCEPTANCE.json` exists and matches the current verify artifact.
-6. If the result is `merge_change`, the change has already passed worktree review, verify, and explicit user acceptance. Run the deferred change merge helper immediately, then archive from the coordinator repo root:
+6. If the result is `merge_change`, the change has already passed worktree review, verify, and explicit user acceptance. Run the deferred change merge helper immediately, rerun reconcile, then archive from the coordinator repo root only when the latest helper output allows it:
    ```bash
    openspec-extensions reconcile merge-change \
      --repo-root . \
@@ -92,8 +92,8 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
    - `await_next_issue_confirmation` -> semi-auto pause before dispatching the next pending issue
    - `verify_change` -> run change-level verify now
    - `await_verify_confirmation` -> semi-auto pause before running verify
-   - `archive_change` -> verify has passed and config allows immediate archive
-   - `ready_for_archive` -> verify has passed, but archive still expects manual confirmation
+   - `archive_change` -> verify has passed and config allows immediate archive; rerun reconcile if any file changed since this helper output, then use `openspec-extensions archive change`
+   - `ready_for_archive` -> verify has passed, but archive still expects manual confirmation; after confirmation rerun reconcile before archive
    - `wait_for_active_issue` -> do not force progress
 
 ## Rules
@@ -122,6 +122,8 @@ Use `router/coordinator-playbook.md` for the default coordinator flow.
 - `dispatch_next_issue` means the first approved issue after the planning-doc commit, or the next pending issue after an accepted issue, should be dispatched immediately; it must not be reframed as a terminal control-plane checkpoint.
 - If coordinator review accepts an issue in a change-scoped worktree, mark it accepted before dispatching the next dependent issue. Merge/commit only after all issues are accepted, worktree-level verify has passed, and `runs/CHANGE-ACCEPTANCE.json` records user acceptance for that verify.
 - For change-scoped worktrees, do not merge code into the coordinator repo root during implementation, issue acceptance, change-level review, verify, or before explicit user acceptance. The only allowed merge point is pre-archive closeout after `runs/CHANGE-ACCEPTANCE.json` is current, and archive must run from the coordinator repo root after that merge.
+- Do not run raw `openspec archive` directly in issue-mode. Archive eligibility is determined by the latest `openspec-extensions reconcile change` output, and archive execution must go through `openspec-extensions archive change`.
+- Do not explain native OpenSpec archive semantics as the workflow rule when a change worktree exists. If the helper says `merge_change`, merge first; if archive wrapper reports `pending_merge.required=true`, follow its `requiredAction`.
 - Do not move from "all issues accepted" to `merge-change`; run change-level `/review` and `verify` against the accumulated change worktree first.
 - Do not move from "all issues completed" to `verify` until `runs/CHANGE-REVIEW.json` exists, is current, and has `status=passed`.
 - Read `automation_profile`, `automation`, and `continuation_policy` from the helper output before deciding whether a pause is intentional or indicates a stuck flow.

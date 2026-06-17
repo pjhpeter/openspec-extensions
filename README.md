@@ -174,7 +174,7 @@ openspec/changes/*/runs/CHANGE-REVIEW.json
 
 如果任务足够小，我建议直接走 OpenSpec 的短链路：创建 change、补齐 proposal/design/tasks、先创建或复用 change 级 worktree，再在该 worktree 内完成实现、先跑 change-level review；review 通过后，必须补齐自动化测试/校验和自动化手工验证，再进入 verify 和 archive。这个仓库不会强迫你把所有事情都拆成多 issue。前端或其他浏览器可见改动不能只停在命令行测试，收尾时优先使用 chrome devtools MCP 覆盖受影响主路径；如果当前 runtime 没有该能力，再退回其他浏览器工具并如实说明。
 
-worktree 的合并边界是硬规则：代码只允许在归档前的收尾阶段合并回主工作区，并且 archive 必须在主工作区执行；其他开发、review、verify 或 issue 接受阶段都不得把 worktree 代码提前合并到主工作区。
+worktree 的合并边界是硬规则：代码只允许在归档前的收尾阶段合并回主工作区，并且 archive 必须在主工作区执行；其他开发、review、verify 或 issue 接受阶段都不得把 worktree 代码提前合并到主工作区。归档资格只认 `openspec-extensions reconcile change` 的最新 `next_action`，归档执行只用 `openspec-extensions archive change` wrapper，不直接运行原生 `openspec archive`。
 
 ```mermaid
 flowchart TD
@@ -359,6 +359,7 @@ flowchart TD
 - `subagent_team.*` 负责控制哪些 gate 可以自动接受，`rra.gate_mode` 负责决定 gate 只是给建议，还是直接阻断流程。
 - 默认安装模板会让每个 issue 在通过 issue-local validation 后自动 accept；change 级 worktree 会累计所有 issue 改动，并在全部 accepted 后先在 worktree 内完成 review / verify。verify 通过后仍必须等待用户验收，运行 `openspec-extensions reconcile accept-change` 写入 `runs/CHANGE-ACCEPTANCE.json` 后，才允许在归档前收尾阶段统一 merge/commit 到主工作区，然后在主工作区 archive。
 - 对应 CLI 是 `openspec-extensions reconcile accept-issue`、`openspec-extensions reconcile accept-change` 和 `openspec-extensions reconcile merge-change`；`merge-issue` 仍保留给 shared workspace 或 issue 级隔离 worktree 的兼容路径。
+- archive 前必须重新跑 `openspec-extensions reconcile change`；如果返回 `merge_change` 就先 `reconcile merge-change`，如果返回 `ready_for_archive` 或 `archive_change` 才运行 `openspec-extensions archive change`。不要用原生 OpenSpec archive 的语义替代这个状态机。
 
 如果你关心的是“昨天跑到哪里了”“这个 issue 上一轮 review 为什么没过”“现在是不是已经可以 verify”，这些答案应该优先从工件里拿，而不是从聊天记录里猜。
 

@@ -11,6 +11,7 @@ import {
   workerBranchName,
 } from "../domain/issue-mode";
 import { readJson, type JsonRecord } from "../domain/change-coordinator";
+import { buildWorkerPatch } from "../git/merge";
 import { displayPath, resolveRepoPath } from "../utils/path";
 
 const ARCHIVE_HELP_TEXT = `Usage:
@@ -130,9 +131,38 @@ type CleanupTarget = {
 };
 
 type DeferredArchiveMerge = {
+  changedFiles: string[];
   issueIds: string[];
+  reason: string;
   required: boolean;
+  requiredAction: string;
+  requiredCommand: string;
+  statusCommand: string;
+  worktree: string;
+  worktreeRelative: string;
 };
+
+function mergeChangeCommand(change: string): string {
+  return `openspec-extensions reconcile merge-change --repo-root . --change ${JSON.stringify(change)}`;
+}
+
+function reconcileStatusCommand(change: string): string {
+  return `openspec-extensions reconcile change --repo-root . --change ${JSON.stringify(change)}`;
+}
+
+function emptyDeferredArchiveMerge(change: string): DeferredArchiveMerge {
+  return {
+    changedFiles: [],
+    issueIds: [],
+    reason: "",
+    required: false,
+    requiredAction: "",
+    requiredCommand: "",
+    statusCommand: reconcileStatusCommand(change),
+    worktree: "",
+    worktreeRelative: "",
+  };
+}
 
 function issueDocIds(repoRoot: string, change: string): string[] {
   const issuesDir = path.join(repoRoot, "openspec", "changes", change, "issues");
@@ -151,16 +181,13 @@ function issueProgressId(fileName: string, progress: JsonRecord): string {
   return String(progress.issue_id ?? path.basename(fileName, ".progress.json")).trim();
 }
 
-function deferredArchiveMerge(repoRoot: string, change: string): DeferredArchiveMerge {
+function acceptedIssueIds(repoRoot: string, change: string): string[] {
   const issuesDir = path.join(repoRoot, "openspec", "changes", change, "issues");
   if (!fs.existsSync(issuesDir)) {
-    return {
-      issueIds: [],
-      required: false,
-    };
+    return [];
   }
 
-  const issueIds = fs.readdirSync(issuesDir)
+  return fs.readdirSync(issuesDir)
     .filter((name) => name.endsWith(".progress.json"))
     .flatMap((name) => {
       const progress = readJson(path.join(issuesDir, name));
@@ -171,23 +198,87 @@ function deferredArchiveMerge(repoRoot: string, change: string): DeferredArchive
     })
     .filter(Boolean)
     .sort();
+}
 
+function isGitWorktreeRoot(repoRoot: string, targetPath: string): boolean {
+  if (!fs.existsSync(targetPath)) {
+    return false;
+  }
+  const process = runCommand(["git", "-C", targetPath, "rev-parse", "--show-toplevel"], repoRoot, false);
+  return process.status === 0 && canonicalPath(process.stdout.trim()) === canonicalPath(targetPath);
+}
+
+function changeWorktreeDiff(repoRoot: string, change: string, config: IssueModeConfig) {
+  const scope = String(config.worker_worktree.scope ?? "shared").trim() || "shared";
+  if (!config.worker_worktree.enabled || scope !== "change") {
+    return {
+      changedFiles: [],
+      worktree: "",
+      worktreeRelative: "",
+    };
+  }
+
+  const worktreeRelative = path.posix.join(config.worktree_root.replace(/\\/g, "/"), change);
+  const worktree = resolveRepoPath(repoRoot, worktreeRelative);
+  if (!isGitWorktreeRoot(repoRoot, worktree)) {
+    return {
+      changedFiles: [],
+      worktree,
+      worktreeRelative: displayPath(repoRoot, worktree),
+    };
+  }
+
+  const patch = buildWorkerPatch(repoRoot, worktree);
   return {
-    issueIds,
-    required: issueIds.length > 0,
+    changedFiles: patch.changedFiles,
+    worktree,
+    worktreeRelative: displayPath(repoRoot, worktree),
   };
 }
 
-function ensureNoDeferredArchiveMerge(repoRoot: string, change: string): DeferredArchiveMerge {
-  const pendingMerge = deferredArchiveMerge(repoRoot, change);
+function deferredArchiveMerge(repoRoot: string, change: string, config: IssueModeConfig): DeferredArchiveMerge {
+  const issueIds = acceptedIssueIds(repoRoot, change);
+  const worktreeDiff = changeWorktreeDiff(repoRoot, change, config);
+  const reasons: string[] = [];
+  if (issueIds.length > 0) {
+    reasons.push("accepted issue work is still deferred");
+  }
+  if (worktreeDiff.changedFiles.length > 0) {
+    reasons.push("change worktree still differs from the coordinator root");
+  }
+  const required = reasons.length > 0;
+
+  if (!required) {
+    return emptyDeferredArchiveMerge(change);
+  }
+
+  const requiredCommand = issueIds.length > 0 ? mergeChangeCommand(change) : "";
+  const requiredAction = requiredCommand
+    ? `Run ${requiredCommand}, rerun ${reconcileStatusCommand(change)}, then archive with openspec-extensions archive change.`
+    : `Merge the change worktree into the coordinator repo root, rerun ${reconcileStatusCommand(change)}, then archive with openspec-extensions archive change.`;
+
+  return {
+    changedFiles: worktreeDiff.changedFiles,
+    issueIds,
+    reason: reasons.join("; "),
+    required,
+    requiredAction,
+    requiredCommand,
+    statusCommand: reconcileStatusCommand(change),
+    worktree: worktreeDiff.worktree,
+    worktreeRelative: worktreeDiff.worktreeRelative,
+  };
+}
+
+function ensureNoDeferredArchiveMerge(pendingMerge: DeferredArchiveMerge, change: string): DeferredArchiveMerge {
   if (!pendingMerge.required) {
     return pendingMerge;
   }
 
-  // 归档会清理 worktree，必须先把已验收代码落回主工作区。
+  // 归档会清理 worktree，必须先把实现落回主工作区。
   throw new Error(
-    `Change ${change} has accepted issue work that is not merged yet: ${pendingMerge.issueIds.join(", ")}. ` +
-    `Run openspec-extensions reconcile merge-change --repo-root . --change ${JSON.stringify(change)} before archive.`
+    `Change ${change} is not ready for archive: ${pendingMerge.reason}. ` +
+    `${pendingMerge.requiredAction} Do not run raw openspec archive directly.`
   );
 }
 
@@ -362,11 +453,13 @@ function cleanupChangeWorktree(repoRoot: string, change: string, config: IssueMo
 export function archiveChange(args: ParsedArchiveArgs) {
   const config = loadIssueModeConfig(args.repoRoot);
   const archiveCommand = args.archiveCommand.trim() || `openspec archive "${args.change}"`;
+  const pendingMerge = deferredArchiveMerge(args.repoRoot, args.change, config);
   const result: Record<string, unknown> = {
+    archive_allowed: !pendingMerge.required,
     change: args.change,
     archive_command: archiveCommand,
     dry_run: args.dryRun,
-    pending_merge: deferredArchiveMerge(args.repoRoot, args.change),
+    pending_merge: pendingMerge,
     cleanup_skipped: args.skipCleanup
   };
 
@@ -376,7 +469,7 @@ export function archiveChange(args: ParsedArchiveArgs) {
     return result;
   }
 
-  ensureNoDeferredArchiveMerge(args.repoRoot, args.change);
+  ensureNoDeferredArchiveMerge(pendingMerge, args.change);
   const archiveProcess = runShell(archiveCommand, args.repoRoot);
   result.archived = true;
   result.archive_stdout = archiveProcess.stdout.trim();

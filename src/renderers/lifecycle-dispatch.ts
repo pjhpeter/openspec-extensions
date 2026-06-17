@@ -644,6 +644,7 @@ function phaseCommandHints(repoRoot: string, change: string, phase: string): str
     return commands;
   }
   if (phase === "ready_for_archive") {
+    commands.push(`openspec-extensions reconcile change --repo-root "${repoRoot}" --change "${change}"`);
     commands.push(`openspec-extensions archive change --repo-root "${repoRoot}" --change "${change}"`);
     return commands;
   }
@@ -1098,6 +1099,7 @@ function renderPhasePacket(
                 "不再新增 issue。",
                 "archive 收尾阶段默认使用 1 个开发 seat + 1 个 checker + 1 个 reviewer 的轻量 closeout 拓扑，全部使用 `reasoning_effort=medium`。",
                 "仅允许 closeout / archive 所需收尾。",
+                "archive 前必须先重新运行 `openspec-extensions reconcile change`；只按 `next_action` 决定是否 `merge-change` 或 archive，不按原生 OpenSpec archive 语义口头判断。",
                 "若发现 blocker，重新回到 change_acceptance。"
               ];
 

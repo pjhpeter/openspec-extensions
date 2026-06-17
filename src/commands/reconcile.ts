@@ -709,7 +709,17 @@ function continuationPolicy(nextAction: string, recommendedIssueId: string): Jso
       human_confirmation_required: false,
       must_not_stop_at_checkpoint: true,
       summary: "当前 change 已满足自动 archive 条件，coordinator 必须继续归档。",
-      instruction: "`archive_change` 不是 terminal checkpoint；立即执行 archive，不要停在 control-plane ready。"
+      instruction: "`archive_change` 不是 terminal checkpoint；先确认当前 helper 输出仍为 `archive_change`，再运行 `openspec-extensions archive change`，不要直接运行原生 `openspec archive`，也不要用口头判断替代 reconcile 状态。"
+    };
+  }
+  if (nextAction === "ready_for_archive") {
+    return {
+      mode: "await_human_confirmation",
+      pause_allowed: true,
+      human_confirmation_required: true,
+      must_not_stop_at_checkpoint: false,
+      summary: "当前状态允许暂停，等待人工确认归档。",
+      instruction: "人工确认后也要重新运行 `openspec-extensions reconcile change`；只有最新 next_action 仍允许归档时，才运行 `openspec-extensions archive change`，不要直接运行原生 `openspec archive`。"
     };
   }
   if ([
@@ -717,8 +727,7 @@ function continuationPolicy(nextAction: string, recommendedIssueId: string): Jso
     "await_planning_docs_commit_confirmation",
     "await_next_issue_confirmation",
     "await_user_acceptance",
-    "await_verify_confirmation",
-    "ready_for_archive"
+    "await_verify_confirmation"
   ].includes(nextAction)) {
     return {
       mode: "await_human_confirmation",
